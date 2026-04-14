@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+manual_images/
+*.pdf
+generate_manual_pdf.py
+generate_presentation.py
+test_nagoya.py
+.streamlit/secrets.toml
