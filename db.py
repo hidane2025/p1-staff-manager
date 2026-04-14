@@ -5,7 +5,22 @@ import os
 from datetime import datetime
 from typing import Optional
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "p1_staff.db")
+# Streamlit Cloud: /tmp に書き込む（アプリディレクトリは読み取り専用）
+_LOCAL_DB = os.path.join(os.path.dirname(__file__), "p1_staff.db")
+_CLOUD_DB = "/tmp/p1_staff.db"
+
+def _get_db_path():
+    """書き込み可能なDBパスを返す"""
+    try:
+        # ローカルに書き込めるならローカル
+        with open(_LOCAL_DB, "a"):
+            pass
+        return _LOCAL_DB
+    except (OSError, IOError):
+        # Streamlit Cloud等: /tmpを使用
+        return _CLOUD_DB
+
+DB_PATH = _get_db_path()
 
 
 def get_connection():
