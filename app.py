@@ -48,5 +48,12 @@ with col6:
     st.markdown("現金照合＋CSV出力")
     st.page_link("pages/6_report.py", label="精算レポートを開く", icon="📊")
 
+col7, _, _ = st.columns(3)
+
+with col7:
+    st.markdown("### 📆 年間累計")
+    st.markdown("確定申告用・法定調書対象者一覧")
+    st.page_link("pages/7_yearly.py", label="年間累計を開く", icon="📆")
+
 st.divider()
-st.caption("P1 Staff Manager v2.0 — 株式会社ヒダネ")
+st.caption("P1 Staff Manager v3.1 — 株式会社ヒダネ")

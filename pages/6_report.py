@@ -102,6 +102,43 @@ role_df = pd.DataFrame([
 ])
 st.dataframe(role_df, use_container_width=True, hide_index=True)
 
+# --- 雇用区分別集計 ---
+st.divider()
+st.subheader("雇用区分別集計（業務委託 / タイミー / 正社員）")
+
+EMPLOYMENT_LABELS = {
+    "contractor": "業務委託",
+    "timee": "タイミー",
+    "fulltime": "正社員",
+}
+
+# 全スタッフの雇用区分を取得
+all_staff_map = {s["id"]: s for s in db.get_all_staff()}
+emp_summary = {}
+for p in payments:
+    staff = all_staff_map.get(p["staff_id"])
+    emp_type = (staff.get("employment_type") if staff else None) or "contractor"
+    label = EMPLOYMENT_LABELS.get(emp_type, emp_type)
+    if label not in emp_summary:
+        emp_summary[label] = {"人数": 0, "合計": 0}
+    emp_summary[label]["人数"] += 1
+    emp_summary[label]["合計"] += p["total_amount"]
+
+emp_df = pd.DataFrame([
+    {
+        "区分": label,
+        "人数": f"{data['人数']}名",
+        "合計": f"¥{data['合計']:,}",
+        "平均": f"¥{data['合計'] // data['人数']:,}" if data["人数"] else "—",
+    }
+    for label, data in emp_summary.items()
+])
+st.dataframe(emp_df, use_container_width=True, hide_index=True)
+
+# 人件費トータル（業務委託+タイミー+正社員）の表示
+total_labor = sum(d["合計"] for d in emp_summary.values())
+st.metric("人件費トータル（全区分合計）", f"¥{total_labor:,}")
+
 # --- 小口経費 ---
 st.divider()
 st.subheader("小口経費")

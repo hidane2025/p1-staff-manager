@@ -120,11 +120,24 @@ pending_count = sum(1 for p in payments if p["status"] == "pending")
 approved_count = sum(1 for p in payments if p["status"] == "approved")
 paid_count = sum(1 for p in payments if p["status"] == "paid")
 
+# 100円単位丸め合計
+def _round_up(n, unit=100):
+    if n % unit == 0:
+        return n
+    return ((n // unit) + 1) * unit
+
+total_rounded = sum(_round_up(p["total_amount"], 100) for p in payments)
+
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("総支払額", f"¥{total_all:,}")
-col2.metric("⏳ 未承認", f"{pending_count}名")
-col3.metric("✅ 承認済", f"{approved_count}名")
+col2.metric("100円丸め後", f"¥{total_rounded:,}",
+            delta=f"+¥{total_rounded - total_all:,}" if total_rounded > total_all else None)
+col3.metric("⏳ 未承認", f"{pending_count}名")
 col4.metric("💴 支払済", f"{paid_count}名")
+
+col5, col6 = st.columns(2)
+col5.metric("✅ 承認済", f"{approved_count}名")
+col6.metric("対象人数", f"{len(payments)}名")
 
 st.divider()
 st.markdown("**支払い内訳合計:**")
@@ -272,6 +285,53 @@ if staff_opts:
                 st.error("❌ 領収書が未受領のため支払いできません")
         elif p["status"] == "paid":
             st.success("支払済み 💴")
+
+        # 領収書PDF発行
+        st.divider()
+        st.markdown("**📄 領収書PDF**")
+        staff_info = db.get_staff_by_id(p["staff_id"])
+        if staff_info and staff_info.get("real_name") and staff_info.get("address"):
+            from utils.receipt import generate_receipt_pdf
+            event_info = db.get_event_by_id(event_id)
+            try:
+                pdf_bytes = generate_receipt_pdf(
+                    receipt_no=f"P1-{event_id}-{p['id']}",
+                    real_name=staff_info["real_name"],
+                    address=staff_info["address"],
+                    email=staff_info.get("email") or "",
+                    amount=p["total_amount"],
+                    event_name=event_info["name"] if event_info else "P1大会",
+                    issue_date=event_info["end_date"] if event_info else "",
+                )
+                st.download_button(
+                    "📥 領収書PDFダウンロード",
+                    pdf_bytes,
+                    f"receipt_{p['name_jp']}_{p['id']}.pdf",
+                    "application/pdf",
+                    key=f"receipt_pdf_{p['id']}",
+                )
+            except Exception as e:
+                st.warning(f"領収書生成エラー: {e}")
+        else:
+            missing = []
+            if not (staff_info and staff_info.get("real_name")):
+                missing.append("本名")
+            if not (staff_info and staff_info.get("address")):
+                missing.append("住所")
+            st.warning(f"⚠️ スタッフ管理で{' と '.join(missing)}を登録すると領収書PDFを発行できます")
+
+    # --- 備考欄 ---
+    st.divider()
+    st.markdown("**📝 備考（イレギュラー対応等）**")
+    current_note = p.get("notes") or p.get("adjustment_note") or ""
+    new_note = st.text_area(
+        "備考", value=current_note, key=f"note_{p['id']}",
+        placeholder="例: 体調不良で早退、深夜急な残業代として+5,000円",
+    )
+    if st.button("💾 備考を保存", key=f"save_note_{p['id']}"):
+        db.get_client().table("p1_payments").update({"notes": new_note}).eq("id", p["id"]).execute()
+        st.success("備考を保存しました")
+        st.rerun()
 
 # --- 監査ログ ---
 st.divider()

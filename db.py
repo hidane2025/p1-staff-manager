@@ -56,10 +56,20 @@ def get_audit_log(event_id=None, limit=50):
 
 # === Staff CRUD ===
 
-def create_staff(no, name_jp, name_en="", role="Dealer", contact="", notes=""):
+def create_staff(no, name_jp, name_en="", role="Dealer", contact="", notes="",
+                 real_name="", address="", email="",
+                 employment_type="contractor", custom_hourly_rate=None):
+    # 重複チェック: NO.が指定されていて既存の場合はエラーを投げる
+    if no and no > 0:
+        existing = get_client().table("p1_staff").select("id, name_jp").eq("no", no).execute()
+        if existing.data:
+            raise ValueError(f"NO.{no} は既に {existing.data[0]['name_jp']} で登録されています")
     r = get_client().table("p1_staff").insert({
         "no": no, "name_jp": name_jp, "name_en": name_en,
-        "role": role, "contact": contact, "notes": notes
+        "role": role, "contact": contact, "notes": notes,
+        "real_name": real_name, "address": address, "email": email,
+        "employment_type": employment_type,
+        "custom_hourly_rate": custom_hourly_rate,
     }).execute()
     return r.data[0]["id"] if r.data else None
 
@@ -237,6 +247,64 @@ def get_payments_for_event(event_id):
         row["role"] = staff_info.get("role", "Dealer")
         result.append(row)
     return result
+
+
+def get_yearly_totals(year, staff_id=None):
+    """指定年(1/1〜12/31)の全スタッフ累計支払額を取得
+
+    Returns: [{staff_id, name_jp, no, role, employment_type,
+              total_amount, event_count, event_names}]
+    """
+    client = get_client()
+    # その年のイベント一覧
+    events = client.table("p1_events").select("id, name").gte(
+        "start_date", f"{year}-01-01").lte("start_date", f"{year}-12-31").execute().data
+    event_ids = [e["id"] for e in events]
+    event_name_map = {e["id"]: e["name"] for e in events}
+    if not event_ids:
+        return []
+
+    # 支払い + スタッフ結合
+    q = client.table("p1_payments").select(
+        "*, p1_staff(name_jp, name_en, no, role, employment_type, real_name, email, address)"
+    ).in_("event_id", event_ids)
+    if staff_id:
+        q = q.eq("staff_id", staff_id)
+    payments = q.execute().data
+
+    # スタッフごとに集計
+    totals = {}
+    for p in payments:
+        s_id = p["staff_id"]
+        staff_info = p.get("p1_staff", {}) or {}
+        if s_id not in totals:
+            totals[s_id] = {
+                "staff_id": s_id,
+                "name_jp": staff_info.get("name_jp", ""),
+                "name_en": staff_info.get("name_en", ""),
+                "no": staff_info.get("no", 0),
+                "role": staff_info.get("role", "Dealer"),
+                "employment_type": staff_info.get("employment_type", "contractor"),
+                "real_name": staff_info.get("real_name", ""),
+                "email": staff_info.get("email", ""),
+                "address": staff_info.get("address", ""),
+                "total_amount": 0,
+                "paid_amount": 0,
+                "event_count": 0,
+                "event_names": set(),
+            }
+        totals[s_id]["total_amount"] += p.get("total_amount", 0)
+        if p.get("status") == "paid":
+            totals[s_id]["paid_amount"] += p.get("total_amount", 0)
+        totals[s_id]["event_count"] += 1
+        totals[s_id]["event_names"].add(event_name_map.get(p["event_id"], ""))
+
+    # setをlistに変換
+    result = []
+    for v in totals.values():
+        v["event_names"] = sorted(v["event_names"])
+        result.append(v)
+    return sorted(result, key=lambda x: -x["total_amount"])
 
 
 def approve_payment(payment_id, approved_by, event_id=None):

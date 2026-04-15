@@ -369,12 +369,13 @@ for s in shifts:
         "状態": STATUS_DISPLAY.get(s["status"], s["status"]),
         "例外": note,
         "MIX": bool(s.get("is_mix", 0)),
+        "備考": s.get("notes") or "",
         "_shift_id": s["id"],
     })
 
 df = pd.DataFrame(display)
 
-# MIXトグル付きテーブル
+# MIX・備考を編集可能にしたテーブル
 edited_df = st.data_editor(
     df,
     use_container_width=True,
@@ -383,17 +384,25 @@ edited_df = st.data_editor(
     disabled=["NO.", "名前", "役職", "予定", "実到着", "実退勤", "状態", "例外", "_shift_id"],
     column_config={
         "MIX": st.column_config.CheckboxColumn("MIX", default=False),
+        "備考": st.column_config.TextColumn("備考", help="イレギュラー対応等を自由入力"),
         "_shift_id": None,
     },
     key="shift_table",
 )
 
-# MIX変更検出・保存
+# 変更検出・保存（MIXと備考）
 if not df.empty and not edited_df.empty:
     for idx in range(len(df)):
+        shift_id = int(df.iloc[idx]["_shift_id"])
+        # MIX変更
         old_mix = df.iloc[idx]["MIX"]
         new_mix = edited_df.iloc[idx]["MIX"]
         if old_mix != new_mix:
-            shift_id = int(df.iloc[idx]["_shift_id"])
             db.set_shift_mix(shift_id, int(new_mix))
+            st.rerun()
+        # 備考変更
+        old_note = df.iloc[idx]["備考"] or ""
+        new_note = edited_df.iloc[idx]["備考"] or ""
+        if old_note != new_note:
+            db.get_client().table("p1_shifts").update({"notes": new_note}).eq("id", shift_id).execute()
             st.rerun()
