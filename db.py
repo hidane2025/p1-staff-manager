@@ -156,6 +156,21 @@ def upsert_shift(event_id, staff_id, date, planned_start, planned_end, is_mix=0)
         }).execute()
 
 
+def _flatten_staff_join(data):
+    """Supabase結合結果のp1_staffが dict/list いずれでもフラット化"""
+    for row in data:
+        staff_info = row.pop("p1_staff", None)
+        if isinstance(staff_info, list):
+            staff_info = staff_info[0] if staff_info else {}
+        if not isinstance(staff_info, dict):
+            staff_info = {}
+        row["name_jp"] = staff_info.get("name_jp", "")
+        row["name_en"] = staff_info.get("name_en", "")
+        row["no"] = staff_info.get("no", 0)
+        row["role"] = staff_info.get("role", "Dealer")
+    return data
+
+
 def get_shifts_for_event(event_id, date=None, staff_id=None):
     client = get_client()
     q = client.table("p1_shifts").select("*, p1_staff(name_jp, name_en, no, role)").eq("event_id", event_id)
@@ -164,16 +179,7 @@ def get_shifts_for_event(event_id, date=None, staff_id=None):
     if staff_id:
         q = q.eq("staff_id", staff_id)
     data = q.order("staff_id").execute().data
-    # Flatten nested staff data
-    result = []
-    for row in data:
-        staff_info = row.pop("p1_staff", {}) or {}
-        row["name_jp"] = staff_info.get("name_jp", "")
-        row["name_en"] = staff_info.get("name_en", "")
-        row["no"] = staff_info.get("no", 0)
-        row["role"] = staff_info.get("role", "Dealer")
-        result.append(row)
-    return result
+    return _flatten_staff_join(data)
 
 
 def checkin_staff(shift_id, actual_start):
@@ -238,15 +244,7 @@ def save_payment(event_id, staff_id, base_pay, night_pay, transport_total,
 
 def get_payments_for_event(event_id):
     data = get_client().table("p1_payments").select("*, p1_staff(name_jp, name_en, no, role)").eq("event_id", event_id).order("staff_id").execute().data
-    result = []
-    for row in data:
-        staff_info = row.pop("p1_staff", {}) or {}
-        row["name_jp"] = staff_info.get("name_jp", "")
-        row["name_en"] = staff_info.get("name_en", "")
-        row["no"] = staff_info.get("no", 0)
-        row["role"] = staff_info.get("role", "Dealer")
-        result.append(row)
-    return result
+    return _flatten_staff_join(data)
 
 
 def get_yearly_totals(year, staff_id=None):
@@ -264,19 +262,26 @@ def get_yearly_totals(year, staff_id=None):
     if not event_ids:
         return []
 
-    # 支払い + スタッフ結合
-    q = client.table("p1_payments").select(
-        "*, p1_staff(name_jp, name_en, no, role, employment_type, real_name, email, address)"
-    ).in_("event_id", event_ids)
+    # 支払いを取得
+    q = client.table("p1_payments").select("*").in_("event_id", event_ids)
     if staff_id:
         q = q.eq("staff_id", staff_id)
     payments = q.execute().data
+
+    # スタッフ情報を別途取得（結合のdict/list不確定問題を回避）
+    staff_ids = list({p["staff_id"] for p in payments})
+    if not staff_ids:
+        return []
+    staff_data = client.table("p1_staff").select(
+        "id, name_jp, name_en, no, role, employment_type, real_name, email, address"
+    ).in_("id", staff_ids).execute().data
+    staff_map = {s["id"]: s for s in staff_data}
 
     # スタッフごとに集計
     totals = {}
     for p in payments:
         s_id = p["staff_id"]
-        staff_info = p.get("p1_staff", {}) or {}
+        staff_info = staff_map.get(s_id, {})
         if s_id not in totals:
             totals[s_id] = {
                 "staff_id": s_id,
@@ -285,9 +290,9 @@ def get_yearly_totals(year, staff_id=None):
                 "no": staff_info.get("no", 0),
                 "role": staff_info.get("role", "Dealer"),
                 "employment_type": staff_info.get("employment_type", "contractor"),
-                "real_name": staff_info.get("real_name", ""),
-                "email": staff_info.get("email", ""),
-                "address": staff_info.get("address", ""),
+                "real_name": staff_info.get("real_name") or "",
+                "email": staff_info.get("email") or "",
+                "address": staff_info.get("address") or "",
                 "total_amount": 0,
                 "paid_amount": 0,
                 "event_count": 0,
