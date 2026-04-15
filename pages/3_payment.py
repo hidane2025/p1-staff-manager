@@ -59,12 +59,22 @@ if st.button("🔄 支払い額を計算", type="primary"):
     if protected_ids:
         st.warning(f"⚠️ {len(protected_ids)}名が承認済み/支払済みです。スキップします。")
 
+    # 全スタッフの雇用区分・個別時給をまとめて取得
+    all_staff_map = {s["id"]: s for s in db.get_all_staff()}
+
     # スタッフごとにグループ化
     staff_shifts = {}
     for s in shifts:
         key = s["staff_id"]
         if key not in staff_shifts:
-            staff_shifts[key] = {"name": s["name_jp"], "role": s["role"], "shifts": []}
+            staff_info = all_staff_map.get(key, {})
+            staff_shifts[key] = {
+                "name": s["name_jp"],
+                "role": s["role"],
+                "shifts": [],
+                "employment_type": staff_info.get("employment_type") or "contractor",
+                "custom_hourly_rate": staff_info.get("custom_hourly_rate"),
+            }
         if s["status"] == "absent":
             continue
         if s["planned_start"] and s["planned_end"]:
@@ -88,6 +98,8 @@ if st.button("🔄 支払い額を計算", type="primary"):
             shifts=data["shifts"], rates_by_date=rates_by_date,
             total_event_days=total_event_days,
             break_6h=break_6h, break_8h=break_8h,
+            employment_type=data["employment_type"],
+            custom_hourly_rate=data["custom_hourly_rate"],
         )
         results.append(payment)
         db.save_payment(

@@ -190,6 +190,8 @@ def calculate_staff_payment(
     total_event_days: int,
     break_6h: int = 45,
     break_8h: int = 60,
+    employment_type: str = "contractor",
+    custom_hourly_rate: Optional[int] = None,
 ) -> StaffPayment:
     """スタッフ1人の全日程支払いを計算
 
@@ -198,8 +200,17 @@ def calculate_staff_payment(
         rates_by_date: {"2025-12-29": {"hourly": 1500, ...}, ...}
         break_6h: 6h超の休憩時間（分）
         break_8h: 8h超の休憩時間（分）
+        employment_type: "contractor"(業務委託) / "timee"(タイミー) / "fulltime"(正社員)
+        custom_hourly_rate: タイミー等の個別時給。指定時は通常時給を上書き
+
+    タイミー:
+        - 個別時給を使用（深夜も同一時給で計算。割増・手当なし）
+        - 交通費は支給、フロア/MIX/精勤は対象外
+    業務委託・正社員:
+        - 通常の計算（時給×時間+深夜+手当+精勤）
     """
     daily_results = []
+    is_timee = employment_type == "timee"
 
     for shift in shifts:
         time_range = f"{shift['start']}~{shift['end']}"
@@ -214,19 +225,37 @@ def calculate_staff_payment(
         rate = rates_by_date.get(shift["date"], {})
         is_mix = shift.get("is_mix", False)
 
-        daily = calculate_daily_pay(
-            shift_hours,
-            hourly_rate=rate.get("hourly", 1500),
-            night_rate=rate.get("night", 1875),
-            transport=rate.get("transport", 1000),
-            role=role,
-            is_mix=is_mix,
-            floor_bonus=rate.get("floor_bonus", 3000),
-            mix_bonus=rate.get("mix_bonus", 1500),
-        )
+        if is_timee and custom_hourly_rate:
+            # タイミー: 個別時給で計算。深夜割増/手当なし
+            daily = calculate_daily_pay(
+                shift_hours,
+                hourly_rate=custom_hourly_rate,
+                night_rate=custom_hourly_rate,  # 深夜も同じ時給
+                transport=rate.get("transport", 1000),
+                role="Timee",  # フロア手当対象外にする
+                is_mix=False,  # MIX手当対象外
+                floor_bonus=0,
+                mix_bonus=0,
+            )
+        else:
+            daily = calculate_daily_pay(
+                shift_hours,
+                hourly_rate=rate.get("hourly", 1500),
+                night_rate=rate.get("night", 1875),
+                transport=rate.get("transport", 1000),
+                role=role,
+                is_mix=is_mix,
+                floor_bonus=rate.get("floor_bonus", 3000),
+                mix_bonus=rate.get("mix_bonus", 1500),
+            )
         daily_results.append(daily)
 
     days_worked = len(daily_results)
+    # タイミーは精勤手当対象外
+    if is_timee:
+        att_bonus_override = 0
+    else:
+        att_bonus_override = None
     total_regular = sum(d.regular_hours for d in daily_results)
     total_night = sum(d.night_hours for d in daily_results)
     base_pay = sum(d.base_pay for d in daily_results)
@@ -235,7 +264,8 @@ def calculate_staff_payment(
     transport_total = sum(d.transport for d in daily_results)
     floor_total = sum(d.floor_bonus for d in daily_results)
     mix_total = sum(d.mix_bonus for d in daily_results)
-    att_bonus = calculate_attendance_bonus(days_worked, total_event_days)
+    att_bonus = (att_bonus_override if att_bonus_override is not None
+                 else calculate_attendance_bonus(days_worked, total_event_days))
 
     total = base_pay + night_pay + transport_total + floor_total + mix_total + att_bonus
 
