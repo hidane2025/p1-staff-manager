@@ -132,18 +132,38 @@ pending_count = sum(1 for p in payments if p["status"] == "pending")
 approved_count = sum(1 for p in payments if p["status"] == "approved")
 paid_count = sum(1 for p in payments if p["status"] == "paid")
 
-# 100円単位丸め合計
-def _round_up(n, unit=100):
-    if n % unit == 0:
+# 丸め単位の選択
+def _round_up(n: int, unit: int) -> int:
+    """unit単位で切り上げ"""
+    if unit <= 0 or n % unit == 0:
         return n
     return ((n // unit) + 1) * unit
 
-total_rounded = sum(_round_up(p["total_amount"], 100) for p in payments)
+
+ROUND_OPTIONS = {
+    "なし": 0,
+    "100円切り上げ": 100,
+    "500円切り上げ（推奨）": 500,
+    "1000円切り上げ": 1000,
+}
+round_label = st.selectbox(
+    "💰 端数丸め（個別金額・合計に適用）",
+    list(ROUND_OPTIONS.keys()),
+    index=2,  # デフォルト: 500円切り上げ
+    help="例: 500円切り上げなら 16,300→16,500 / 18,600→19,000",
+)
+round_unit = ROUND_OPTIONS[round_label]
+
+# 個別金額を丸めた場合の合計
+total_rounded = sum(_round_up(p["total_amount"], round_unit) for p in payments) if round_unit else total_all
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("総支払額", f"¥{total_all:,}")
-col2.metric("100円丸め後", f"¥{total_rounded:,}",
-            delta=f"+¥{total_rounded - total_all:,}" if total_rounded > total_all else None)
+col2.metric(
+    f"丸め後合計（{round_label}）",
+    f"¥{total_rounded:,}",
+    delta=f"+¥{total_rounded - total_all:,}" if total_rounded > total_all else None,
+)
 col3.metric("⏳ 未承認", f"{pending_count}名")
 col4.metric("💴 支払済", f"{paid_count}名")
 
@@ -228,14 +248,19 @@ if status_filter != "すべて":
 display_data = []
 for p in filtered:
     status_icon = {"pending": "⏳ 未承認", "approved": "✅ 承認済", "paid": "💴 支払済"}.get(p["status"], p["status"])
-    display_data.append({
+    rounded = _round_up(p["total_amount"], round_unit) if round_unit else p["total_amount"]
+    row = {
         "NO.": p["no"], "名前": p["name_jp"], "役職": p["role"],
         "基本給": f"¥{p['base_pay']:,}", "深夜": f"¥{p['night_pay']:,}",
         "交通費": f"¥{p['transport_total']:,}", "Floor": f"¥{p['floor_bonus_total']:,}",
         "MIX": f"¥{p['mix_bonus_total']:,}", "精勤": f"¥{p['attendance_bonus']:,}",
         "合計": f"¥{p['total_amount']:,}",
-        "状態": status_icon, "領収書": "✅" if p["receipt_received"] else "❌",
-    })
+    }
+    if round_unit:
+        row["丸め後"] = f"¥{rounded:,}"
+    row["状態"] = status_icon
+    row["領収書"] = "✅" if p["receipt_received"] else "❌"
+    display_data.append(row)
 
 st.dataframe(pd.DataFrame(display_data), use_container_width=True, hide_index=True)
 
@@ -249,6 +274,11 @@ if staff_opts:
 
     col_d1, col_d2 = st.columns(2)
     with col_d1:
+        p_rounded = _round_up(p["total_amount"], round_unit) if round_unit else p["total_amount"]
+        rounded_row = (
+            f"| **{round_label}後** | **¥{p_rounded:,}**（+¥{p_rounded - p['total_amount']:,}） |\n"
+            if round_unit and p_rounded != p["total_amount"] else ""
+        )
         st.markdown(f"""
 **{p['name_jp']}** (NO.{p['no']}) — {p['role']}
 
@@ -262,7 +292,7 @@ if staff_opts:
 | MIX手当 | ¥{p['mix_bonus_total']:,} |
 | 精勤手当 | ¥{p['attendance_bonus']:,} |
 | **合計** | **¥{p['total_amount']:,}** |
-
+{rounded_row}
 承認者: {p.get('approved_by') or '未承認'}
 """)
 
