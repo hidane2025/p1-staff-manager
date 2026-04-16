@@ -58,18 +58,27 @@ def get_audit_log(event_id=None, limit=50):
 
 def create_staff(no, name_jp, name_en="", role="Dealer", contact="", notes="",
                  real_name="", address="", email="",
-                 employment_type="contractor", custom_hourly_rate=None):
+                 employment_type="contractor", custom_hourly_rate=None,
+                 nearest_station="", prefecture=None, region=None):
+    from utils.region import address_to_region
     # 重複チェック: NO.が指定されていて既存の場合はエラーを投げる
     if no and no > 0:
         existing = get_client().table("p1_staff").select("id, name_jp").eq("no", no).execute()
         if existing.data:
             raise ValueError(f"NO.{no} は既に {existing.data[0]['name_jp']} で登録されています")
+    # 住所から都道府県・地域を自動判定（明示指定が無ければ）
+    if address and (not prefecture or not region):
+        auto_pref, auto_region = address_to_region(address)
+        prefecture = prefecture or auto_pref
+        region = region or auto_region
     r = get_client().table("p1_staff").insert({
         "no": no, "name_jp": name_jp, "name_en": name_en,
         "role": role, "contact": contact, "notes": notes,
         "real_name": real_name, "address": address, "email": email,
         "employment_type": employment_type,
         "custom_hourly_rate": custom_hourly_rate,
+        "nearest_station": nearest_station,
+        "prefecture": prefecture, "region": region,
     }).execute()
     return r.data[0]["id"] if r.data else None
 
@@ -93,8 +102,108 @@ def get_staff_by_id(staff_id):
 
 
 def update_staff(staff_id, **kwargs):
+    # 住所が変わったら都道府県・地域も再判定
+    if "address" in kwargs and kwargs["address"]:
+        from utils.region import address_to_region
+        pref, region = address_to_region(kwargs["address"])
+        if pref and "prefecture" not in kwargs:
+            kwargs["prefecture"] = pref
+        if region and "region" not in kwargs:
+            kwargs["region"] = region
     kwargs["updated_at"] = _now()
     get_client().table("p1_staff").update(kwargs).eq("id", staff_id).execute()
+
+
+def bulk_import_staff(rows: list[dict]) -> dict:
+    """スタッフ情報を一括登録/更新
+
+    Args:
+        rows: [{"no": 18, "name_jp": "EveKat", "real_name": "...",
+                "address": "...", "email": "...", "nearest_station": "...",
+                "employment_type": "contractor", ...}]
+    Returns:
+        {"created": N, "updated": M, "errors": [str, ...]}
+    """
+    from utils.region import address_to_region
+    client = get_client()
+    created = 0
+    updated = 0
+    errors = []
+
+    for i, row in enumerate(rows, 1):
+        name_jp = (row.get("name_jp") or "").strip()
+        if not name_jp:
+            errors.append(f"行{i}: 名前が空")
+            continue
+        no = row.get("no")
+        try:
+            no = int(no) if no not in (None, "") else None
+        except (ValueError, TypeError):
+            no = None
+
+        # NO.があれば、NO.でマッチした既存を更新
+        existing = None
+        if no:
+            res = client.table("p1_staff").select("*").eq("no", no).execute()
+            if res.data:
+                existing = res.data[0]
+        if not existing:
+            # ディーラーネームでも検索
+            res = client.table("p1_staff").select("*").eq("name_jp", name_jp).execute()
+            if res.data:
+                existing = res.data[0]
+
+        # 住所→都道府県・地域を自動判定
+        address = row.get("address", "") or ""
+        if address:
+            pref, region = address_to_region(address)
+        elif existing:
+            # 空の住所＋既存あり → 既存の住所を引き継ぐ
+            address = existing.get("address", "") or ""
+            pref = existing.get("prefecture")
+            region = existing.get("region")
+        else:
+            pref, region = None, None
+
+        # 更新時は空フィールドを既存値でフォールバック
+        def _val(key, default=""):
+            v = row.get(key)
+            if v not in (None, ""):
+                return v
+            return (existing.get(key, default) if existing else default)
+
+        payload = {
+            "name_jp": name_jp,  # name_jpは必須なのでそのまま
+            "name_en": _val("name_en"),
+            "role": _val("role", "Dealer"),
+            "contact": _val("contact"),
+            "notes": _val("notes"),
+            "real_name": _val("real_name"),
+            "address": address,
+            "email": _val("email"),
+            "nearest_station": _val("nearest_station"),
+            "employment_type": _val("employment_type", "contractor"),
+            "custom_hourly_rate": row.get("custom_hourly_rate") or (existing.get("custom_hourly_rate") if existing else None),
+            "prefecture": pref,
+            "region": region,
+        }
+
+        try:
+            if existing:
+                if no:
+                    payload["no"] = no
+                payload["updated_at"] = _now()
+                client.table("p1_staff").update(payload).eq("id", existing["id"]).execute()
+                updated += 1
+            else:
+                if no:
+                    payload["no"] = no
+                client.table("p1_staff").insert(payload).execute()
+                created += 1
+        except Exception as e:
+            errors.append(f"行{i} ({name_jp}): {str(e)[:100]}")
+
+    return {"created": created, "updated": updated, "errors": errors}
 
 
 def find_or_create_staff(no, name_jp, name_en="", role="Dealer"):
@@ -102,6 +211,74 @@ def find_or_create_staff(no, name_jp, name_en="", role="Dealer"):
     if r.data:
         return r.data[0]["id"]
     return create_staff(no, name_jp, name_en, role)
+
+
+# === Transport Rules ===
+
+def get_transport_rules(event_id):
+    """イベントの地域別交通費ルールを取得"""
+    return get_client().table("p1_event_transport_rules").select("*").eq(
+        "event_id", event_id).order("region").execute().data
+
+
+def save_transport_rules(event_id: int, rules: list[dict]):
+    """交通費ルールを一括保存（既存削除→再挿入）
+
+    rules: [{"region": "東海", "max_amount": 10000,
+            "receipt_required": 1, "is_venue_region": 0, "note": ""}]
+    """
+    client = get_client()
+    client.table("p1_event_transport_rules").delete().eq("event_id", event_id).execute()
+    if not rules:
+        return
+    payload = []
+    for r in rules:
+        payload.append({
+            "event_id": event_id,
+            "region": r.get("region"),
+            "max_amount": int(r.get("max_amount") or 0),
+            "receipt_required": int(r.get("receipt_required") or 0),
+            "is_venue_region": int(r.get("is_venue_region") or 0),
+            "note": r.get("note", "") or "",
+        })
+    client.table("p1_event_transport_rules").insert(payload).execute()
+
+
+# === Transport Claims ===
+
+def get_transport_claims(event_id):
+    """イベントの領収書金額一覧を取得"""
+    return get_client().table("p1_transport_claims").select("*").eq(
+        "event_id", event_id).execute().data
+
+
+def upsert_transport_claim(event_id: int, staff_id: int,
+                            receipt_amount: int, approved_amount: int,
+                            has_receipt: int = 1, note: str = ""):
+    """領収書金額を登録/更新"""
+    client = get_client()
+    existing = client.table("p1_transport_claims").select("id").eq(
+        "event_id", event_id).eq("staff_id", staff_id).execute().data
+    payload = {
+        "event_id": event_id, "staff_id": staff_id,
+        "receipt_amount": receipt_amount, "approved_amount": approved_amount,
+        "has_receipt": has_receipt, "note": note,
+        "updated_at": _now(),
+    }
+    if existing:
+        client.table("p1_transport_claims").update(payload).eq(
+            "id", existing[0]["id"]).execute()
+    else:
+        client.table("p1_transport_claims").insert(payload).execute()
+
+
+def get_staff_region(staff_id: int):
+    """スタッフの地域を取得（address→region優先、未設定時はcontractorデフォルト）"""
+    row = get_client().table("p1_staff").select(
+        "region, prefecture, address").eq("id", staff_id).execute().data
+    if not row:
+        return None, None
+    return row[0].get("region"), row[0].get("prefecture")
 
 
 # === Event CRUD ===

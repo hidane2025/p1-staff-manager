@@ -192,6 +192,7 @@ def calculate_staff_payment(
     break_8h: int = 60,
     employment_type: str = "contractor",
     custom_hourly_rate: Optional[int] = None,
+    transport_override: Optional[int] = None,
 ) -> StaffPayment:
     """スタッフ1人の全日程支払いを計算
 
@@ -266,6 +267,10 @@ def calculate_staff_payment(
     mix_total = sum(d.mix_bonus for d in daily_results)
     att_bonus = (att_bonus_override if att_bonus_override is not None
                  else calculate_attendance_bonus(days_worked, total_event_days))
+
+    # 交通費override: 新システム（領収書金額+上限）が指定されていればそれを使う
+    if transport_override is not None:
+        transport_total = transport_override
 
     total = base_pay + night_pay + transport_total + floor_total + mix_total + att_bonus
 

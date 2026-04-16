@@ -62,6 +62,31 @@ if st.button("🔄 支払い額を計算", type="primary"):
     # 全スタッフの雇用区分・個別時給をまとめて取得
     all_staff_map = {s["id"]: s for s in db.get_all_staff()}
 
+    # 交通費ルール・領収書請求の取得
+    transport_rules = {r["region"]: r for r in db.get_transport_rules(event_id)}
+    transport_claims = {c["staff_id"]: c for c in db.get_transport_claims(event_id)}
+
+    def _calc_transport(staff_info: dict, days: int) -> tuple[int | None, str]:
+        """新交通費システムでスタッフの交通費を計算
+
+        Returns: (交通費金額 or None, 説明メッセージ)
+            Noneの場合は旧システム（rate.transportで日数分）を使う
+        """
+        if not transport_rules:
+            return None, ""  # ルール未設定なら旧ロジック
+        region = staff_info.get("region")
+        if not region or region not in transport_rules:
+            return 0, "住所未登録または圏外のため交通費0"
+        rule = transport_rules[region]
+        if rule.get("is_venue_region"):
+            # 開催地: 一律 max_amount × 日数
+            return int(rule.get("max_amount", 0) or 0) * days, "開催地一律"
+        # 圏外: 領収書金額
+        claim = transport_claims.get(staff_info.get("id"))
+        if claim and claim.get("has_receipt"):
+            return int(claim.get("approved_amount") or 0), "領収書確定"
+        return 0, "領収書未提出のため0"
+
     # スタッフごとにグループ化
     staff_shifts = {}
     for s in shifts:
@@ -74,6 +99,7 @@ if st.button("🔄 支払い額を計算", type="primary"):
                 "shifts": [],
                 "employment_type": staff_info.get("employment_type") or "contractor",
                 "custom_hourly_rate": staff_info.get("custom_hourly_rate"),
+                "staff_info": staff_info,
             }
         if s["status"] == "absent":
             continue
@@ -93,6 +119,9 @@ if st.button("🔄 支払い額を計算", type="primary"):
         if staff_id in protected_ids:
             skipped += 1
             continue
+        # 新交通費システム（あれば）
+        days = len(data["shifts"])
+        transport_override, _msg = _calc_transport(data["staff_info"], days)
         payment = calculate_staff_payment(
             staff_id=staff_id, name=data["name"], role=data["role"],
             shifts=data["shifts"], rates_by_date=rates_by_date,
@@ -100,6 +129,7 @@ if st.button("🔄 支払い額を計算", type="primary"):
             break_6h=break_6h, break_8h=break_8h,
             employment_type=data["employment_type"],
             custom_hourly_rate=data["custom_hourly_rate"],
+            transport_override=transport_override,
         )
         results.append(payment)
         db.save_payment(
