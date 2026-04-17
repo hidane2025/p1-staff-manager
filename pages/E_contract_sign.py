@@ -78,15 +78,18 @@ if contract["status"] == "signed":
     st.stop()
 
 # ---- 契約内容表示 ----
-tpl = contract_db.get_template(contract["template_id"])
-if not tpl:
-    st.error("テンプレートが見つかりません。発行者にお問い合わせください。")
-    st.stop()
-
-variables = json.loads(contract.get("variables_json") or "{}")
-rendered = tpl["body_markdown"]
-for k, v in variables.items():
-    rendered = rendered.replace(f"{{{{{k}}}}}", v or "")
+# Ultra Review CR-1対策: 発行時スナップショット(rendered_body_md)を最優先で使う。
+# 旧契約で未記録の場合のみテンプレートから再生成。
+rendered = contract.get("rendered_body_md")
+if not rendered:
+    tpl = contract_db.get_template(contract["template_id"])
+    if not tpl:
+        st.error("テンプレートが見つかりません。発行者にお問い合わせください。")
+        st.stop()
+    variables = json.loads(contract.get("variables_json") or "{}")
+    rendered = tpl["body_markdown"]
+    for k, v in variables.items():
+        rendered = rendered.replace(f"{{{{{k}}}}}", v or "")
 
 st.info(f"契約書No: **{contract['contract_no']}**")
 st.caption("以下の内容を必ずご確認の上、電子署名してください。")
@@ -138,21 +141,40 @@ except ImportError:
     uploaded = st.file_uploader("署名画像（PNG推奨）", type=["png", "jpg", "jpeg"])
     sig_image_array = None
 
+# Ultra Review M-4対策: 二重送信ガード
+# 送信中フラグ・送信済みフラグをsession_stateで管理
+SUBMIT_LOCK_KEY = f"signing_{contract['id']}"
+if SUBMIT_LOCK_KEY not in st.session_state:
+    st.session_state[SUBMIT_LOCK_KEY] = "idle"  # idle/submitting/done
+
+submit_state = st.session_state[SUBMIT_LOCK_KEY]
+
 col_a, col_b = st.columns([1, 1])
 with col_a:
-    clear = st.button("🗑 署名をやり直す", use_container_width=True)
+    clear = st.button(
+        "🗑 署名をやり直す",
+        use_container_width=True,
+        disabled=(submit_state != "idle"),
+    )
     if clear and has_canvas:
         st.rerun()
 
 with col_b:
+    submit_label = {
+        "idle": "✅ 署名して送信",
+        "submitting": "⏳ 送信中... お待ちください",
+        "done": "✅ 送信完了",
+    }[submit_state]
     submit = st.button(
-        "✅ 署名して送信",
+        submit_label,
         type="primary",
-        disabled=not agree,
+        disabled=(not agree or submit_state != "idle"),
         use_container_width=True,
     )
 
 if submit:
+    # Ultra Review M-4対策: submitting 状態にロック
+    st.session_state[SUBMIT_LOCK_KEY] = "submitting"
     sig_png_bytes = None
 
     if has_canvas and sig_image_array is not None:
@@ -168,6 +190,7 @@ if submit:
         sig_png_bytes = uploaded.read()
 
     if not sig_png_bytes:
+        st.session_state[SUBMIT_LOCK_KEY] = "idle"  # rollback
         st.error("署名を描画してください。")
     else:
         # 空白チェック（全部白なら拒否）
@@ -176,6 +199,7 @@ if submit:
             extrema = img_check.getextrema()
             is_all_white = all(e[0] >= 250 and e[1] >= 250 for e in extrema)
             if is_all_white:
+                st.session_state[SUBMIT_LOCK_KEY] = "idle"  # rollback
                 st.error("署名が空白です。描画してから再度送信してください。")
                 st.stop()
         except Exception:
@@ -188,6 +212,7 @@ if submit:
                 signer_ip="", signer_ua="",
             )
         if result["ok"]:
+            st.session_state[SUBMIT_LOCK_KEY] = "done"
             st.success("✅ 署名が完了しました。ありがとうございます。")
             st.caption(f"契約書No: {contract['contract_no']}")
             st.caption(f"Content-Hash (SHA-256先頭16): {result['content_hash'][:16]}")
@@ -203,6 +228,8 @@ if submit:
                 )
             st.info("署名完了の記録がサーバーに保存されました。上記PDFは控えとして保管してください。")
         else:
+            # 失敗時はロックを戻す（リトライ可能に）
+            st.session_state[SUBMIT_LOCK_KEY] = "idle"
             st.error(f"署名処理に失敗しました: {result.get('error')}")
 
 st.divider()

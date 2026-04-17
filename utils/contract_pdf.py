@@ -45,8 +45,11 @@ def today_jst_ymd() -> str:
 
 
 def build_contract_no(template_id: int, staff_id: int, issue_date_ymd: str) -> str:
+    """契約書Noを生成。同日同スタッフへの再発行に備えてランダムサフィックスを付与。"""
+    import secrets
     compact = issue_date_ymd.replace("-", "")
-    return f"C-{compact}-T{template_id}-S{staff_id}"
+    suffix = secrets.token_hex(3).upper()  # 6桁16進
+    return f"C-{compact}-T{template_id}-S{staff_id}-{suffix}"
 
 
 @dataclass(frozen=True)

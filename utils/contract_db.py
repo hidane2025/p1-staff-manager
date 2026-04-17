@@ -67,15 +67,33 @@ def create_contract(
     contract_no: str,
     variables: dict,
     event_id: Optional[int] = None,
+    rendered_body_md: Optional[str] = None,
+    template_version: Optional[str] = None,
+    template_name_snapshot: Optional[str] = None,
 ) -> int:
-    r = db.get_client().table("p1_contracts").insert({
+    """契約発行時のスナップショットを保持した行を作成
+
+    Args:
+        rendered_body_md: 発行時点のレンダリング済み本文。
+            署名時はこれを使うことで、テンプレ改変の影響を受けない（CR-1対策）。
+        template_version: 発行時点のテンプレバージョン
+        template_name_snapshot: 発行時点のテンプレ名
+    """
+    payload = {
         "template_id": template_id,
         "staff_id": staff_id,
         "event_id": event_id,
         "contract_no": contract_no,
         "status": "draft",
         "variables_json": json.dumps(variables, ensure_ascii=False),
-    }).execute()
+    }
+    if rendered_body_md is not None:
+        payload["rendered_body_md"] = rendered_body_md
+    if template_version is not None:
+        payload["template_version"] = template_version
+    if template_name_snapshot is not None:
+        payload["template_name_snapshot"] = template_name_snapshot
+    r = db.get_client().table("p1_contracts").insert(payload).execute()
     return r.data[0]["id"] if r.data else 0
 
 

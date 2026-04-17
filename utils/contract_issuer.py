@@ -81,11 +81,15 @@ def issue_contract(
         issuer_name=issuer_name,
     )
 
-    # DB行作成
+    # DB行作成（rendered_body_mdもスナップショットとして記録）
+    # → 署名時のテンプレ改変に影響されない（Ultra Review CR-1対策）
     contract_id = contract_db.create_contract(
         template_id, staff_id, contract_no,
         variables=variables.to_dict(),
         event_id=event_id,
+        rendered_body_md=rendered,
+        template_version=tpl.get("version"),
+        template_name_snapshot=tpl.get("name"),
     )
     if not contract_id:
         return {"ok": False, "error": "DB書き込み失敗"}
@@ -139,13 +143,18 @@ def issue_contracts_bulk(template_id: int, staff_ids: list[int],
 
 def apply_signature(contract_id: int, signature_png: bytes,
                       signer_ip: str = "", signer_ua: str = "") -> dict:
-    """署名画像を受け取り、署名済PDFを生成してStorageに保存"""
+    """署名画像を受け取り、署名済PDFを生成してStorageに保存
+
+    ※ Ultra Review CR-1対策:
+    発行時にスナップショット保存したrendered_body_mdを優先使用する。
+    テンプレが発行後に編集されても、署名対象の内容は固定される。
+    """
     from datetime import datetime, timedelta, timezone
     JST = timezone(timedelta(hours=9))
 
     client = db.get_client()
     row = client.table("p1_contracts").select(
-        "id, contract_no, template_id, variables_json, event_id, status"
+        "id, contract_no, template_id, variables_json, event_id, status, rendered_body_md"
     ).eq("id", contract_id).execute().data
     if not row:
         return {"ok": False, "error": "契約が見つかりません"}
@@ -156,18 +165,19 @@ def apply_signature(contract_id: int, signature_png: bytes,
     if c["status"] == "revoked":
         return {"ok": False, "error": "この契約は無効化されています"}
 
-    tpl = contract_db.get_template(c["template_id"])
-    if not tpl:
-        return {"ok": False, "error": "テンプレートが見つかりません"}
-
     import json as _json
     variables_dict = _json.loads(c["variables_json"] or "{}")
 
-    # 再レンダリング（テンプレが変わっていても、変数はDB保存されたものを使用）
-    # 最もシンプル: 変数をdictで直接embed
-    rendered = tpl["body_markdown"]
-    for k, v in variables_dict.items():
-        rendered = rendered.replace(f"{{{{{k}}}}}", v or "")
+    # CR-1対策: 発行時スナップショットを最優先
+    # 旧契約（rendered_body_md未記録）のみ、互換のためテンプレから再生成
+    rendered = c.get("rendered_body_md")
+    if not rendered:
+        tpl = contract_db.get_template(c["template_id"])
+        if not tpl:
+            return {"ok": False, "error": "テンプレートが見つかりません"}
+        rendered = tpl["body_markdown"]
+        for k, v in variables_dict.items():
+            rendered = rendered.replace(f"{{{{{k}}}}}", v or "")
 
     # 署名日時
     signed_at_iso = datetime.now(JST).isoformat()

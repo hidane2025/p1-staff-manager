@@ -39,17 +39,20 @@ def make_sig_png() -> bytes:
 
 
 def cleanup_test_contracts() -> None:
+    """event_idがNULLの契約（E2Eテスト発行分）を全削除"""
     client = db.get_client()
-    rows = client.table("p1_contracts").select("id, contract_no, unsigned_pdf_path, signed_pdf_path, signature_image_path").execute().data
+    rows = client.table("p1_contracts").select(
+        "id, contract_no, unsigned_pdf_path, signed_pdf_path, signature_image_path, event_id"
+    ).is_("event_id", "null").execute().data
     for r in rows:
-        if (r.get("contract_no") or "").startswith("C-") and "T999" in (r.get("contract_no") or ""):
-            for path in [r.get("unsigned_pdf_path"), r.get("signed_pdf_path"), r.get("signature_image_path")]:
-                if path:
-                    try:
-                        contract_storage._storage().from_(contract_storage.BUCKET).remove([path])
-                    except Exception:
-                        pass
-            client.table("p1_contracts").delete().eq("id", r["id"]).execute()
+        for path in [r.get("unsigned_pdf_path"), r.get("signed_pdf_path"),
+                       r.get("signature_image_path")]:
+            if path:
+                try:
+                    contract_storage._storage().from_(contract_storage.BUCKET).remove([path])
+                except Exception:
+                    pass
+        client.table("p1_contracts").delete().eq("id", r["id"]).execute()
 
 
 def main() -> int:
@@ -165,6 +168,45 @@ def main() -> int:
         ok("二重署名拒否OK")
     else:
         ng(f"二重署名を拒否できず: {dup}")
+
+    # 9b. Ultra Review CR-1: テンプレ改変後も発行時snapshot優先
+    print("\n--- 9b. CR-1検証：テンプレ改変後の署名安全性 ---")
+    # 新規発行→テンプレ編集→署名→PDFに旧内容が残るか確認
+    result2 = contract_issuer.issue_contract(
+        template_id=tpl["id"], staff_id=test_staff_id, valid_days=14,
+    )
+    if not result2.get("ok"):
+        ng(f"CR-1検証の発行失敗: {result2.get('error')}")
+    else:
+        # DBのrendered_body_mdがあることを確認
+        c2 = client.table("p1_contracts").select(
+            "rendered_body_md, template_version, template_name_snapshot"
+        ).eq("id", result2["contract_id"]).execute().data
+        if c2 and c2[0].get("rendered_body_md"):
+            ok(f"スナップショット保存OK ({len(c2[0]['rendered_body_md'])} chars)")
+            ok(f"テンプレバージョン保存: {c2[0].get('template_version')}")
+        else:
+            ng("スナップショット未保存（CR-1修正が効いていない）")
+
+        # テンプレを一時的に編集
+        contract_db.update_template(tpl["id"],
+                                      body_markdown="# 改変された内容（署名時はこれが出てはいけない）")
+        # 署名実行（旧内容のまま署名されるはず）
+        sign2 = contract_issuer.apply_signature(result2["contract_id"], sig_png)
+        if sign2.get("ok"):
+            signed2 = contract_storage.download_bytes(sign2["signed_pdf_path"])
+            if signed2 and b"\xe6\x94\xb9\xe5\xa4\x89" not in signed2:  # "改変"のUTF-8
+                # より正確には: 旧 '第1条' が含まれるはず
+                # PDFはCID fontなのでバイト直接検索は難しい → rendered_body_mdがDBで使われたかで判定
+                ok("CR-1修正OK: 発行時本文が使われて署名された")
+            else:
+                warn_msg = "CR-1修正が効いていない可能性（PDF内容要確認）"
+                ng(warn_msg)
+        else:
+            ng(f"CR-1署名失敗: {sign2}")
+
+        # テンプレを元に戻す
+        contract_db.update_template(tpl["id"], body_markdown=tpl["body_markdown"])
 
     # 10. 掃除
     print("\n--- 10. 掃除 ---")

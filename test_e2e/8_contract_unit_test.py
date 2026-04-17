@@ -86,9 +86,12 @@ def test_render_template() -> None:
 
 
 def test_contract_no() -> None:
-    n = build_contract_no(1, 123, "2026-04-17")
-    assert n == "C-20260417-T1-S123"
-    print(f"  ✅ 契約書No生成: {n}")
+    n1 = build_contract_no(1, 123, "2026-04-17")
+    n2 = build_contract_no(1, 123, "2026-04-17")
+    # 形式: C-YYYYMMDD-T{id}-S{staff}-{6hex}
+    assert n1.startswith("C-20260417-T1-S123-")
+    assert n1 != n2  # ランダムサフィックスで毎回異なる
+    print(f"  ✅ 契約書No生成: {n1} / {n2}")
 
 
 def test_unsigned_pdf() -> None:
