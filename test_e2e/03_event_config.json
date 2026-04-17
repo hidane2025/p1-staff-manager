@@ -1,0 +1,135 @@
+{
+  "name": "P1 Kyoto 2026 夏大会",
+  "venue": "京都劇場",
+  "venue_prefecture": "京都府",
+  "start_date": "2026-08-13",
+  "end_date": "2026-08-17",
+  "dates": [
+    "2026-08-13",
+    "2026-08-14",
+    "2026-08-15",
+    "2026-08-16",
+    "2026-08-17"
+  ],
+  "rates": {
+    "2026-08-13": {
+      "hourly": 1500,
+      "night": 1875,
+      "transport": 1000,
+      "floor_bonus": 3000,
+      "mix_bonus": 1500,
+      "date_label": "regular"
+    },
+    "2026-08-14": {
+      "hourly": 1500,
+      "night": 1875,
+      "transport": 1000,
+      "floor_bonus": 3000,
+      "mix_bonus": 1500,
+      "date_label": "regular"
+    },
+    "2026-08-15": {
+      "hourly": 1600,
+      "night": 2000,
+      "transport": 1000,
+      "floor_bonus": 5000,
+      "mix_bonus": 1500,
+      "date_label": "premium"
+    },
+    "2026-08-16": {
+      "hourly": 1600,
+      "night": 2000,
+      "transport": 1000,
+      "floor_bonus": 5000,
+      "mix_bonus": 1500,
+      "date_label": "premium"
+    },
+    "2026-08-17": {
+      "hourly": 1500,
+      "night": 1875,
+      "transport": 1000,
+      "floor_bonus": 3000,
+      "mix_bonus": 1500,
+      "date_label": "regular"
+    }
+  },
+  "transport_rules": [
+    {
+      "region": "近畿",
+      "max_amount": 1000,
+      "receipt_required": 0,
+      "is_venue_region": 1,
+      "note": "開催地・一律支給"
+    },
+    {
+      "region": "東海",
+      "max_amount": 8000,
+      "receipt_required": 1,
+      "is_venue_region": 0,
+      "note": ""
+    },
+    {
+      "region": "関東",
+      "max_amount": 15000,
+      "receipt_required": 1,
+      "is_venue_region": 0,
+      "note": ""
+    },
+    {
+      "region": "北陸",
+      "max_amount": 10000,
+      "receipt_required": 1,
+      "is_venue_region": 0,
+      "note": ""
+    },
+    {
+      "region": "甲信越",
+      "max_amount": 12000,
+      "receipt_required": 1,
+      "is_venue_region": 0,
+      "note": ""
+    },
+    {
+      "region": "中国",
+      "max_amount": 10000,
+      "receipt_required": 1,
+      "is_venue_region": 0,
+      "note": ""
+    },
+    {
+      "region": "四国",
+      "max_amount": 12000,
+      "receipt_required": 1,
+      "is_venue_region": 0,
+      "note": ""
+    },
+    {
+      "region": "九州",
+      "max_amount": 20000,
+      "receipt_required": 1,
+      "is_venue_region": 0,
+      "note": ""
+    },
+    {
+      "region": "東北",
+      "max_amount": 20000,
+      "receipt_required": 1,
+      "is_venue_region": 0,
+      "note": ""
+    },
+    {
+      "region": "北海道",
+      "max_amount": 25000,
+      "receipt_required": 1,
+      "is_venue_region": 0,
+      "note": ""
+    },
+    {
+      "region": "沖縄",
+      "max_amount": 25000,
+      "receipt_required": 1,
+      "is_venue_region": 0,
+      "note": ""
+    }
+  ]
+}
