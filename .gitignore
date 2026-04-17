@@ -5,8 +5,12 @@ __pycache__/
 *.db-shm
 manual_images/
 *.pdf
+!docs/MANUAL_*.pdf
 generate_manual_pdf.py
 generate_presentation.py
 test_nagoya.py
 .streamlit/secrets.toml
 Icon
+.DS_Store
+docs/preview/
+docs/preview_full/
