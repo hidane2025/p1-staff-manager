@@ -130,10 +130,9 @@ issued = [r for r in rows if r.get("receipt_pdf_path") and r.get("receipt_token"
 if not issued:
     st.caption("発行済みの領収書はまだありません。")
 else:
-    # 公開URLのベースは Streamlit Cloud のデプロイドメイン
-    # ローカルでは相対URLで表示
-    base_host = st.secrets.get("PUBLIC_URL", "") if hasattr(st, "secrets") else ""
-    base_host = base_host or "https://p1-staff-manager.streamlit.app"
+    # 公開URLのベースは自動判定（secrets override → Hostヘッダ → fallback）
+    from utils.url_helper import get_base_host
+    base_host = get_base_host()
 
     table_rows = []
     for r in issued:

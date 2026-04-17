@@ -143,7 +143,8 @@ contracts = contract_db.list_contracts(
 if not contracts:
     st.caption("該当する契約はありません。")
 else:
-    base_host = "https://p1-staff-manager.streamlit.app"
+    from utils.url_helper import get_base_host
+    base_host = get_base_host()
     rows = []
     for c in contracts:
         token = c.get("signing_token") or ""
