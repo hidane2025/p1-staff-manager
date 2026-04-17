@@ -9,6 +9,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+from utils.ui_helpers import hide_staff_only_pages
+hide_staff_only_pages()
+
 st.title("🃏 P1 Staff Manager")
 st.markdown("イベント経理管理システム")
 

@@ -13,6 +13,8 @@ from utils.calculator import calculate_staff_payment
 from utils.event_selector import select_event
 
 st.set_page_config(page_title="支払い計算", page_icon="💰", layout="wide")
+from utils.ui_helpers import hide_staff_only_pages
+hide_staff_only_pages()
 st.title("💰 支払い計算")
 
 # --- イベント選択（全ページ共通・session_state共有） ---
@@ -245,11 +247,32 @@ with col_pay:
     payable = [p for p in approved_payments if p["receipt_received"]]
     not_payable = [p for p in approved_payments if not p["receipt_received"]]
     if payable:
-        if st.button(f"💴 承認済み＋領収書受領済みの{len(payable)}名を支払済みに"):
-            for p in payable:
-                db.mark_paid(p["id"], event_id)
-            st.success(f"{len(payable)}名を支払済みにしました")
-            st.rerun()
+        bulk_pay_key = "__confirm_bulk_paid"
+        if st.session_state.get(bulk_pay_key):
+            st.warning(
+                f"⚠️ {len(payable)}名を **支払済み** に変更します。"
+                f"支払済みにすると後から元に戻せません（DB直操作が必要）。本当によろしいですか？"
+            )
+            cy, cn = st.columns(2)
+            if cy.button("✅ 確定して支払済みにする", type="primary",
+                          key="confirm_bulk_paid_yes"):
+                try:
+                    for p in payable:
+                        db.mark_paid(p["id"], event_id)
+                    st.success(f"✅ {len(payable)}名を支払済みにしました")
+                except Exception as e:
+                    st.error("💥 一部の更新に失敗しました。該当スタッフを手動で確認してください。")
+                    with st.expander("🔧 技術詳細"):
+                        st.code(str(e))
+                st.session_state[bulk_pay_key] = False
+                st.rerun()
+            if cn.button("❌ キャンセル", key="confirm_bulk_paid_no"):
+                st.session_state[bulk_pay_key] = False
+                st.rerun()
+        else:
+            if st.button(f"💴 承認済み＋領収書受領済みの{len(payable)}名を支払済みに"):
+                st.session_state[bulk_pay_key] = True
+                st.rerun()
     if not_payable:
         st.warning(f"⚠️ {len(not_payable)}名が承認済みだが領収書未受領のため支払い不可")
 
@@ -348,9 +371,25 @@ if staff_opts:
         # 支払い（承認済み＋領収書受領済みのみ）
         if p["status"] == "approved":
             if p["receipt_received"]:
-                if st.button("💴 支払済みにする", key=f"pay_{p['id']}"):
-                    db.mark_paid(p["id"], event_id)
-                    st.success(f"{p['name_jp']} を支払済みにしました")
+                pay_conf_key = f"__confirm_pay_{p['id']}"
+                if st.session_state.get(pay_conf_key):
+                    st.warning(f"⚠️ {p['name_jp']} を支払済みにします。元に戻せません。")
+                    cy2, cn2 = st.columns(2)
+                    if cy2.button("✅ 確定", key=f"y_{p['id']}", type="primary"):
+                        try:
+                            db.mark_paid(p["id"], event_id)
+                            st.success(f"{p['name_jp']} を支払済みにしました")
+                        except Exception as e:
+                            st.error("更新失敗。もう一度お試しください。")
+                        st.session_state[pay_conf_key] = False
+                        st.rerun()
+                    if cn2.button("❌ 取消", key=f"n_{p['id']}"):
+                        st.session_state[pay_conf_key] = False
+                        st.rerun()
+                else:
+                    if st.button("💴 支払済みにする", key=f"pay_{p['id']}"):
+                        st.session_state[pay_conf_key] = True
+                        st.rerun()
                     st.rerun()
             else:
                 st.error("❌ 領収書が未受領のため支払いできません")
@@ -391,7 +430,7 @@ if staff_opts:
                 missing.append("住所")
             col_warn, col_link = st.columns([3, 1])
             col_warn.warning(f"⚠️ {' と '.join(missing)}が未登録のため領収書PDFを発行できません")
-            col_link.page_link("pages/1_staff.py", label="▶ スタッフ管理へ", icon="📋")
+            col_link.page_link("pages/1_スタッフ管理.py", label="▶ スタッフ管理へ", icon="📋")
 
     # --- 備考欄 ---
     st.divider()

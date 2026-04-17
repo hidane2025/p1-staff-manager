@@ -10,6 +10,8 @@ from utils.region import REGIONS, default_regions_for_event, address_to_region
 from utils.event_selector import select_event
 
 st.set_page_config(page_title="交通費", page_icon="🚃", layout="wide")
+from utils.ui_helpers import hide_staff_only_pages
+hide_staff_only_pages()
 st.title("🚃 交通費ルール設定・事前見積")
 st.caption("イベント毎に地域別の交通費上限を設定します。")
 

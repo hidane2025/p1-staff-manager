@@ -9,6 +9,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
 
 st.set_page_config(page_title="年間累計", page_icon="📆", layout="wide")
+from utils.ui_helpers import hide_staff_only_pages
+hide_staff_only_pages()
 st.title("📆 年間累計レポート（確定申告用）")
 st.caption("1/1〜12/31の累計支払額。法定調書提出対象者（年¥50万超）を自動フラグ表示。")
 
@@ -131,9 +133,56 @@ if target_staff:
             if not t.get("real_name") or not t.get("address"):
                 col_err, col_link = st.columns([3, 1])
                 col_err.error("❌ 本名または住所が未登録です（法定調書作成に必要）")
-                col_link.page_link("pages/1_staff.py", label="▶ スタッフ管理へ", icon="📋")
+                col_link.page_link("pages/1_スタッフ管理.py", label="▶ スタッフ管理へ", icon="📋")
 else:
     st.success("¥500,000超のスタッフはいません。")
+
+# --- スタッフ情報健全性チェック ---
+st.divider()
+with st.expander("🩺 スタッフ情報健全性チェック（運用品質確認）", expanded=False):
+    st.caption("領収書や契約書が正しく発行できないスタッフを抽出します。")
+
+    # 全スタッフ情報取得
+    client = db.get_client()
+    all_staff = client.table("p1_staff").select(
+        "id, no, name_jp, real_name, address, email, nearest_station, employment_type"
+    ).order("no").execute().data
+    # 今年稼働のid
+    active_ids = {t["staff_id"] for t in totals}
+    active_staff = [s for s in all_staff if s["id"] in active_ids]
+
+    def _miss(s, keys):
+        return [k for k in keys if not s.get(k)]
+
+    issues = []
+    for s in active_staff:
+        m = _miss(s, ["real_name", "email", "address"])
+        if m:
+            issues.append({
+                "No.": s.get("no"),
+                "ディーラーネーム": s.get("name_jp"),
+                "本名": s.get("real_name") or "❌未登録",
+                "メール": s.get("email") or "❌未登録",
+                "住所": s.get("address") or "❌未登録",
+                "不足項目": "、".join(
+                    {"real_name": "本名", "email": "メール", "address": "住所"}[k]
+                    for k in m
+                ),
+            })
+
+    if issues:
+        st.warning(f"⚠️ 今年稼働した {len(active_staff)}名中、**{len(issues)}名** に未登録項目があります。")
+        st.dataframe(issues, hide_index=True, use_container_width=True)
+        st.info("💡 法定調書提出や領収書・契約書発行の前に、スタッフ管理画面で補完してください。")
+        csv_issues = pd.DataFrame(issues).to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "📥 未登録スタッフ一覧CSV",
+            csv_issues,
+            f"p1_staff_incomplete_{year}.csv",
+            "text/csv",
+        )
+    else:
+        st.success(f"✅ 今年稼働した {len(active_staff)}名全員の本名・メール・住所が登録済みです。")
 
 # --- CSV出力 ---
 st.divider()

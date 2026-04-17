@@ -12,6 +12,9 @@ from utils import event_selector
 
 
 st.set_page_config(page_title="領収書発行", page_icon="📄", layout="wide")
+from utils.ui_helpers import hide_staff_only_pages, missing_field_warning, copyable_url
+hide_staff_only_pages()
+
 st.title("📄 領収書発行")
 st.caption("支払確定分の領収書をPDF生成し、スタッフ用DLリンクを発行します。")
 
@@ -109,18 +112,38 @@ with col2:
 
 st.write(f"選択中: **{len(selected_ids)}名**")
 
-if st.button("📄 選択分を一括発行", type="primary", disabled=(len(selected_ids) == 0)):
-    with st.spinner(f"{len(selected_ids)}名分を発行中..."):
-        result = receipt_issuer.issue_receipts_bulk(
-            selected_ids, valid_days=int(valid_days), force_regenerate=force
+# 選択されたスタッフの本名・住所欠損をチェック
+selected_rows_data = [r for r in rows if r["id"] in selected_ids]
+if selected_rows_data:
+    missing_list = missing_field_warning(selected_rows_data, ["real_name"])
+    if missing_list:
+        proceed = st.checkbox(
+            "⚠️ 本名未登録でも発行する（領収書の宛名はディーラーネームになります）",
+            value=False,
         )
-    st.success(f"発行完了: 成功 {result['success']}件 / 失敗 {result['failure']}件")
-    if result["failure"] > 0:
-        with st.expander("❌ 失敗詳細"):
-            for r in result["results"]:
-                if not r.get("ok"):
-                    st.error(f"payment_id={r.get('payment_id')}: {r.get('error')}")
-    st.rerun()
+    else:
+        proceed = True
+else:
+    proceed = False
+
+if st.button("📄 選択分を一括発行", type="primary",
+             disabled=(len(selected_ids) == 0 or not proceed)):
+    try:
+        with st.spinner(f"{len(selected_ids)}名分を発行中..."):
+            result = receipt_issuer.issue_receipts_bulk(
+                selected_ids, valid_days=int(valid_days), force_regenerate=force
+            )
+        st.success(f"✅ 発行完了: 成功 {result['success']}件 / 失敗 {result['failure']}件")
+        if result["failure"] > 0:
+            with st.expander("❌ 失敗詳細"):
+                for r in result["results"]:
+                    if not r.get("ok"):
+                        st.error(f"payment_id={r.get('payment_id')}: {r.get('error')}")
+        st.rerun()
+    except Exception as e:
+        st.error("💥 発行処理中にエラーが発生しました。ネットワーク状況を確認して再度お試しください。")
+        with st.expander("🔧 技術詳細（管理者向け）"):
+            st.code(str(e), language=None)
 
 # --- DLリンク一覧 ---
 st.divider()
@@ -137,7 +160,7 @@ else:
     table_rows = []
     for r in issued:
         token = r["receipt_token"]
-        url = f"{base_host}/9_receipt_download?token={token}"
+        url = f"{base_host}/receipt_download?token={token}"
         table_rows.append({
             "No.": r.get("no", 0),
             "ディーラーネーム": r.get("name_jp", ""),
@@ -145,20 +168,46 @@ else:
             "金額": r.get("total_amount", 0),
             "DL回数": r.get("receipt_download_count") or 0,
             "有効期限": r.get("receipt_token_expires_at") or "",
-            "DLリンク": url,
+            "URL": url,
         })
     df_links = pd.DataFrame(table_rows)
     st.dataframe(
         df_links,
         column_config={
             "金額": st.column_config.NumberColumn(format="¥%d"),
-            "DLリンク": st.column_config.LinkColumn("DLリンク", display_text="🔗 コピー用"),
         },
         hide_index=True,
         use_container_width=True,
     )
 
-    # CSV出力（LINE等に貼り付け配布用）
+    # --- 個別URLコピー（1クリックでクリップボード） ---
+    st.markdown("#### 📋 URLをコピー（LINE等に貼り付け用）")
+    st.caption("下記コードブロック右上のコピーアイコンを押すと、URLがクリップボードに入ります。")
+
+    # モード選択
+    copy_mode = st.radio(
+        "表示形式",
+        ["個別（1名ずつ）", "一括（全員分まとめて）"],
+        horizontal=True,
+    )
+
+    if copy_mode == "個別（1名ずつ）":
+        staff_choices = {
+            f"{r['No.']} {r['ディーラーネーム']}（{r['本名']}） ¥{r['金額']:,}": r["URL"]
+            for r in table_rows
+        }
+        picked = st.selectbox("スタッフ選択", list(staff_choices.keys()))
+        copyable_url(staff_choices[picked], label="このスタッフのDL URL")
+    else:
+        # 全員分を LINE送信風にまとめる
+        bulk_text = "\n\n".join(
+            f"{r['本名'] or r['ディーラーネーム']}さん\n{r['URL']}"
+            for r in table_rows
+        )
+        copyable_url(bulk_text, label="全員分まとめて（LINE等にコピー&ペースト）")
+
+    # CSV出力
+    st.markdown("---")
     csv = df_links.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
         "📥 DLリンク一覧をCSVでダウンロード",

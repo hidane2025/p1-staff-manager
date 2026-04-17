@@ -11,6 +11,8 @@ from utils.calculator import parse_shift_time
 from utils.event_selector import select_event
 
 st.set_page_config(page_title="シフト取込", page_icon="📅", layout="wide")
+from utils.ui_helpers import hide_staff_only_pages
+hide_staff_only_pages()
 st.title("📅 シフト取込")
 
 # --- イベント選択 or 作成 ---

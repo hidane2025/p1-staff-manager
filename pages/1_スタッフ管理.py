@@ -7,6 +7,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
 
 st.set_page_config(page_title="スタッフ管理", page_icon="📋", layout="wide")
+from utils.ui_helpers import hide_staff_only_pages
+hide_staff_only_pages()
 st.title("📋 スタッフ管理")
 
 ROLES = ["Dealer", "Floor", "TD", "DC", "Chip"]

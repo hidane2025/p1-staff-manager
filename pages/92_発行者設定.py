@@ -10,6 +10,8 @@ from utils import event_selector
 
 
 st.set_page_config(page_title="発行者設定", page_icon="🏢", layout="wide")
+from utils.ui_helpers import hide_staff_only_pages
+hide_staff_only_pages()
 st.title("🏢 発行者設定")
 st.caption("領収書PDFに記載する発行者（Pacific）情報を設定します。インボイス番号は後日追加可能です。")
 

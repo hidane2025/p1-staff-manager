@@ -8,6 +8,8 @@ from utils import contract_db
 
 
 st.set_page_config(page_title="契約書テンプレート", page_icon="📝", layout="wide")
+from utils.ui_helpers import hide_staff_only_pages
+hide_staff_only_pages()
 st.title("📝 契約書テンプレート管理")
 st.caption("業務委託契約書・NDA・個人情報取扱同意書などのテンプレートを管理します。")
 

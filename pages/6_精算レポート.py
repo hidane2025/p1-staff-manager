@@ -9,6 +9,8 @@ import db
 from utils.event_selector import select_event
 
 st.set_page_config(page_title="精算レポート", page_icon="📊", layout="wide")
+from utils.ui_helpers import hide_staff_only_pages
+hide_staff_only_pages()
 st.title("📊 精算レポート")
 
 # --- イベント選択（全ページ共通） ---
