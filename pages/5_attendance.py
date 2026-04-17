@@ -12,20 +12,14 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
+from utils.event_selector import select_event
 
 st.set_page_config(page_title="出退勤", page_icon="🕐", layout="wide")
 st.title("🕐 出退勤管理")
 st.caption("シフト通り＝デフォルト。例外（欠勤・遅刻・延長・早退）だけ記録する")
 
-# --- イベント・日付選択 ---
-events = db.get_all_events()
-if not events:
-    st.warning("イベントがありません。")
-    st.stop()
-
-event_options = {f"{e['name']}": e["id"] for e in events}
-selected_event = st.selectbox("イベント", list(event_options.keys()))
-event_id = event_options[selected_event]
+# --- イベント・日付選択（全ページ共通のsession_state共有） ---
+event_id = select_event(db.get_all_events(), "イベント")
 
 rates = db.get_event_rates(event_id)
 date_options = [r["date"] for r in rates]
@@ -90,32 +84,26 @@ with col_bulk1:
         if eligible_count == 0:
             st.info("対象のスタッフがいません（全員出勤済みまたは欠勤）")
         else:
-            conn = db.get_connection()
+            client = db.get_client()
             for s in eligible_shifts:
-                conn.execute(
-                    """UPDATE shifts SET actual_start = planned_start,
-                       status = 'checked_in' WHERE id = ?""",
-                    (s["id"],)
-                )
-            conn.commit()
-            conn.close()
+                client.table("p1_shifts").update({
+                    "actual_start": s["planned_start"],
+                    "status": "checked_in",
+                }).eq("id", s["id"]).execute()
             st.success(f"{eligible_count}名を出勤にしました（予定開始が {now_str} 以前）")
             st.rerun()
 
 with col_bulk2:
     if st.button("🔴 全員退勤（予定時刻で確定）", use_container_width=True):
-        conn = db.get_connection()
+        client = db.get_client()
         for s in shifts:
             if s["status"] in ("checked_in", "scheduled"):
                 actual_end = s.get("actual_end") or s["planned_end"]
-                conn.execute(
-                    """UPDATE shifts SET actual_end = ?,
-                       actual_start = COALESCE(actual_start, planned_start),
-                       status = 'checked_out' WHERE id = ?""",
-                    (actual_end, s["id"])
-                )
-        conn.commit()
-        conn.close()
+                client.table("p1_shifts").update({
+                    "actual_end": actual_end,
+                    "actual_start": s.get("actual_start") or s["planned_start"],
+                    "status": "checked_out",
+                }).eq("id", s["id"]).execute()
         st.success("全員を予定時刻で退勤確定しました")
         st.rerun()
 
@@ -130,15 +118,13 @@ with col_bulk3:
         st.error("⚠️ 全員の出退勤データが消えます")
         col_yes, col_no = st.columns(2)
         if col_yes.button("はい、リセットする", type="primary"):
-            conn = db.get_connection()
+            client = db.get_client()
             for s in shifts:
-                conn.execute(
-                    """UPDATE shifts SET actual_start = NULL, actual_end = NULL,
-                       status = 'scheduled' WHERE id = ?""",
-                    (s["id"],)
-                )
-            conn.commit()
-            conn.close()
+                client.table("p1_shifts").update({
+                    "actual_start": None,
+                    "actual_end": None,
+                    "status": "scheduled",
+                }).eq("id", s["id"]).execute()
             st.session_state["confirm_reset"] = False
             st.success("全員のステータスをリセットしました")
             st.rerun()
@@ -152,9 +138,9 @@ with col_bulk3:
 st.divider()
 st.subheader("② 例外を記録（来てない人・時間が違う人だけ）")
 
-# タブで操作を分ける
-tab_absent, tab_late, tab_overtime, tab_early, tab_freeze = st.tabs([
-    "❌ 欠勤", "⏰ 遅刻", "⏩ 延長（残業）", "⏪ 早退", "🧊 凍結退勤"
+# タブで操作を分ける（凍結退勤を最初＝最終日の主要操作）
+tab_freeze, tab_absent, tab_late, tab_overtime, tab_early = st.tabs([
+    "🧊 凍結退勤（一括）", "❌ 欠勤", "⏰ 遅刻", "⏩ 延長（残業）", "⏪ 早退"
 ])
 
 # スタッフ選択肢を生成
@@ -172,15 +158,9 @@ with tab_absent:
     )
     if st.button("❌ 選択した人を欠勤にする", key="mark_absent"):
         if absent_staff:
-            conn = db.get_connection()
             for name in absent_staff:
                 s = staff_options[name]
-                conn.execute(
-                    "UPDATE shifts SET status = 'absent', actual_start = NULL, actual_end = NULL WHERE id = ?",
-                    (s["id"],)
-                )
-            conn.commit()
-            conn.close()
+                db.mark_absent(s["id"])
             st.success(f"{len(absent_staff)}名を欠勤にしました")
             st.rerun()
 
@@ -256,8 +236,32 @@ with tab_freeze:
             if freeze_selected:
                 freeze_time = f"{freeze_hour:02d}:{freeze_min:02d}"
                 freeze_ids = [freeze_candidates[name]["id"] for name in freeze_selected]
-                db.bulk_checkout(freeze_ids, freeze_time, event_id)
+                affected_staff = db.bulk_checkout(freeze_ids, freeze_time, event_id)
+                # 影響を受けたスタッフの支払いを「未承認」に戻して再計算を促す
+                reset_count = 0
+                protected_count = 0
+                for staff_id in affected_staff:
+                    if db.reset_payment_to_pending(event_id, staff_id,
+                                                    reason=f"凍結退勤 {freeze_time}"):
+                        reset_count += 1
+                    else:
+                        # paid の場合または支払いレコードなし
+                        client_q = db.get_client().table("p1_payments").select(
+                            "status").eq("event_id", event_id).eq(
+                            "staff_id", staff_id).execute().data
+                        if client_q and client_q[0].get("status") == "paid":
+                            protected_count += 1
                 st.success(f"{len(freeze_ids)}名を {freeze_time} で一括退勤しました")
+                if reset_count:
+                    st.info(
+                        f"💡 {reset_count}名の支払いを未承認に戻しました。"
+                        "「💰 支払い計算」ページで再計算してください。"
+                    )
+                if protected_count:
+                    st.warning(
+                        f"⚠️ {protected_count}名はすでに支払済みのため再計算されません（保護）。"
+                        "差額は小口精算で対応してください。"
+                    )
                 st.rerun()
             else:
                 st.warning("スタッフを選択してください")

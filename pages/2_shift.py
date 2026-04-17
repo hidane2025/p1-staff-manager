@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
 from utils.shift_parser import parse_shift_csv
 from utils.calculator import parse_shift_time
+from utils.event_selector import select_event
 
 st.set_page_config(page_title="シフト取込", page_icon="📅", layout="wide")
 st.title("📅 シフト取込")
@@ -15,14 +16,12 @@ st.title("📅 シフト取込")
 # --- イベント選択 or 作成 ---
 st.subheader("1. イベントを選択")
 events = db.get_all_events()
-event_options = {f"{e['name']} ({e['start_date']}〜{e['end_date']})": e["id"] for e in events}
 
 tab_select, tab_create = st.tabs(["既存イベントを選択", "新規イベント作成"])
 
 with tab_select:
-    if event_options:
-        selected = st.selectbox("イベント", list(event_options.keys()))
-        event_id = event_options[selected]
+    if events:
+        event_id = select_event(events, "イベント")
     else:
         st.info("イベントがありません。「新規イベント作成」タブで作成してください。")
         event_id = None
@@ -40,9 +39,6 @@ with tab_create:
             new_id = db.create_event(ev_name, ev_venue, str(ev_start), str(ev_end))
             st.success(f"「{ev_name}」を作成しました")
             st.rerun()
-
-if not event_id and events:
-    event_id = events[0]["id"]
 
 if not event_id:
     st.stop()

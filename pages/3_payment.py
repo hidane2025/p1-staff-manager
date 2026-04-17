@@ -10,19 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
 from utils.calculator import calculate_staff_payment
+from utils.event_selector import select_event
 
 st.set_page_config(page_title="支払い計算", page_icon="💰", layout="wide")
 st.title("💰 支払い計算")
 
-# --- イベント選択 ---
-events = db.get_all_events()
-if not events:
-    st.warning("イベントがありません。シフト取込ページでイベントを作成してください。")
-    st.stop()
-
-event_options = {f"{e['name']} ({e['start_date']}〜{e['end_date']})": e["id"] for e in events}
-selected = st.selectbox("イベント選択", list(event_options.keys()))
-event_id = event_options[selected]
+# --- イベント選択（全ページ共通・session_state共有） ---
+event_id = select_event(db.get_all_events(), "イベント選択")
 event = db.get_event_by_id(event_id)
 
 # レートと日数
@@ -176,11 +170,16 @@ ROUND_OPTIONS = {
     "500円切り上げ（推奨）": 500,
     "1000円切り上げ": 1000,
 }
+# 前回の選択を記憶（session_state）
+_labels = list(ROUND_OPTIONS.keys())
+_prev = st.session_state.get("payment_round_label", "500円切り上げ（推奨）")
+_prev_idx = _labels.index(_prev) if _prev in _labels else 2
 round_label = st.selectbox(
     "💰 端数丸め（個別金額・合計に適用）",
-    list(ROUND_OPTIONS.keys()),
-    index=2,  # デフォルト: 500円切り上げ
+    _labels,
+    index=_prev_idx,
     help="例: 500円切り上げなら 16,300→16,500 / 18,600→19,000",
+    key="payment_round_label",
 )
 round_unit = ROUND_OPTIONS[round_label]
 
@@ -390,7 +389,9 @@ if staff_opts:
                 missing.append("本名")
             if not (staff_info and staff_info.get("address")):
                 missing.append("住所")
-            st.warning(f"⚠️ スタッフ管理で{' と '.join(missing)}を登録すると領収書PDFを発行できます")
+            col_warn, col_link = st.columns([3, 1])
+            col_warn.warning(f"⚠️ {' と '.join(missing)}が未登録のため領収書PDFを発行できません")
+            col_link.page_link("pages/1_staff.py", label="▶ スタッフ管理へ", icon="📋")
 
     # --- 備考欄 ---
     st.divider()

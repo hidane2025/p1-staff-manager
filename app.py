@@ -61,4 +61,4 @@ with col8:
     st.page_link("pages/8_transport.py", label="交通費を開く", icon="🚃")
 
 st.divider()
-st.caption("P1 Staff Manager v3.2 — 株式会社ヒダネ")
+st.caption("P1 Staff Manager v3.3 — 株式会社ヒダネ")

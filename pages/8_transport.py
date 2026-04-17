@@ -7,20 +7,14 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
 from utils.region import REGIONS, default_regions_for_event, address_to_region
+from utils.event_selector import select_event
 
 st.set_page_config(page_title="交通費", page_icon="🚃", layout="wide")
 st.title("🚃 交通費ルール設定・事前見積")
 st.caption("イベント毎に地域別の交通費上限を設定します。")
 
-# --- イベント選択 ---
-events = db.get_all_events()
-if not events:
-    st.warning("イベントがありません。")
-    st.stop()
-
-event_options = {f"{e['name']} ({e['start_date']}〜{e['end_date']})": e["id"] for e in events}
-selected = st.selectbox("イベント", list(event_options.keys()))
-event_id = event_options[selected]
+# --- イベント選択（全ページ共通） ---
+event_id = select_event(db.get_all_events(), "イベント")
 event = db.get_event_by_id(event_id)
 
 # ============================================================

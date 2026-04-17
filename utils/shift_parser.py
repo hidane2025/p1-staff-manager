@@ -30,11 +30,32 @@ def detect_role(role_str: str) -> str:
     return "Dealer"
 
 
+_ZENKAKU_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
+
+
+def normalize_digits(s: str) -> str:
+    """全角数字を半角に正規化"""
+    return str(s).translate(_ZENKAKU_DIGITS)
+
+
+def safe_int(v, default: int = 0) -> int:
+    """全角/半角混在にも強い整数変換"""
+    if v is None:
+        return default
+    s = normalize_digits(str(v).strip())
+    if not s:
+        return default
+    try:
+        return int(float(s))
+    except (ValueError, TypeError):
+        return default
+
+
 def parse_time_cell(cell_value) -> Optional[str]:
     """セルの時刻文字列をパース。×やNaNはNone"""
     if pd.isna(cell_value):
         return None
-    val = str(cell_value).strip()
+    val = normalize_digits(str(cell_value).strip())
     if val in ("", "×", "x", "X", "-", "ー", "—"):
         return None
     return val
@@ -151,10 +172,7 @@ def parse_shift_csv(file_content: bytes, year: int = 2025) -> dict:
         role_raw = str(row.get(role_col, "")).strip() if role_col else ""
         role = detect_role(role_raw)
         no_raw = row.get(no_col, "") if no_col else ""
-        try:
-            no = int(float(str(no_raw)))
-        except (ValueError, TypeError):
-            no = 0
+        no = safe_int(no_raw, 0)
 
         name_en = str(row.get(name_en_col, "")).strip() if name_en_col else ""
         if name_en == "nan":

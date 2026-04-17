@@ -6,19 +6,13 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
+from utils.event_selector import select_event
 
 st.set_page_config(page_title="精算レポート", page_icon="📊", layout="wide")
 st.title("📊 精算レポート")
 
-# --- イベント選択 ---
-events = db.get_all_events()
-if not events:
-    st.warning("イベントがありません。")
-    st.stop()
-
-event_options = {f"{e['name']} ({e['start_date']}〜{e['end_date']})": e["id"] for e in events}
-selected = st.selectbox("イベント選択", list(event_options.keys()))
-event_id = event_options[selected]
+# --- イベント選択（全ページ共通） ---
+event_id = select_event(db.get_all_events(), "イベント選択")
 
 # --- 支払い状況 ---
 payments = db.get_payments_for_event(event_id)

@@ -2,8 +2,11 @@
 
 import os
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
+
+# 日本時間（JST = UTC+9）で統一
+_JST = timezone(timedelta(hours=9))
 
 try:
     from supabase import create_client
@@ -11,15 +14,27 @@ except ImportError:
     create_client = None
 
 # Supabase接続情報（st.secretsまたは環境変数から取得）
+# 本番のキーは .streamlit/secrets.toml または環境変数に設定
+# デフォルトはanon公開キー（RLS有効＋allow_allポリシー）だが、機密データを扱う場合は必ず上書きすること
+_DEFAULT_SUPABASE_URL = "https://fmqalkwkxckbxxijiprp.supabase.co"
+_DEFAULT_SUPABASE_KEY = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtcWFsa3dreGNrYnh4aWppcHJwIiwicm9sZSI6ImFub24i"
+    "LCJpYXQiOjE3NzU5ODU5NjgsImV4cCI6MjA5MTU2MTk2OH0."
+    "ECV0yK5b3H2GOZp--Q2iPvh8CmCrMO1h0fMadmm0fLo"
+)
+
+
 def _get_supabase_config():
-    """Supabase URL/Keyを取得"""
+    """Supabase URL/Keyを取得（優先度: st.secrets > 環境変数 > デフォルト）"""
     try:
         url = st.secrets["SUPABASE_URL"]
         key = st.secrets["SUPABASE_KEY"]
+        return url, key
     except Exception:
-        url = os.environ.get("SUPABASE_URL", "https://fmqalkwkxckbxxijiprp.supabase.co")
-        key = os.environ.get("SUPABASE_KEY",
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtcWFsa3dreGNrYnh4aWppcHJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5ODU5NjgsImV4cCI6MjA5MTU2MTk2OH0.ECV0yK5b3H2GOZp--Q2iPvh8CmCrMO1h0fMadmm0fLo")
+        pass
+    url = os.environ.get("SUPABASE_URL", _DEFAULT_SUPABASE_URL)
+    key = os.environ.get("SUPABASE_KEY", _DEFAULT_SUPABASE_KEY)
     return url, key
 
 
@@ -31,7 +46,8 @@ def get_client():
 
 
 def _now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    """JSTの現在時刻を返す（Supabaseに保存する日時を統一）"""
+    return datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
 
 
 # === Audit Log ===
@@ -172,6 +188,17 @@ def bulk_import_staff(rows: list[dict]) -> dict:
                 return v
             return (existing.get(key, default) if existing else default)
 
+        # custom_hourly_rate: None なら既存値を使う、0以上の数値なら尊重する（0指定を許容）
+        new_rate = row.get("custom_hourly_rate")
+        try:
+            new_rate = int(new_rate) if new_rate not in (None, "") else None
+        except (ValueError, TypeError):
+            new_rate = None
+        if new_rate is None and existing:
+            custom_rate = existing.get("custom_hourly_rate")
+        else:
+            custom_rate = new_rate
+
         payload = {
             "name_jp": name_jp,  # name_jpは必須なのでそのまま
             "name_en": _val("name_en"),
@@ -183,7 +210,7 @@ def bulk_import_staff(rows: list[dict]) -> dict:
             "email": _val("email"),
             "nearest_station": _val("nearest_station"),
             "employment_type": _val("employment_type", "contractor"),
-            "custom_hourly_rate": row.get("custom_hourly_rate") or (existing.get("custom_hourly_rate") if existing else None),
+            "custom_hourly_rate": custom_rate,
             "prefecture": pref,
             "region": region,
         }
@@ -377,15 +404,49 @@ def checkout_staff(shift_id, actual_end):
 
 
 def bulk_checkout(shift_ids, actual_end, event_id=None):
+    """一括退勤（凍結対応）。対象スタッフIDをリストで返す。"""
     client = get_client()
+    affected_staff_ids = []
     for sid in shift_ids:
-        row = client.table("p1_shifts").select("planned_start, actual_start").eq("id", sid).execute().data
-        a_start = (row[0].get("actual_start") or row[0].get("planned_start")) if row else None
+        row = client.table("p1_shifts").select(
+            "planned_start, actual_start, staff_id"
+        ).eq("id", sid).execute().data
+        if not row:
+            continue
+        a_start = row[0].get("actual_start") or row[0].get("planned_start")
+        affected_staff_ids.append(row[0].get("staff_id"))
         client.table("p1_shifts").update({
             "actual_end": actual_end, "actual_start": a_start, "status": "checked_out"
         }).eq("id", sid).execute()
     if event_id:
-        log_action("bulk_checkout", "shifts", detail=f"{len(shift_ids)}名を{actual_end}で一括退勤", event_id=event_id)
+        log_action("bulk_checkout", "shifts",
+                    detail=f"{len(shift_ids)}名を{actual_end}で一括退勤",
+                    event_id=event_id)
+    return list({s for s in affected_staff_ids if s is not None})
+
+
+def reset_payment_to_pending(event_id, staff_id, reason="凍結再計算"):
+    """支払いを未承認に戻す（凍結発生時の再計算準備）。
+
+    支払済み(paid)は保護。承認済み(approved)→未承認(pending)に戻す。
+    Returns: True=リセット成功、False=支払済みで保護 or レコードなし
+    """
+    client = get_client()
+    existing = client.table("p1_payments").select("id, status").eq(
+        "event_id", event_id).eq("staff_id", staff_id).execute().data
+    if not existing:
+        return False
+    payment = existing[0]
+    if payment["status"] == "paid":
+        log_action("freeze_recalc_skipped", "payments", payment["id"],
+                    detail=f"{reason}: 支払済みのため保護", event_id=event_id)
+        return False
+    client.table("p1_payments").update({
+        "status": "pending", "approved_by": None, "approved_at": None,
+    }).eq("id", payment["id"]).execute()
+    log_action("freeze_recalc", "payments", payment["id"],
+                detail=f"{reason}: 未承認に戻した", event_id=event_id)
+    return True
 
 
 def mark_absent(shift_id):

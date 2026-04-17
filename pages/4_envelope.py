@@ -10,19 +10,13 @@ from utils.denomination import (
     calculate_denomination, calculate_total_denomination,
     round_amount, format_denomination, DENOM_LABELS, DENOMINATIONS,
 )
+from utils.event_selector import select_event
 
 st.set_page_config(page_title="封筒リスト", page_icon="✉️", layout="wide")
 st.title("✉️ 封筒リスト")
 
-# --- イベント選択 ---
-events = db.get_all_events()
-if not events:
-    st.warning("イベントがありません。")
-    st.stop()
-
-event_options = {f"{e['name']} ({e['start_date']}〜{e['end_date']})": e["id"] for e in events}
-selected = st.selectbox("イベント選択", list(event_options.keys()))
-event_id = event_options[selected]
+# --- イベント選択（全ページ共通） ---
+event_id = select_event(db.get_all_events(), "イベント選択")
 
 # --- 設定 ---
 st.subheader("設定")
