@@ -15,30 +15,32 @@ import streamlit as st
 # ==========================================================================
 _HIDE_STAFF_PAGES_CSS = """
 <style>
-/* スタッフ向けページ（token経由でのみ使う）をサイドバーから隠す */
-section[data-testid="stSidebarNav"] ul li a[href$="/receipt_download"],
-section[data-testid="stSidebarNav"] ul li a[href$="/contract_sign"] {
+/* Streamlit最新版のサイドバーリンクからスタッフ専用ページを隠す */
+a[data-testid="stSidebarNavLink"][href*="receipt_download"],
+a[data-testid="stSidebarNavLink"][href*="contract_sign"] {
     display: none !important;
 }
-/* :has() 対応ブラウザで li 自体を隠す */
-section[data-testid="stSidebarNav"] ul li:has(a[href$="/receipt_download"]),
-section[data-testid="stSidebarNav"] ul li:has(a[href$="/contract_sign"]) {
+/* 親liごと隠す（:has()対応ブラウザ = 2023年以降のChrome/Safari/Firefox） */
+[data-testid="stSidebarNavItems"] > li:has(a[data-testid="stSidebarNavLink"][href*="receipt_download"]),
+[data-testid="stSidebarNavItems"] > li:has(a[data-testid="stSidebarNavLink"][href*="contract_sign"]) {
     display: none !important;
 }
 </style>
 <script>
-/* :has()非対応ブラウザ用のJSフォールバック */
+/* :has()非対応ブラウザ用のJSフォールバック＋動的再描画対応 */
 (function(){
   const hide = () => {
-    document.querySelectorAll('section[data-testid="stSidebarNav"] ul li a').forEach(a => {
+    document.querySelectorAll('a[data-testid="stSidebarNavLink"]').forEach(a => {
       const h = a.getAttribute('href') || '';
-      if (h.endsWith('/receipt_download') || h.endsWith('/contract_sign')) {
+      if (h.includes('/receipt_download') || h.includes('/contract_sign')) {
         const li = a.closest('li');
         if (li) li.style.display = 'none';
+        a.style.display = 'none';
       }
     });
   };
   hide();
+  // Streamlitの再レンダリングに追随
   const obs = new MutationObserver(hide);
   obs.observe(document.body, {childList: true, subtree: true});
 })();
