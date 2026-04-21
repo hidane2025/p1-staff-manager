@@ -14,3 +14,38 @@ Icon
 .DS_Store
 docs/preview/
 docs/preview_full/
+
+# === 2026-04-21 個人情報保護対応（Kimura指摘 #3）===
+# テスト用スタッフデータ・シフト表（本物個人情報を含む可能性があるため絶対にコミットしない）
+test_e2e/01_staff_master.csv
+test_e2e/02_shift_kyoto.csv
+test_e2e/*.xlsx
+test_e2e/test_*.pdf
+test_e2e/screenshots/
+test_e2e/04_test_report.md
+test_e2e/test_contract_*.pdf
+test_e2e/preview_*.png
+
+# AIツール・IDE設定ファイル（Kimura指摘 #4）
+.claude/
+.codex/
+.cursor/
+.vscode/
+.idea/
+*.code-workspace
+
+# 環境変数・認証情報
+.env
+.env.*
+*.key
+*.pem
+credentials*.json
+secrets.json
+
+# OSファイル
+Thumbs.db
+ehthumbs.db
+
+# docs/preview系も念のため
+docs/preview_v2/
+docs/manual_src/__pycache__/
