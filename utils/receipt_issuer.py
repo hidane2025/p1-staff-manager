@@ -14,6 +14,7 @@ from typing import Optional
 
 import db  # type: ignore
 
+from utils import db_schema
 from utils import receipt_db
 from utils import receipt_storage
 from utils import receipt_token
@@ -95,10 +96,15 @@ def issue_receipt(
         }
     """
     client = db.get_client()
-    p_row = client.table("p1_payments").select(
-        "id, event_id, staff_id, total_amount, "
-        "receipt_pdf_path, receipt_original_path, receipt_token, receipt_no"
-    ).eq("id", payment_id).execute().data
+    # receipt_original_path が未作成のDBでも動くよう、SELECTリストを動的に構築
+    p_cols = [
+        "id", "event_id", "staff_id", "total_amount",
+        "receipt_pdf_path", "receipt_token", "receipt_no",
+    ]
+    if db_schema.has_column("p1_payments", "receipt_original_path"):
+        p_cols.insert(5, "receipt_original_path")
+    p_row = client.table("p1_payments").select(", ".join(p_cols)).eq(
+        "id", payment_id).execute().data
     if not p_row:
         return {"ok": False, "error": "支払レコードなし", "payment_id": payment_id}
     p = p_row[0]

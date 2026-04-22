@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import db  # type: ignore
+from utils import db_schema
 
 
 JST = timezone(timedelta(hours=9))
@@ -14,6 +15,11 @@ JST = timezone(timedelta(hours=9))
 
 def _now_iso() -> str:
     return datetime.now(JST).isoformat()
+
+
+def _has_is_provisional() -> bool:
+    """p1_contract_templates.is_provisional カラムの存在判定"""
+    return db_schema.has_column("p1_contract_templates", "is_provisional")
 
 
 # ==========================================================================
@@ -40,15 +46,20 @@ def create_template(name: str, version: str, doc_type: str,
     Args:
         is_provisional: 1=仮版（経理レビュー前・PDFに透かし）、0=正規版。
             既定は仮版。手動アップロードされた正規版のみ 0 を渡す想定。
+
+    Note:
+        is_provisional カラムが未作成のDBなら、そのキーは送らない（後方互換）。
     """
-    r = db.get_client().table("p1_contract_templates").insert({
+    payload = {
         "name": name,
         "version": version,
         "doc_type": doc_type,
         "body_markdown": body_markdown,
         "is_active": 1,
-        "is_provisional": int(is_provisional),
-    }).execute()
+    }
+    if _has_is_provisional():
+        payload["is_provisional"] = int(is_provisional)
+    r = db.get_client().table("p1_contract_templates").insert(payload).execute()
     return r.data[0]["id"] if r.data else 0
 
 
@@ -59,7 +70,14 @@ def update_template(template_id: int, **fields) -> None:
     if not payload:
         return
     if "is_provisional" in payload:
-        payload["is_provisional"] = int(payload["is_provisional"])
+        if _has_is_provisional():
+            payload["is_provisional"] = int(payload["is_provisional"])
+        else:
+            # カラム未作成なら黙って除外（他の更新は通す）
+            payload.pop("is_provisional", None)
+        if not payload:
+            # 残ったフィールドが無ければ何もしない
+            return
     payload["updated_at"] = _now_iso()
     db.get_client().table("p1_contract_templates").update(payload).eq(
         "id", template_id).execute()

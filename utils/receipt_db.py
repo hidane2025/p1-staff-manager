@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import db  # type: ignore
+from utils import db_schema
 
 
 JST = timezone(timedelta(hours=9))
@@ -19,16 +20,34 @@ def _now_iso() -> str:
     return datetime.now(JST).isoformat()
 
 
+# --- カラム存在チェックの薄いラッパ（このモジュール内で頻出するため局所化） ---
+def _has_show_tax_breakdown() -> bool:
+    return db_schema.has_column("p1_events", "show_tax_breakdown")
+
+
+def _has_receipt_original_path() -> bool:
+    return db_schema.has_column("p1_payments", "receipt_original_path")
+
+
 # ==========================================================================
 # Event: 発行者情報
 # ==========================================================================
 def get_issuer_settings(event_id: int) -> dict:
-    """イベントの発行者情報を取得（未設定はデフォルト埋め）"""
+    """イベントの発行者情報を取得（未設定はデフォルト埋め）
+
+    Note:
+        show_tax_breakdown カラムはマイグレ未実行なら存在しない。
+        その場合は False 固定で返す（後方互換）。
+    """
     client = db.get_client()
-    res = client.table("p1_events").select(
-        "issuer_name, issuer_address, issuer_tel, invoice_number, "
-        "issuer_seal_url, receipt_purpose, show_tax_breakdown"
-    ).eq("id", event_id).execute()
+    cols = [
+        "issuer_name", "issuer_address", "issuer_tel", "invoice_number",
+        "issuer_seal_url", "receipt_purpose",
+    ]
+    if _has_show_tax_breakdown():
+        cols.append("show_tax_breakdown")
+    res = client.table("p1_events").select(", ".join(cols)).eq(
+        "id", event_id).execute()
     row = res.data[0] if res.data else {}
     return {
         "issuer_name": row.get("issuer_name") or "株式会社パシフィック",
@@ -42,7 +61,11 @@ def get_issuer_settings(event_id: int) -> dict:
 
 
 def save_issuer_settings(event_id: int, **fields) -> None:
-    """発行者情報を更新（部分更新OK）"""
+    """発行者情報を更新（部分更新OK）
+
+    Note:
+        show_tax_breakdown カラムが未作成の場合は、そのキーだけ黙って除外する。
+    """
     allowed = {
         "issuer_name", "issuer_address", "issuer_tel",
         "invoice_number", "issuer_seal_url", "receipt_purpose",
@@ -50,8 +73,12 @@ def save_issuer_settings(event_id: int, **fields) -> None:
     }
     payload = {k: v for k, v in fields.items() if k in allowed}
     if "show_tax_breakdown" in payload:
-        # DB側は INT なので 0/1 に正規化
-        payload["show_tax_breakdown"] = 1 if payload["show_tax_breakdown"] else 0
+        if _has_show_tax_breakdown():
+            # DB側は INT なので 0/1 に正規化
+            payload["show_tax_breakdown"] = 1 if payload["show_tax_breakdown"] else 0
+        else:
+            # カラム未作成なら更新から除外（他の設定は反映する）
+            payload.pop("show_tax_breakdown", None)
     if not payload:
         return
     db.get_client().table("p1_events").update(payload).eq("id", event_id).execute()
@@ -84,7 +111,8 @@ def save_receipt_meta(
         "receipt_token_expires_at": expires_at_iso,
         "receipt_generated_at": _now_iso(),
     }
-    if pdf_path_original is not None:
+    # receipt_original_path カラムが存在する場合のみ書き込む（マイグレ前は無視）
+    if pdf_path_original is not None and _has_receipt_original_path():
         payload["receipt_original_path"] = pdf_path_original
     db.get_client().table("p1_payments").update(payload).eq("id", payment_id).execute()
 
@@ -103,15 +131,22 @@ def mark_receipt_downloaded(payment_id: int) -> None:
 
 
 def find_payment_by_token(token: str) -> Optional[dict]:
-    """トークンから支払レコードを検索（検証用）"""
+    """トークンから支払レコードを検索（検証用）
+
+    receipt_original_path が未作成なら SELECT リストから外す。
+    """
     if not token:
         return None
     client = db.get_client()
-    res = client.table("p1_payments").select(
-        "id, event_id, staff_id, total_amount, receipt_no, "
-        "receipt_pdf_path, receipt_original_path, "
-        "receipt_token_expires_at, receipt_download_count"
-    ).eq("receipt_token", token).execute()
+    cols = [
+        "id", "event_id", "staff_id", "total_amount", "receipt_no",
+        "receipt_pdf_path",
+        "receipt_token_expires_at", "receipt_download_count",
+    ]
+    if _has_receipt_original_path():
+        cols.insert(6, "receipt_original_path")  # receipt_pdf_path の後ろへ
+    res = client.table("p1_payments").select(", ".join(cols)).eq(
+        "receipt_token", token).execute()
     return res.data[0] if res.data else None
 
 
@@ -126,13 +161,18 @@ def get_payments_needing_receipt(event_id: int,
             "approved_or_paid" = 承認済み/支払済みのみ
     """
     client = db.get_client()
-    q = client.table("p1_payments").select(
-        "id, event_id, staff_id, total_amount, status, "
-        "receipt_no, receipt_pdf_path, receipt_original_path, receipt_token, "
-        "receipt_token_expires_at, receipt_generated_at, "
-        "receipt_download_count, p1_staff(name_jp, name_en, no, role, "
-        "real_name, address, email)"
-    ).eq("event_id", event_id)
+    payment_cols = [
+        "id", "event_id", "staff_id", "total_amount", "status",
+        "receipt_no", "receipt_pdf_path", "receipt_token",
+        "receipt_token_expires_at", "receipt_generated_at",
+        "receipt_download_count",
+    ]
+    if _has_receipt_original_path():
+        payment_cols.insert(7, "receipt_original_path")
+    select_expr = ", ".join(payment_cols) + (
+        ", p1_staff(name_jp, name_en, no, role, real_name, address, email)"
+    )
+    q = client.table("p1_payments").select(select_expr).eq("event_id", event_id)
     rows = q.execute().data
     # staff結合のlist/dict両対応
     out = []
