@@ -33,22 +33,33 @@ def get_template(template_id: int) -> Optional[dict]:
 
 
 def create_template(name: str, version: str, doc_type: str,
-                      body_markdown: str) -> int:
+                      body_markdown: str,
+                      is_provisional: int = 1) -> int:
+    """テンプレを新規登録する。
+
+    Args:
+        is_provisional: 1=仮版（経理レビュー前・PDFに透かし）、0=正規版。
+            既定は仮版。手動アップロードされた正規版のみ 0 を渡す想定。
+    """
     r = db.get_client().table("p1_contract_templates").insert({
         "name": name,
         "version": version,
         "doc_type": doc_type,
         "body_markdown": body_markdown,
         "is_active": 1,
+        "is_provisional": int(is_provisional),
     }).execute()
     return r.data[0]["id"] if r.data else 0
 
 
 def update_template(template_id: int, **fields) -> None:
-    allowed = {"name", "version", "doc_type", "body_markdown", "is_active"}
+    allowed = {"name", "version", "doc_type", "body_markdown",
+                "is_active", "is_provisional"}
     payload = {k: v for k, v in fields.items() if k in allowed}
     if not payload:
         return
+    if "is_provisional" in payload:
+        payload["is_provisional"] = int(payload["is_provisional"])
     payload["updated_at"] = _now_iso()
     db.get_client().table("p1_contract_templates").update(payload).eq(
         "id", template_id).execute()

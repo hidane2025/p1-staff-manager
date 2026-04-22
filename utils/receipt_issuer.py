@@ -2,6 +2,10 @@
 
 PDF生成 → Supabase Storageへアップ → トークン発行 → DB保存 → URL返却
 を一気通貫で行う高レベルAPI。
+
+2026-04-21 拡張:
+    発行者保管用（原本）とスタッフ配布用（控え）の2バージョンを同時生成し、
+    それぞれ別パスでストレージへUPする。消費税額の内訳表示にも対応。
 """
 
 from __future__ import annotations
@@ -48,19 +52,42 @@ def _load_seal_bytes(seal_url: str) -> Optional[bytes]:
     return None
 
 
+def _build_receipt_input(
+    receipt_no: str,
+    staff: dict,
+    amount: int,
+    event_name: str,
+    issue_date: str,
+    purpose: str,
+) -> ReceiptInput:
+    """PDF生成用の入力データを組み立て（DRY）"""
+    return ReceiptInput(
+        receipt_no=receipt_no,
+        recipient_name=(staff.get("real_name") or staff.get("name_jp") or "スタッフ"),
+        recipient_address=staff.get("address") or "",
+        recipient_email=staff.get("email") or "",
+        amount=int(amount),
+        event_name=event_name,
+        issue_date=issue_date,
+        purpose=purpose,
+    )
+
+
 def issue_receipt(
     payment_id: int,
     valid_days: int = 7,
     force_regenerate: bool = False,
 ) -> dict:
-    """領収書1件を発行
+    """領収書1件を発行（原本＋控えの2バージョン）
 
     Returns:
         {
             "ok": bool,
             "payment_id": int,
             "receipt_no": str,
-            "pdf_path": str,
+            "pdf_path": str,            # 後方互換: 控えのパス
+            "copy_path": str,           # 控え（スタッフ配布用）
+            "original_path": str,       # 原本（発行者保管用）
             "token": str,
             "expires_at": str,
             "download_url": str | None,
@@ -69,7 +96,8 @@ def issue_receipt(
     """
     client = db.get_client()
     p_row = client.table("p1_payments").select(
-        "id, event_id, staff_id, total_amount, receipt_pdf_path, receipt_token"
+        "id, event_id, staff_id, total_amount, "
+        "receipt_pdf_path, receipt_original_path, receipt_token, receipt_no"
     ).eq("id", payment_id).execute().data
     if not p_row:
         return {"ok": False, "error": "支払レコードなし", "payment_id": payment_id}
@@ -81,9 +109,12 @@ def issue_receipt(
             p["receipt_pdf_path"], valid_seconds=valid_days * 24 * 3600
         )
         return {
-            "ok": True, "payment_id": payment_id,
+            "ok": True,
+            "payment_id": payment_id,
             "receipt_no": p.get("receipt_no") or "",
             "pdf_path": p["receipt_pdf_path"],
+            "copy_path": p.get("receipt_pdf_path") or "",
+            "original_path": p.get("receipt_original_path") or "",
             "token": p["receipt_token"],
             "expires_at": "",
             "download_url": url,
@@ -102,50 +133,79 @@ def issue_receipt(
     issue_date = today_jst_ymd()
     receipt_no = build_receipt_no(event_id, staff_id, issue_date)
 
-    # PDF生成
+    issuer_info = IssuerInfo(
+        name=issuer_data["issuer_name"],
+        address=issuer_data["issuer_address"],
+        tel=issuer_data["issuer_tel"],
+        invoice_number=(issuer_data["invoice_number"] or None),
+        seal_image_bytes=_load_seal_bytes(issuer_data["issuer_seal_url"]),
+    )
+    receipt_input = _build_receipt_input(
+        receipt_no=receipt_no,
+        staff=staff,
+        amount=int(amount),
+        event_name=event.get("name", ""),
+        issue_date=issue_date,
+        purpose=issuer_data["receipt_purpose"],
+    )
+    tax_flag = bool(issuer_data.get("show_tax_breakdown"))
+
+    # PDF生成: 原本 + 控え
     try:
-        pdf_bytes = generate_receipt_pdf_v2(
-            receipt=ReceiptInput(
-                receipt_no=receipt_no,
-                recipient_name=(staff.get("real_name") or staff.get("name_jp") or "スタッフ"),
-                recipient_address=staff.get("address") or "",
-                recipient_email=staff.get("email") or "",
-                amount=int(amount),
-                event_name=event.get("name", ""),
-                issue_date=issue_date,
-                purpose=issuer_data["receipt_purpose"],
-            ),
-            issuer=IssuerInfo(
-                name=issuer_data["issuer_name"],
-                address=issuer_data["issuer_address"],
-                tel=issuer_data["issuer_tel"],
-                invoice_number=(issuer_data["invoice_number"] or None),
-                seal_image_bytes=_load_seal_bytes(issuer_data["issuer_seal_url"]),
-            ),
+        pdf_original = generate_receipt_pdf_v2(
+            receipt=receipt_input,
+            issuer=issuer_info,
             include_stamp_free_note=True,
+            document_type="original",
+            tax_breakdown=tax_flag,
+        )
+        pdf_copy = generate_receipt_pdf_v2(
+            receipt=receipt_input,
+            issuer=issuer_info,
+            include_stamp_free_note=True,
+            document_type="copy",
+            tax_breakdown=tax_flag,
         )
     except Exception as e:
         return {"ok": False, "error": f"PDF生成失敗: {e}", "payment_id": payment_id}
 
-    # Storageへアップロード
+    # Storageへアップロード（原本・控え）
     try:
-        pdf_path = receipt_storage.upload_pdf(event_id, receipt_no, pdf_bytes)
+        original_path = receipt_storage.upload_pdf_at(
+            receipt_storage.original_pdf_path(event_id, receipt_no),
+            pdf_original,
+        )
+        copy_path = receipt_storage.upload_pdf_at(
+            receipt_storage.copy_pdf_path(event_id, receipt_no),
+            pdf_copy,
+        )
     except Exception as e:
         return {"ok": False, "error": f"アップロード失敗: {e}", "payment_id": payment_id}
 
-    # トークン発行＋DB保存
+    # トークン発行＋DB保存（receipt_pdf_path は後方互換で控えパスを入れる）
     token = receipt_token.generate_token()
     expires_at = receipt_token.expiry_iso(valid_days=valid_days)
-    receipt_db.save_receipt_meta(payment_id, receipt_no, pdf_path, token, expires_at)
+    receipt_db.save_receipt_meta(
+        payment_id=payment_id,
+        receipt_no=receipt_no,
+        pdf_path=copy_path,  # 後方互換
+        token=token,
+        expires_at_iso=expires_at,
+        pdf_path_copy=copy_path,
+        pdf_path_original=original_path,
+    )
 
-    # Signed URL（Storage直接アクセス）と、内部トークンURLの両方を返す
-    signed_url = receipt_storage.get_signed_url(pdf_path, valid_seconds=valid_days * 24 * 3600)
+    # Signed URL（スタッフ配布用の控え）
+    signed_url = receipt_storage.get_signed_url(
+        copy_path, valid_seconds=valid_days * 24 * 3600
+    )
 
     # audit log
     try:
         db.log_action(
             "issue_receipt", "payments", payment_id,
-            detail=f"No.{receipt_no} ¥{amount:,}", event_id=event_id,
+            detail=f"No.{receipt_no} ¥{amount:,} (orig+copy)",
+            event_id=event_id,
         )
     except Exception:
         pass
@@ -154,7 +214,9 @@ def issue_receipt(
         "ok": True,
         "payment_id": payment_id,
         "receipt_no": receipt_no,
-        "pdf_path": pdf_path,
+        "pdf_path": copy_path,        # 後方互換
+        "copy_path": copy_path,
+        "original_path": original_path,
         "token": token,
         "expires_at": expires_at,
         "download_url": signed_url,

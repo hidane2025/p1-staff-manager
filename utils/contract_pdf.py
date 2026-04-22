@@ -97,13 +97,14 @@ MARGIN_BOTTOM = 22 * mm
 
 
 def _draw_text_block(c: canvas.Canvas, text: str, x: float, y: float,
-                      max_w: float, font: str, size: int, leading: float = 1.6) -> float:
+                      max_w: float, font: str, size: int, leading: float = 1.6,
+                      is_provisional: bool = False) -> float:
     """複数行テキスト描画。改ページが必要な場合は新ページ作成。残Y座標を返す。"""
     lines = _wrap(text, c, font, size, max_w)
     for ln in lines:
         if y < MARGIN_BOTTOM + size * 0.5:
             c.showPage()
-            _draw_page_header(c)
+            _draw_page_header(c, is_provisional=is_provisional)
             y = PAGE_H - MARGIN_TOP
         c.setFont(font, size)
         c.drawString(x, y, ln)
@@ -131,14 +132,59 @@ def _wrap(text: str, c: canvas.Canvas, font: str, size: int, max_w: float) -> li
     return out
 
 
-def _draw_page_header(c: canvas.Canvas) -> None:
-    """各ページ共通ヘッダー"""
+def _draw_page_header(c: canvas.Canvas, is_provisional: bool = False) -> None:
+    """各ページ共通ヘッダー。is_provisional=True のときは右上に仮版透かしも描画する。"""
     c.setFillColor(HexColor("#1F3A5F"))
     c.rect(0, PAGE_H - 10 * mm, PAGE_W, 10 * mm, fill=1, stroke=0)
     c.setFillColor(HexColor("#FFFFFF"))
     c.setFont(FONT_JP_REG, 8)
     c.drawString(MARGIN_X, PAGE_H - 7 * mm, "P1 Staff Manager｜契約書")
     c.setFillColor(black)
+    if is_provisional:
+        _draw_provisional_watermark(c)
+
+
+# ブランドカラー赤橙（ヒダネ）。経理レビュー前テンプレに透かしで表示する。
+PROVISIONAL_COLOR_HEX = "#C8381E"
+PROVISIONAL_OPACITY = 0.30
+
+
+def _draw_provisional_watermark(c: canvas.Canvas) -> None:
+    """右上に「仮版」の薄い透かしを描画する（is_provisional=1 のとき）。
+
+    PDF の透明度グラフィックステートを使い、
+    ブランド赤橙の背景ボックス + 白抜き「仮版」テキストを右上に表示する。
+    reportlab の setFillAlpha は 4.0 以降で安定しており、既存依存の範囲内。
+    """
+    try:
+        c.saveState()
+        c.setFillAlpha(PROVISIONAL_OPACITY)
+        c.setStrokeAlpha(PROVISIONAL_OPACITY)
+
+        # 赤橙ボックス
+        box_w = 28 * mm
+        box_h = 11 * mm
+        box_x = PAGE_W - MARGIN_X - box_w
+        box_y = PAGE_H - 10 * mm - box_h - 2 * mm
+        c.setFillColor(HexColor(PROVISIONAL_COLOR_HEX))
+        c.setStrokeColor(HexColor(PROVISIONAL_COLOR_HEX))
+        c.roundRect(box_x, box_y, box_w, box_h, 2 * mm, fill=1, stroke=0)
+
+        # 白抜き「仮版」ラベル（薄く見せるためアルファ込み）
+        c.setFillColor(HexColor("#FFFFFF"))
+        c.setFont(FONT_JP_MIN, 14)
+        c.drawCentredString(box_x + box_w / 2, box_y + 3 * mm, "仮版")
+
+        # 下段に補足（英語）
+        c.setFont(FONT_JP_REG, 6)
+        c.setFillColor(HexColor(PROVISIONAL_COLOR_HEX))
+        c.drawRightString(
+            PAGE_W - MARGIN_X,
+            box_y - 3 * mm,
+            "PROVISIONAL DRAFT — 経理レビュー前",
+        )
+    finally:
+        c.restoreState()
 
 
 def generate_contract_pdf(
@@ -147,6 +193,7 @@ def generate_contract_pdf(
     issuer_name: str,
     signature_image_bytes: Optional[bytes] = None,
     signed_at_iso: Optional[str] = None,
+    is_provisional: bool = False,
 ) -> bytes:
     """契約書PDFを生成
 
@@ -156,23 +203,32 @@ def generate_contract_pdf(
         issuer_name: 発行者名（ヘッダーに表示）
         signature_image_bytes: 署名画像（PNG bytes）。あれば末尾に署名欄描画
         signed_at_iso: 署名日時ISO文字列
+        is_provisional: True の場合、全ページ右上に「仮版」透かしを入れる
     """
     _ensure_font()
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
 
     # ========== 1ページ目ヘッダー ==========
-    _draw_page_header(c)
+    _draw_page_header(c, is_provisional=is_provisional)
 
     # 契約書番号・発行日
+    # 仮版では右上に透かしボックスが入るため、契約書番号を左寄せして衝突を避ける。
     c.setFont(FONT_JP_REG, 8)
     c.setFillColor(HexColor("#666666"))
-    c.drawRightString(PAGE_W - MARGIN_X, PAGE_H - 16 * mm,
-                       f"契約書No. {contract_no}")
+    if is_provisional:
+        c.drawString(MARGIN_X, PAGE_H - 16 * mm,
+                     f"契約書No. {contract_no}")
+    else:
+        c.drawRightString(PAGE_W - MARGIN_X, PAGE_H - 16 * mm,
+                          f"契約書No. {contract_no}")
     c.setFillColor(black)
 
     # ========== 本文を描画 ==========
-    y = PAGE_H - MARGIN_TOP - 5 * mm
+    # 仮版の場合は透かしの下に余白を余分に取って、本文が透かしの下を通っても
+    # 可読性を損なわないようにする。
+    y_top_offset = 12 * mm if is_provisional else 5 * mm
+    y = PAGE_H - MARGIN_TOP - y_top_offset
     max_w = PAGE_W - MARGIN_X * 2
 
     for raw_line in rendered_body.split("\n"):
@@ -181,7 +237,7 @@ def generate_contract_pdf(
             y -= 4 * mm
             if y < MARGIN_BOTTOM + 15 * mm:
                 c.showPage()
-                _draw_page_header(c)
+                _draw_page_header(c, is_provisional=is_provisional)
                 y = PAGE_H - MARGIN_TOP
             c.setFont(FONT_JP_MIN, 18)
             c.setFillColor(HexColor("#1F3A5F"))
@@ -195,7 +251,7 @@ def generate_contract_pdf(
             y -= 2 * mm
             if y < MARGIN_BOTTOM + 12 * mm:
                 c.showPage()
-                _draw_page_header(c)
+                _draw_page_header(c, is_provisional=is_provisional)
                 y = PAGE_H - MARGIN_TOP
             c.setFont(FONT_JP_MIN, 12)
             c.setFillColor(HexColor("#1F3A5F"))
@@ -211,18 +267,19 @@ def generate_contract_pdf(
         elif line.startswith("- "):   # 箇条書き
             if y < MARGIN_BOTTOM + 8 * mm:
                 c.showPage()
-                _draw_page_header(c)
+                _draw_page_header(c, is_provisional=is_provisional)
                 y = PAGE_H - MARGIN_TOP
             c.setFont(FONT_JP_REG, 10)
             c.drawString(MARGIN_X + 2 * mm, y, "●")
             y = _draw_text_block(c, line[2:].strip(),
                                    MARGIN_X + 8 * mm, y,
-                                   max_w - 8 * mm, FONT_JP_REG, 10, leading=1.5)
+                                   max_w - 8 * mm, FONT_JP_REG, 10, leading=1.5,
+                                   is_provisional=is_provisional)
             y -= 1 * mm
         elif line.startswith("**") and line.endswith("**"):   # 強調（単独行）
             if y < MARGIN_BOTTOM + 8 * mm:
                 c.showPage()
-                _draw_page_header(c)
+                _draw_page_header(c, is_provisional=is_provisional)
                 y = PAGE_H - MARGIN_TOP
             c.setFont(FONT_JP_MIN, 10)
             c.setFillColor(HexColor("#1F3A5F"))
@@ -232,27 +289,29 @@ def generate_contract_pdf(
         elif line.startswith("_") and line.endswith("_"):   # イタリック→斜体の代わりに小さな注記
             if y < MARGIN_BOTTOM + 8 * mm:
                 c.showPage()
-                _draw_page_header(c)
+                _draw_page_header(c, is_provisional=is_provisional)
                 y = PAGE_H - MARGIN_TOP
             c.setFont(FONT_JP_REG, 9)
             c.setFillColor(HexColor("#555555"))
             y = _draw_text_block(c, line.strip("_").strip(),
                                    MARGIN_X, y, max_w,
-                                   FONT_JP_REG, 9, leading=1.5)
+                                   FONT_JP_REG, 9, leading=1.5,
+                                   is_provisional=is_provisional)
             c.setFillColor(black)
         elif line == "":
             y -= 3 * mm
         else:
             # 通常本文
             y = _draw_text_block(c, line, MARGIN_X, y, max_w,
-                                   FONT_JP_REG, 10, leading=1.6)
+                                   FONT_JP_REG, 10, leading=1.6,
+                                   is_provisional=is_provisional)
 
     # ========== 署名欄 ==========
     if signature_image_bytes:
         # 余白が足りなければ新ページ
         if y < MARGIN_BOTTOM + 60 * mm:
             c.showPage()
-            _draw_page_header(c)
+            _draw_page_header(c, is_provisional=is_provisional)
             y = PAGE_H - MARGIN_TOP
 
         y -= 10 * mm

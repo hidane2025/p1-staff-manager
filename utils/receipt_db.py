@@ -27,7 +27,7 @@ def get_issuer_settings(event_id: int) -> dict:
     client = db.get_client()
     res = client.table("p1_events").select(
         "issuer_name, issuer_address, issuer_tel, invoice_number, "
-        "issuer_seal_url, receipt_purpose"
+        "issuer_seal_url, receipt_purpose, show_tax_breakdown"
     ).eq("id", event_id).execute()
     row = res.data[0] if res.data else {}
     return {
@@ -37,6 +37,7 @@ def get_issuer_settings(event_id: int) -> dict:
         "invoice_number": row.get("invoice_number") or "",
         "issuer_seal_url": row.get("issuer_seal_url") or "",
         "receipt_purpose": row.get("receipt_purpose") or "ポーカー大会運営業務委託費として",
+        "show_tax_breakdown": bool(row.get("show_tax_breakdown") or 0),
     }
 
 
@@ -45,8 +46,12 @@ def save_issuer_settings(event_id: int, **fields) -> None:
     allowed = {
         "issuer_name", "issuer_address", "issuer_tel",
         "invoice_number", "issuer_seal_url", "receipt_purpose",
+        "show_tax_breakdown",
     }
     payload = {k: v for k, v in fields.items() if k in allowed}
+    if "show_tax_breakdown" in payload:
+        # DB側は INT なので 0/1 に正規化
+        payload["show_tax_breakdown"] = 1 if payload["show_tax_breakdown"] else 0
     if not payload:
         return
     db.get_client().table("p1_events").update(payload).eq("id", event_id).execute()
@@ -61,15 +66,27 @@ def save_receipt_meta(
     pdf_path: str,
     token: str,
     expires_at_iso: str,
+    pdf_path_copy: Optional[str] = None,
+    pdf_path_original: Optional[str] = None,
 ) -> None:
-    """PDFアップロード後、payments行にメタ情報を保存"""
-    db.get_client().table("p1_payments").update({
+    """PDFアップロード後、payments行にメタ情報を保存
+
+    Args:
+        pdf_path: 後方互換用（従来のメインPDFパス。通常は copy と同じ）
+        pdf_path_copy: 受領者配布用（控え）PDFパス（明示的に渡す場合）
+        pdf_path_original: 発行者保管用（原本）PDFパス
+    """
+    payload = {
         "receipt_no": receipt_no,
-        "receipt_pdf_path": pdf_path,
+        # 後方互換: receipt_pdf_path には「控え」を格納する運用
+        "receipt_pdf_path": pdf_path_copy or pdf_path,
         "receipt_token": token,
         "receipt_token_expires_at": expires_at_iso,
         "receipt_generated_at": _now_iso(),
-    }).eq("id", payment_id).execute()
+    }
+    if pdf_path_original is not None:
+        payload["receipt_original_path"] = pdf_path_original
+    db.get_client().table("p1_payments").update(payload).eq("id", payment_id).execute()
 
 
 def mark_receipt_downloaded(payment_id: int) -> None:
@@ -92,7 +109,8 @@ def find_payment_by_token(token: str) -> Optional[dict]:
     client = db.get_client()
     res = client.table("p1_payments").select(
         "id, event_id, staff_id, total_amount, receipt_no, "
-        "receipt_pdf_path, receipt_token_expires_at, receipt_download_count"
+        "receipt_pdf_path, receipt_original_path, "
+        "receipt_token_expires_at, receipt_download_count"
     ).eq("receipt_token", token).execute()
     return res.data[0] if res.data else None
 
@@ -110,7 +128,7 @@ def get_payments_needing_receipt(event_id: int,
     client = db.get_client()
     q = client.table("p1_payments").select(
         "id, event_id, staff_id, total_amount, status, "
-        "receipt_no, receipt_pdf_path, receipt_token, "
+        "receipt_no, receipt_pdf_path, receipt_original_path, receipt_token, "
         "receipt_token_expires_at, receipt_generated_at, "
         "receipt_download_count, p1_staff(name_jp, name_en, no, role, "
         "real_name, address, email)"

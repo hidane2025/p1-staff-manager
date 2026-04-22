@@ -11,6 +11,10 @@ generate_presentation.py
 test_nagoya.py
 .streamlit/secrets.toml
 Icon
+Icon?
+Icon*$
+**/Icon
+**/Icon?
 .DS_Store
 docs/preview/
 docs/preview_full/

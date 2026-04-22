@@ -48,6 +48,15 @@ with st.form("issuer_form"):
             placeholder="T1234567890123（未登録なら空欄のまま）",
             help="空欄の場合、領収書には印字されません。後日登録した際にここに入力するだけで自動反映します。",
         )
+        show_tax_breakdown = st.checkbox(
+            "消費税額を内訳表示する",
+            value=cur["show_tax_breakdown"],
+            help=(
+                "ONにすると領収書PDFの金額ブロックに"
+                "「内 本体価格 ¥xxx」「内 消費税額 ¥xxx（10%）」の2行を追加します。"
+                "インボイス制度対応時に推奨。"
+            ),
+        )
         issuer_seal_url = st.text_input(
             "電子印影URL（任意）",
             value=cur["issuer_seal_url"],
@@ -64,6 +73,7 @@ with st.form("issuer_form"):
             invoice_number=invoice_number,
             issuer_seal_url=issuer_seal_url,
             receipt_purpose=receipt_purpose,
+            show_tax_breakdown=show_tax_breakdown,
         )
         st.success("✅ 発行者情報を保存しました")
         st.rerun()

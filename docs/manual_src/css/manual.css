@@ -1,0 +1,898 @@
+/* ============================================================
+   P1 Staff Manager 取扱説明書 — エディトリアルスタイル
+   ミオ設計 / ユイ実装
+   ============================================================ */
+
+/* ---------- 印刷用ページ設定 ---------- */
+@page {
+  size: A4;
+  margin: 22mm 18mm 20mm 22mm; /* 非対称：上・外・下・内 */
+
+  @bottom-left {
+    content: "P1 Staff Manager 取扱説明書";
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    font-size: 8pt;
+    color: #888;
+    margin-bottom: 6mm;
+  }
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font-family: "Inter", "Hiragino Kaku Gothic ProN", sans-serif;
+    font-size: 9pt;
+    color: #444;
+    margin-bottom: 6mm;
+    letter-spacing: 0.05em;
+  }
+}
+
+/* 表紙は余白とフッターを打ち消し */
+@page cover {
+  margin: 0;
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+
+/* 章扉：フッター無し */
+@page chapter-opening {
+  margin: 22mm 18mm 20mm 22mm;
+  @bottom-left { content: none; }
+  @bottom-right {
+    content: counter(page);
+    font-family: "Inter", sans-serif;
+    font-size: 9pt;
+    color: #444;
+    margin-bottom: 6mm;
+  }
+}
+
+/* ---------- 基本タイポ ---------- */
+:root {
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #888;
+  --line: #d4d0c8;
+  --line-soft: #e8e4dc;
+  --navy: #1F3A5F;
+  --navy-soft: #2b4f7b;
+  --vermilion: #C8381E;
+  --ivory: #FDFBF6;
+  --paper: #FFFFFF;
+
+  --font-mincho: "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-gothic: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  --font-digit: "Inter", "Hiragino Kaku Gothic ProN", sans-serif;
+
+  /* ベースライン 12pt = 3mm */
+  --baseline: 12pt;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mincho);
+  font-size: 10pt;
+  line-height: 1.75;
+  color: var(--ink);
+  background: var(--paper);
+  /* 和文禁則 */
+  text-spacing-trim: trim-start;
+  hanging-punctuation: allow-end;
+  word-break: strict;
+  line-break: strict;
+}
+
+/* すべての要素で数字はInterを使う */
+body * {
+  font-feature-settings: "palt" 1;
+}
+
+/* ---------- 見出し階層 ---------- */
+h1, h2, h3, h4 {
+  font-family: var(--font-gothic);
+  color: var(--navy);
+  line-height: 1.3;
+  letter-spacing: 0.03em;
+  break-after: avoid;
+}
+
+h1 {
+  font-size: 22pt;
+  font-weight: 600;
+  margin: 0 0 8mm 0;
+  padding-bottom: 3mm;
+  border-bottom: 0.5pt solid var(--navy);
+  position: relative;
+}
+h1::before {
+  content: "";
+  position: absolute;
+  bottom: -0.5pt;
+  left: 0;
+  width: 12mm;
+  height: 1pt;
+  background: var(--vermilion);
+}
+
+h2 {
+  font-size: 13pt;
+  font-weight: 600;
+  margin: 6mm 0 3mm 0;
+  padding-left: 4mm;
+  border-left: 1.5pt solid var(--vermilion);
+}
+
+h3 {
+  font-size: 11pt;
+  font-weight: 600;
+  margin: 6mm 0 2mm 0;
+  color: var(--navy-soft);
+}
+
+h4 {
+  font-size: 10pt;
+  font-weight: 600;
+  margin: 4mm 0 1mm 0;
+  color: var(--ink-soft);
+}
+
+/* ---------- 本文 ---------- */
+p {
+  margin: 0 0 2mm 0;
+  text-align: justify;
+  text-justify: inter-character;
+}
+
+strong, b {
+  font-family: var(--font-gothic);
+  font-weight: 600;
+  color: var(--navy);
+}
+
+em, i {
+  font-style: normal;
+  color: var(--vermilion);
+}
+
+/* 数字・英字の font 切替 */
+.num, .en {
+  font-family: var(--font-digit);
+  font-feature-settings: "tnum" 1;
+}
+
+/* ---------- 箇条書き ---------- */
+ul, ol {
+  margin: 0 0 4mm 0;
+  padding-left: 5mm;
+}
+ul li {
+  list-style: none;
+  position: relative;
+  margin-bottom: 1.5mm;
+  padding-left: 4mm;
+}
+ul li::before {
+  content: "■";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--vermilion);
+  font-size: 7pt;
+  line-height: 2.2;
+}
+ol li {
+  margin-bottom: 1.5mm;
+  padding-left: 1mm;
+}
+ol li::marker {
+  font-family: var(--font-digit);
+  color: var(--navy);
+  font-weight: 600;
+}
+
+/* ---------- 表紙 ---------- */
+.cover {
+  page: cover;
+  page-break-after: always;
+  width: 210mm;
+  height: 297mm;
+  position: relative;
+  background: var(--ivory);
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.cover-band {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 60mm;
+  background: var(--navy);
+}
+.cover-accent {
+  position: absolute;
+  top: 60mm; left: 0; right: 0;
+  height: 3mm;
+  background: var(--vermilion);
+}
+.cover-title {
+  position: absolute;
+  top: 100mm;
+  left: 22mm;
+  right: 22mm;
+}
+.cover-title .kicker {
+  font-family: var(--font-gothic);
+  font-size: 10pt;
+  letter-spacing: 0.4em;
+  color: var(--vermilion);
+  margin-bottom: 5mm;
+}
+.cover-title h1 {
+  font-family: var(--font-mincho);
+  font-size: 48pt;
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--ink);
+  border: none;
+  padding: 0;
+  margin: 0 0 6mm 0;
+  letter-spacing: 0.02em;
+}
+.cover-title h1::before { content: none; }
+.cover-title .subtitle {
+  font-family: var(--font-mincho);
+  font-size: 18pt;
+  font-weight: 300;
+  color: var(--ink-soft);
+  margin: 0;
+  letter-spacing: 0.08em;
+}
+.cover-subcopy {
+  position: absolute;
+  top: 195mm;
+  left: 22mm;
+  right: 22mm;
+  font-family: var(--font-mincho);
+  font-size: 14pt;
+  line-height: 1.8;
+  color: var(--ink);
+  letter-spacing: 0.05em;
+}
+.cover-meta {
+  position: absolute;
+  bottom: 22mm;
+  left: 22mm;
+  right: 22mm;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-family: var(--font-gothic);
+  font-size: 9pt;
+  color: var(--ink-muted);
+  letter-spacing: 0.1em;
+}
+.cover-meta .lhs {
+  text-align: left;
+}
+.cover-meta .lhs .num {
+  font-size: 24pt;
+  font-family: var(--font-mincho);
+  color: var(--navy);
+  letter-spacing: 0;
+  display: block;
+  margin-bottom: 2mm;
+}
+.cover-meta .rhs {
+  text-align: right;
+}
+.cover-pacific-band {
+  position: absolute;
+  top: 40mm;
+  left: 22mm;
+  font-family: var(--font-gothic);
+  font-size: 10pt;
+  color: rgba(255,255,255,0.8);
+  letter-spacing: 0.3em;
+}
+.cover-mark {
+  position: absolute;
+  top: 18mm;
+  left: 22mm;
+  font-family: var(--font-mincho);
+  font-size: 14pt;
+  color: #fff;
+  letter-spacing: 0.2em;
+}
+
+/* ---------- 目次 ---------- */
+.toc {
+  page-break-after: always;
+  padding-top: 0;
+}
+.toc h1 {
+  font-size: 32pt;
+  font-family: var(--font-mincho);
+  border: none;
+  margin-bottom: 15mm;
+  padding: 0;
+}
+.toc h1::before { content: none; }
+.toc h1 .en {
+  display: block;
+  font-family: var(--font-digit);
+  font-size: 9pt;
+  font-weight: 400;
+  letter-spacing: 0.3em;
+  color: var(--vermilion);
+  margin-bottom: 3mm;
+}
+.toc-part {
+  margin-bottom: 8mm;
+  break-inside: avoid;
+}
+.toc-part-head {
+  display: flex;
+  align-items: baseline;
+  gap: 4mm;
+  font-family: var(--font-gothic);
+  margin-bottom: 3mm;
+  padding-bottom: 1.5mm;
+  border-bottom: 0.5pt solid var(--navy);
+}
+.toc-part-head .part-num {
+  font-family: var(--font-digit);
+  font-size: 20pt;
+  font-weight: 500;
+  color: var(--navy);
+  letter-spacing: 0;
+}
+.toc-part-head .part-title {
+  font-size: 13pt;
+  font-weight: 600;
+  color: var(--navy);
+}
+.toc-part-head .part-sub {
+  margin-left: auto;
+  font-size: 8pt;
+  color: var(--ink-muted);
+  letter-spacing: 0.1em;
+}
+.toc-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 1mm;
+  padding-left: 12mm;
+}
+.toc-entry {
+  display: flex;
+  align-items: baseline;
+  font-size: 10pt;
+}
+.toc-entry .num {
+  width: 11mm;
+  color: var(--ink-muted);
+  font-size: 8.5pt;
+  letter-spacing: 0;
+}
+.toc-entry .title {
+  font-family: var(--font-mincho);
+  color: var(--ink);
+}
+.toc-entry .dots {
+  flex: 1;
+  border-bottom: 0.3pt dotted var(--ink-muted);
+  margin: 0 2mm 2pt 2mm;
+  height: 1px;
+}
+.toc-entry .pagenum {
+  font-family: var(--font-digit);
+  font-size: 9pt;
+  color: var(--navy);
+  letter-spacing: 0;
+  min-width: 8mm;
+  text-align: right;
+}
+
+/* ---------- 章扉 ---------- */
+.chapter-opening {
+  page: chapter-opening;
+  page-break-before: always;
+  page-break-after: always;
+  min-height: 220mm;
+  position: relative;
+}
+.chapter-opening .part-badge {
+  font-family: var(--font-digit);
+  font-size: 8pt;
+  letter-spacing: 0.4em;
+  color: var(--vermilion);
+  margin-bottom: 3mm;
+}
+.chapter-opening .part-num {
+  font-family: var(--font-digit);
+  font-size: 72pt;
+  font-weight: 300;
+  color: var(--navy);
+  line-height: 1;
+  margin-bottom: 6mm;
+  letter-spacing: 0;
+}
+.chapter-opening h1 {
+  font-family: var(--font-mincho);
+  font-size: 36pt;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  border: none;
+  padding: 0;
+  margin: 0 0 10mm 0;
+}
+.chapter-opening h1::before { content: none; }
+.chapter-opening .lead {
+  font-family: var(--font-mincho);
+  font-size: 12pt;
+  line-height: 2;
+  color: var(--ink-soft);
+  max-width: 140mm;
+  margin-bottom: 15mm;
+}
+.chapter-opening .chapter-idx {
+  margin-top: 15mm;
+  border-top: 0.5pt solid var(--navy);
+  padding-top: 6mm;
+}
+.chapter-opening .chapter-idx-title {
+  font-family: var(--font-gothic);
+  font-size: 8pt;
+  letter-spacing: 0.3em;
+  color: var(--ink-muted);
+  margin-bottom: 4mm;
+}
+.chapter-opening .chapter-idx ul {
+  columns: 2;
+  column-gap: 10mm;
+  padding: 0;
+}
+.chapter-opening .chapter-idx li {
+  padding-left: 0;
+  font-family: var(--font-mincho);
+  font-size: 10pt;
+  break-inside: avoid;
+}
+.chapter-opening .chapter-idx li::before { content: none; }
+.chapter-opening .chapter-idx li .en {
+  font-size: 8.5pt;
+  color: var(--vermilion);
+  margin-right: 2mm;
+}
+
+/* ---------- コンテンツページ共通 ---------- */
+/* 連続フロー（自然に流し込み） */
+.page {
+  page-break-before: auto;
+  padding-top: 3mm;
+}
+/* 新PHASEや大セクションの切り替えだけ強制改ページ */
+.page.new-chapter {
+  page-break-before: always;
+  padding-top: 0;
+}
+.page-label {
+  font-family: var(--font-gothic);
+  font-size: 7.5pt;
+  letter-spacing: 0.35em;
+  color: var(--ink-muted);
+  margin-bottom: 2mm;
+  text-transform: uppercase;
+}
+/* セクション間のマージン縮小 */
+.page h1 {
+  margin-top: 0;
+  margin-bottom: 4mm;
+}
+.page h2 {
+  margin-top: 5mm;
+}
+.page h3 {
+  margin-top: 4mm;
+  margin-bottom: 1.5mm;
+}
+
+/* ---------- 2カラムレイアウト ---------- */
+.two-col {
+  column-count: 2;
+  column-gap: 8mm;
+  column-rule: 0.3pt solid var(--line-soft);
+}
+.two-col > * {
+  break-inside: avoid;
+}
+
+/* ---------- サイドノート（余白メモ） ---------- */
+.sidenote {
+  border-left: 1.5pt solid var(--vermilion);
+  padding: 2mm 0 2mm 4mm;
+  margin: 4mm 0;
+  font-family: var(--font-gothic);
+  font-size: 9pt;
+  color: var(--ink-soft);
+  line-height: 1.7;
+}
+.sidenote .label {
+  display: block;
+  font-size: 7.5pt;
+  letter-spacing: 0.25em;
+  color: var(--vermilion);
+  margin-bottom: 1mm;
+}
+
+/* ---------- 罫線表 ---------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9pt;
+  line-height: 1.5;
+  margin: 2mm 0 3mm 0;
+  /* 表が長い場合は分割許可、短い場合はまとめる */
+  break-inside: auto;
+}
+thead th {
+  font-family: var(--font-gothic);
+  font-size: 8.5pt;
+  font-weight: 600;
+  color: var(--navy);
+  text-align: left;
+  padding: 1.5mm 3mm;
+  border-top: 0.8pt solid var(--navy);
+  border-bottom: 0.4pt solid var(--navy);
+  letter-spacing: 0.05em;
+}
+tbody td {
+  padding: 1.5mm 3mm;
+  border-bottom: 0.3pt solid var(--line-soft);
+  vertical-align: top;
+}
+tbody tr:last-child td {
+  border-bottom: 0.4pt solid var(--navy);
+}
+tbody th {
+  font-family: var(--font-gothic);
+  font-weight: 500;
+  color: var(--navy-soft);
+  text-align: left;
+  padding: 2mm 3mm;
+  border-bottom: 0.3pt solid var(--line-soft);
+  background: var(--ivory);
+  font-size: 9pt;
+}
+
+/* ---------- 図版・スクショ ---------- */
+figure {
+  margin: 5mm 0;
+  break-inside: avoid;
+}
+figure img {
+  width: 100%;
+  height: auto;
+  border: 0.3pt solid var(--line);
+  box-shadow: 1mm 1mm 0 rgba(0,0,0,0.04);
+}
+figure figcaption {
+  font-family: var(--font-gothic);
+  font-size: 8.5pt;
+  color: var(--ink-muted);
+  margin-top: 2mm;
+  letter-spacing: 0.03em;
+}
+figure figcaption .fignum {
+  font-family: var(--font-digit);
+  color: var(--vermilion);
+  font-weight: 600;
+  margin-right: 3mm;
+  letter-spacing: 0.1em;
+}
+
+/* ---------- フロー図（縦型ステップ） ---------- */
+.flow {
+  margin: 4mm 0;
+}
+.flow-step {
+  display: grid;
+  grid-template-columns: 14mm 1fr;
+  gap: 3mm;
+  padding: 2mm 0;
+  border-bottom: 0.3pt solid var(--line-soft);
+  break-inside: avoid;
+}
+.flow-step:last-child {
+  border-bottom: 0.5pt solid var(--navy);
+}
+.flow-step .idx {
+  font-family: var(--font-mincho);
+  font-size: 22pt;
+  color: var(--vermilion);
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0;
+  padding-top: 1mm;
+}
+.flow-step .body h4 {
+  font-family: var(--font-gothic);
+  font-size: 10.5pt;
+  color: var(--navy);
+  margin: 0 0 1mm 0;
+}
+.flow-step .body p {
+  font-size: 9pt;
+  line-height: 1.6;
+  margin: 0 0 0.5mm 0;
+}
+.flow-step .body .who {
+  display: inline-block;
+  font-family: var(--font-gothic);
+  font-size: 8pt;
+  color: var(--vermilion);
+  letter-spacing: 0.1em;
+  padding: 0.5mm 2mm;
+  border: 0.3pt solid var(--vermilion);
+  margin-right: 2mm;
+  vertical-align: 1.5pt;
+}
+
+/* ---------- チェックリスト ---------- */
+.checklist {
+  background: var(--ivory);
+  padding: 3mm 4mm 2mm;
+  margin: 4mm 0;
+  border-left: 2pt solid var(--navy);
+  break-inside: avoid;
+}
+.checklist .label {
+  font-family: var(--font-gothic);
+  font-size: 7.5pt;
+  letter-spacing: 0.25em;
+  color: var(--navy);
+  margin-bottom: 1.5mm;
+}
+.checklist h3 {
+  font-family: var(--font-gothic);
+  font-size: 10pt;
+  color: var(--ink);
+  margin: 0 0 2mm 0;
+}
+.checklist ul {
+  padding: 0;
+  margin: 0;
+}
+.checklist ul li {
+  padding-left: 6mm;
+  margin-bottom: 0.8mm;
+  font-size: 9pt;
+  line-height: 1.6;
+}
+.checklist ul li::before {
+  content: "□";
+  color: var(--navy);
+  font-size: 11pt;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+/* ---------- FAQ ---------- */
+.faq {
+  margin: 4mm 0;
+  break-inside: avoid;
+}
+.faq .q {
+  font-family: var(--font-gothic);
+  font-weight: 600;
+  font-size: 10.5pt;
+  color: var(--navy);
+  margin: 0 0 1.5mm 0;
+  line-height: 1.5;
+}
+.faq .q::before {
+  content: "Q. ";
+  color: var(--vermilion);
+  font-family: var(--font-digit);
+  letter-spacing: 0;
+}
+.faq .a {
+  font-family: var(--font-mincho);
+  font-size: 10pt;
+  line-height: 1.85;
+  color: var(--ink);
+  padding-left: 5.5mm;
+  margin-bottom: 4mm;
+  text-align: justify;
+}
+
+/* ---------- 強調ボックス ---------- */
+.callout {
+  padding: 3mm 4mm;
+  margin: 4mm 0;
+  border-left: 2pt solid var(--vermilion);
+  background: #fef8f4;
+  font-size: 9.5pt;
+  line-height: 1.7;
+  break-inside: avoid;
+}
+.callout .label {
+  display: block;
+  font-family: var(--font-gothic);
+  font-size: 7.5pt;
+  letter-spacing: 0.25em;
+  color: var(--vermilion);
+  margin-bottom: 1mm;
+}
+.callout.note {
+  border-left-color: var(--navy);
+  background: #f5f8fc;
+}
+.callout.note .label {
+  color: var(--navy);
+}
+.callout.warn {
+  border-left-color: #b8860b;
+  background: #fdf8e7;
+}
+.callout.warn .label {
+  color: #8b6914;
+}
+
+/* ---------- 数値強調 ---------- */
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1mm;
+  padding: 3mm 0;
+  border-top: 0.3pt solid var(--line);
+  border-bottom: 0.3pt solid var(--line);
+  margin: 3mm 0;
+  break-inside: avoid;
+}
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.stat-row .label {
+  font-family: var(--font-gothic);
+  font-size: 8.5pt;
+  color: var(--ink-muted);
+  letter-spacing: 0.08em;
+}
+.stat-row .value {
+  font-family: var(--font-digit);
+  font-size: 18pt;
+  font-weight: 500;
+  color: var(--navy);
+  letter-spacing: 0;
+}
+.stat-row .value.vermilion {
+  color: var(--vermilion);
+}
+
+/* ---------- グリッド（2-3列レイアウト） ---------- */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6mm;
+  margin: 4mm 0;
+}
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 5mm;
+  margin: 4mm 0;
+}
+
+/* ---------- 役職バッジ ---------- */
+.role {
+  display: inline-block;
+  font-family: var(--font-gothic);
+  font-size: 7.5pt;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  padding: 0.3mm 2mm;
+  border: 0.3pt solid var(--navy);
+  color: var(--navy);
+  margin-right: 1.5mm;
+  vertical-align: 2pt;
+}
+.role.exec { border-color: var(--vermilion); color: var(--vermilion); }
+
+/* ---------- 用語集 ---------- */
+.glossary dt {
+  font-family: var(--font-gothic);
+  font-weight: 600;
+  font-size: 10pt;
+  color: var(--navy);
+  margin-top: 3mm;
+}
+.glossary dd {
+  font-size: 9.5pt;
+  line-height: 1.75;
+  color: var(--ink);
+  margin: 0 0 1mm 0;
+  padding-left: 4mm;
+  border-left: 0.3pt solid var(--line);
+}
+.glossary dd .en {
+  font-size: 8.5pt;
+  color: var(--ink-muted);
+  margin-right: 2mm;
+}
+
+/* ---------- リファレンスページ（機能紹介） ---------- */
+.ref-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 4mm;
+  align-items: baseline;
+  border-bottom: 0.5pt solid var(--navy);
+  padding-bottom: 3mm;
+  margin-bottom: 5mm;
+}
+.ref-num {
+  font-family: var(--font-digit);
+  font-size: 36pt;
+  color: var(--vermilion);
+  line-height: 1;
+  font-weight: 400;
+}
+.ref-title {
+  font-family: var(--font-mincho);
+  font-size: 20pt;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 0;
+}
+.ref-meta {
+  font-family: var(--font-gothic);
+  font-size: 8pt;
+  color: var(--ink-muted);
+  letter-spacing: 0.1em;
+  text-align: right;
+  line-height: 1.5;
+}
+.ref-lead {
+  font-family: var(--font-mincho);
+  font-size: 11pt;
+  line-height: 1.9;
+  color: var(--ink-soft);
+  margin-bottom: 5mm;
+}
+
+/* ---------- 最終ページ（奥付） ---------- */
+.colophon {
+  page-break-before: always;
+  padding-top: 80mm;
+  text-align: center;
+}
+.colophon h2 {
+  font-family: var(--font-mincho);
+  font-size: 14pt;
+  font-weight: 400;
+  color: var(--ink);
+  border: none;
+  padding: 0;
+  margin-bottom: 15mm;
+  letter-spacing: 0.3em;
+}
+.colophon table {
+  max-width: 130mm;
+  margin: 0 auto;
+  font-size: 9.5pt;
+}
+.colophon th {
+  border: none;
+  text-align: right;
+  color: var(--ink-muted);
+  font-weight: 400;
+  padding-right: 6mm;
+  width: 30%;
+}
+.colophon td {
+  border: none;
+  text-align: left;
+}

@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
+from datetime import datetime
+
 import streamlit as st
 import pandas as pd
 
 import db
 from utils import receipt_db
 from utils import receipt_issuer
+from utils import receipt_storage
 from utils import event_selector
 
 
@@ -43,6 +48,7 @@ with st.expander("📝 発行者情報（現在の設定）", expanded=False):
         st.text(f"インボイス番号: {inv}")
         st.text(f"但し書き: {issuer['receipt_purpose']}")
         st.text(f"電子印影: {'✅ 設定済み' if issuer['issuer_seal_url'] else '(未設定)'}")
+        st.text(f"税額内訳表示: {'✅ ON' if issuer.get('show_tax_breakdown') else 'OFF'}")
     st.info("編集は『発行者設定』ページから行ってください。")
 
 st.divider()
@@ -215,3 +221,69 @@ else:
         file_name=f"receipt_links_event{event_id}.csv",
         mime="text/csv",
     )
+
+    # --- 原本ZIP一括DL（Pacific保管用） ---
+    st.markdown("---")
+    st.subheader("📦 原本ZIPを一括ダウンロード")
+    st.caption(
+        "発行者（Pacific）保管用として、全員分の「原本」PDFをまとめてZIPで取得します。"
+        "経理保管・税務対応にお使いください。"
+    )
+
+    # 原本パスを持っている領収書のみを対象とする
+    # （旧仕様で発行された領収書は receipt_original_path が空の可能性あり）
+    original_ready = [r for r in issued if r.get("receipt_original_path")]
+    original_missing = len(issued) - len(original_ready)
+
+    if original_missing > 0:
+        st.warning(
+            f"⚠️ 原本PDFが未生成の領収書が {original_missing} 件あります。"
+            "これらは旧バージョンで発行されたため、『強制再生成』で原本を作り直してください。"
+        )
+
+    if not original_ready:
+        st.caption("原本PDFが生成済みの領収書がまだありません。")
+    else:
+        if st.button(
+            f"📦 原本ZIPを作成・ダウンロード ({len(original_ready)}件)",
+            type="primary",
+        ):
+            try:
+                with st.spinner(f"{len(original_ready)}件の原本PDFをZIP化中..."):
+                    zip_buf = io.BytesIO()
+                    errors: list[str] = []
+                    with zipfile.ZipFile(
+                        zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED
+                    ) as zf:
+                        for r in original_ready:
+                            original_path = r.get("receipt_original_path")
+                            receipt_no = r.get("receipt_no") or f"unknown_{r['id']}"
+                            if not original_path:
+                                continue
+                            pdf_bytes = receipt_storage.download_pdf(original_path)
+                            if not pdf_bytes:
+                                errors.append(f"No.{receipt_no}: ダウンロード失敗")
+                                continue
+                            # ZIP内ファイル名: {receipt_no}_原本.pdf
+                            zf.writestr(f"{receipt_no}_原本.pdf", pdf_bytes)
+                    zip_buf.seek(0)
+
+                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                st.download_button(
+                    "📥 ZIPをダウンロード",
+                    data=zip_buf.getvalue(),
+                    file_name=f"receipts_original_event{event_id}_{stamp}.zip",
+                    mime="application/zip",
+                )
+                if errors:
+                    st.warning(
+                        f"一部ファイルの取得に失敗しました ({len(errors)}件)："
+                    )
+                    for msg in errors:
+                        st.caption(f"- {msg}")
+                else:
+                    st.success(f"✅ {len(original_ready)}件の原本PDFをZIP化しました。")
+            except Exception as e:
+                st.error("💥 ZIP生成中にエラーが発生しました。")
+                with st.expander("🔧 技術詳細（管理者向け）"):
+                    st.code(str(e), language=None)

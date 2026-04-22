@@ -73,12 +73,14 @@ def issue_contract(
         issue_date=issue_date,
     )
     rendered = render_template(tpl["body_markdown"], variables)
+    is_provisional = bool(tpl.get("is_provisional", 1))
 
     # PDF生成（未署名）
     pdf_bytes = generate_contract_pdf(
         rendered_body=rendered,
         contract_no=contract_no,
         issuer_name=issuer_name,
+        is_provisional=is_provisional,
     )
 
     # DB行作成（rendered_body_mdもスナップショットとして記録）
@@ -108,9 +110,10 @@ def issue_contract(
     contract_db.save_unsigned_meta(contract_id, path, token, expires_at)
 
     try:
+        provisional_note = " [仮版で発行]" if is_provisional else ""
         db.log_action(
             "issue_contract", "contracts", contract_id,
-            detail=f"{contract_no} → {staff.get('name_jp')}",
+            detail=f"{contract_no} → {staff.get('name_jp')}{provisional_note}",
             event_id=event_id,
         )
     except Exception:
@@ -123,6 +126,7 @@ def issue_contract(
         "token": token,
         "expires_at": expires_at,
         "pdf_path": path,
+        "is_provisional": is_provisional,
         "error": None,
     }
 
@@ -171,13 +175,17 @@ def apply_signature(contract_id: int, signature_png: bytes,
     # CR-1対策: 発行時スナップショットを最優先
     # 旧契約（rendered_body_md未記録）のみ、互換のためテンプレから再生成
     rendered = c.get("rendered_body_md")
+    tpl = contract_db.get_template(c["template_id"]) if c.get("template_id") else None
     if not rendered:
-        tpl = contract_db.get_template(c["template_id"])
         if not tpl:
             return {"ok": False, "error": "テンプレートが見つかりません"}
         rendered = tpl["body_markdown"]
         for k, v in variables_dict.items():
             rendered = rendered.replace(f"{{{{{k}}}}}", v or "")
+
+    # 仮版フラグは発行時のテンプレ状態を参照。
+    # テンプレが削除済みのレガシー契約は False（安全側：透かしなし）で扱う。
+    is_provisional = bool(tpl.get("is_provisional", 0)) if tpl else False
 
     # 署名日時
     signed_at_iso = datetime.now(JST).isoformat()
@@ -200,6 +208,7 @@ def apply_signature(contract_id: int, signature_png: bytes,
             issuer_name=variables_dict.get("issuer_name") or "",
             signature_image_bytes=signature_png,
             signed_at_iso=signed_at_iso,
+            is_provisional=is_provisional,
         )
         signed_path = contract_storage.upload_bytes(
             contract_storage.signed_pdf_path(c["contract_no"]), signed_pdf,

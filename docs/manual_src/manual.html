@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>P1 Staff Manager 取扱説明書</title>
+<link rel="stylesheet" href="css/manual.css">
+</head>
+<body>
+
+<!-- =============================================================
+     COVER
+     ============================================================= -->
+<section class="cover">
+  <div class="cover-band"></div>
+  <div class="cover-accent"></div>
+  <div class="cover-mark">株式会社パシフィック</div>
+  <div class="cover-pacific-band">PACIFIC ACCOUNTING ONLINE</div>
+
+  <div class="cover-title">
+    <div class="kicker">OPERATION HANDBOOK / 2026</div>
+    <h1>P1 Staff<br>Manager</h1>
+    <p class="subtitle">取扱説明書 ― 責任者・経理担当者のための運用ガイド</p>
+  </div>
+
+  <div class="cover-subcopy">
+    迷わず、確かに、<br>
+    大会を回す。
+  </div>
+
+  <div class="cover-meta">
+    <div class="lhs">
+      <span class="num">v3.5</span>
+      P1 STAFF MANAGER / EDITION 2026.04
+    </div>
+    <div class="rhs">
+      HIDANE AI DEPARTMENT<br>
+      EDITORIAL BY SOU &amp; MIO
+    </div>
+  </div>
+</section>
+
+<!-- =============================================================
+     TOC
+     ============================================================= -->
+<section class="toc">
+  <h1>
+    <span class="en">TABLE OF CONTENTS</span>
+    目次
+  </h1>
+
+  <div class="toc-part">
+    <div class="toc-part-head">
+      <span class="part-num">00</span>
+      <span class="part-title">はじめに</span>
+      <span class="part-sub">ABOUT THIS BOOK</span>
+    </div>
+    <div class="toc-entries">
+      <div class="toc-entry"><span class="num">0-1</span><span class="title">このマニュアルの使い方</span><span class="dots"></span><span class="pagenum">3</span></div>
+      <div class="toc-entry"><span class="num">0-2</span><span class="title">読み手と想定シーン</span><span class="dots"></span><span class="pagenum">3</span></div>
+      <div class="toc-entry"><span class="num">0-3</span><span class="title">役割分担の原則</span><span class="dots"></span><span class="pagenum">4</span></div>
+    </div>
+  </div>
+
+  <div class="toc-part">
+    <div class="toc-part-head">
+      <span class="part-num">01</span>
+      <span class="part-title">大会ライフサイクル</span>
+      <span class="part-sub">LIFECYCLE</span>
+    </div>
+    <div class="toc-entries">
+      <div class="toc-entry"><span class="num">1-A</span><span class="title">2ヶ月前 ― 準備を始める</span><span class="dots"></span><span class="pagenum">6</span></div>
+      <div class="toc-entry"><span class="num">1-B</span><span class="title">前日〜当日 ― 現場の稼働</span><span class="dots"></span><span class="pagenum">8</span></div>
+      <div class="toc-entry"><span class="num">1-C</span><span class="title">翌日〜支払日 ― 精算と受け渡し</span><span class="dots"></span><span class="pagenum">10</span></div>
+      <div class="toc-entry"><span class="num">1-D</span><span class="title">支払後〜月末 ― 書類の整える</span><span class="dots"></span><span class="pagenum">12</span></div>
+      <div class="toc-entry"><span class="num">1-E</span><span class="title">年末年始 ― 確定申告に備える</span><span class="dots"></span><span class="pagenum">14</span></div>
+    </div>
+  </div>
+
+  <div class="toc-part">
+    <div class="toc-part-head">
+      <span class="part-num">02</span>
+      <span class="part-title">機能リファレンス</span>
+      <span class="part-sub">FUNCTION REFERENCE</span>
+    </div>
+    <div class="toc-entries">
+      <div class="toc-entry"><span class="num">2-01</span><span class="title">支払い計算</span><span class="dots"></span><span class="pagenum">16</span></div>
+      <div class="toc-entry"><span class="num">2-02</span><span class="title">出退勤</span><span class="dots"></span><span class="pagenum">17</span></div>
+      <div class="toc-entry"><span class="num">2-03</span><span class="title">封筒リスト</span><span class="dots"></span><span class="pagenum">18</span></div>
+      <div class="toc-entry"><span class="num">2-04</span><span class="title">領収書発行</span><span class="dots"></span><span class="pagenum">19</span></div>
+      <div class="toc-entry"><span class="num">2-05</span><span class="title">契約書発行</span><span class="dots"></span><span class="pagenum">20</span></div>
+      <div class="toc-entry"><span class="num">2-06</span><span class="title">シフト取込</span><span class="dots"></span><span class="pagenum">21</span></div>
+      <div class="toc-entry"><span class="num">2-07</span><span class="title">スタッフ管理</span><span class="dots"></span><span class="pagenum">22</span></div>
+      <div class="toc-entry"><span class="num">2-08</span><span class="title">交通費</span><span class="dots"></span><span class="pagenum">23</span></div>
+      <div class="toc-entry"><span class="num">2-09</span><span class="title">精算レポート・年間累計・発行者設定・契約書テンプレ</span><span class="dots"></span><span class="pagenum">24</span></div>
+    </div>
+  </div>
+
+  <div class="toc-part">
+    <div class="toc-part-head">
+      <span class="part-num">03</span>
+      <span class="part-title">困ったときは</span>
+      <span class="part-sub">TROUBLESHOOTING</span>
+    </div>
+    <div class="toc-entries">
+      <div class="toc-entry"><span class="num">3-1</span><span class="title">症状別トラブル対処</span><span class="dots"></span><span class="pagenum">26</span></div>
+      <div class="toc-entry"><span class="num">3-2</span><span class="title">FAQ ― よくある質問</span><span class="dots"></span><span class="pagenum">27</span></div>
+    </div>
+  </div>
+
+  <div class="toc-part">
+    <div class="toc-part-head">
+      <span class="part-num">04</span>
+      <span class="part-title">付録</span>
+      <span class="part-sub">APPENDIX</span>
+    </div>
+    <div class="toc-entries">
+      <div class="toc-entry"><span class="num">4-1</span><span class="title">用語集</span><span class="dots"></span><span class="pagenum">28</span></div>
+      <div class="toc-entry"><span class="num">4-2</span><span class="title">税務と法的根拠</span><span class="dots"></span><span class="pagenum">29</span></div>
+      <div class="toc-entry"><span class="num">4-3</span><span class="title">習熟ロードマップ</span><span class="dots"></span><span class="pagenum">30</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- =============================================================
+     PART 0 — はじめに
+     ============================================================= -->
+<section class="chapter-opening">
+  <div class="part-badge">PART 00 / ABOUT THIS BOOK</div>
+  <div class="part-num">00</div>
+  <h1>はじめに</h1>
+  <p class="lead">
+    このマニュアルは、P1 Staff Manager を日々の現場で使う<br>
+    三つの立場 ― 経理責任者・経理担当・現場リーダー ― <br>
+    のために書かれています。機能の説明書ではなく、<br>
+    <em>大会を一巡させるための運用の書</em>です。
+  </p>
+  <div class="chapter-idx">
+    <div class="chapter-idx-title">THIS PART</div>
+    <ul>
+      <li><span class="en">0-1</span>このマニュアルの使い方</li>
+      <li><span class="en">0-2</span>読み手と想定シーン</li>
+      <li><span class="en">0-3</span>役割分担の原則</li>
+    </ul>
+  </div>
+</section>
+
+<section class="page new-chapter">
+  <div class="page-label">PART 00 / INTRODUCTION</div>
+  <h1>はじめに</h1>
+
+  <h2>0-1 ― このマニュアルの使い方</h2>
+  <p>
+    大会を一回転させる順番で書いています。初めて使う日は PART 01 を頭から通読してください。
+    二巡目以降は必要な機能だけ PART 02 の機能リファレンスで辞書的に引けるようにしてあります。
+  </p>
+  <p>
+    困ったときは PART 03、制度や用語の確認は PART 04 にまとめました。
+    ページ右下の番号で前後を参照しながら、迷わず現場に戻れる構成です。
+  </p>
+
+  <h2>0-2 ― 読み手と想定シーン</h2>
+  <p>本書が想定する読み手は次の三名です。</p>
+  <table>
+    <thead>
+      <tr><th style="width:22%">立場</th><th style="width:28%">担当者例</th><th>主に開くページ</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>経理責任者</strong></td><td>伊藤さん</td><td>支払い計算・承認・精算レポート・年間累計</td></tr>
+      <tr><td><strong>経理担当</strong></td><td>小島さん</td><td>スタッフ管理・領収書発行・交通費・封筒リスト</td></tr>
+      <tr><td><strong>現場リーダー</strong></td><td>笹尾さん</td><td>シフト取込・出退勤・凍結退勤</td></tr>
+    </tbody>
+  </table>
+  <div class="callout note">
+    <span class="label">本書の前提</span>
+    初期セットアップ（Supabase接続・Storageバケット作成）は中野さんとヒダネAI部で完了済みです。日々の運用に絞って解説します。
+  </div>
+
+  <h2>0-3 ― 役割分担の原則</h2>
+  <p>操作ミスを防ぐため、一つの行為の責任者は一人に絞ります。</p>
+  <table>
+    <thead>
+      <tr><th style="width:35%">業務</th><th style="width:25%">主担当</th><th>補足</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>スタッフマスタの登録・更新</td><td><span class="role">経理担当</span>小島さん</td><td>本名・住所・メール必須</td></tr>
+      <tr><td>シフト取込・出退勤</td><td><span class="role">現場</span>笹尾さん</td><td>凍結退勤も笹尾さん専属</td></tr>
+      <tr><td>支払い額の確認</td><td><span class="role">経理担当</span>小島さん</td><td>内容を精査してから回す</td></tr>
+      <tr><td>支払い承認・paid化</td><td><span class="role exec">責任者</span>伊藤さん</td><td>paidは元に戻せない</td></tr>
+      <tr><td>領収書発行・配布</td><td><span class="role">経理担当</span>小島さん</td><td>URLは本人に直接送る</td></tr>
+      <tr><td>契約書発行・署名依頼</td><td><span class="role exec">責任者</span>伊藤さん</td><td>業務委託・NDAを兼ねる</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- =============================================================
+     PART 01 — LIFECYCLE
+     ============================================================= -->
+<section class="chapter-opening">
+  <div class="part-badge">PART 01 / LIFECYCLE</div>
+  <div class="part-num">01</div>
+  <h1>大会ライフサイクル</h1>
+  <p class="lead">
+    一つの大会は、二ヶ月前から月末まで五つの局面を辿ります。<br>
+    各局面で「誰が何をやるか」「この機能をどう呼び出すか」を、<br>
+    時間軸に沿って案内します。<br>
+    現場で迷ったら、このパートを開いて該当の局面を探してください。
+  </p>
+  <div class="chapter-idx">
+    <div class="chapter-idx-title">PHASES</div>
+    <ul>
+      <li><span class="en">A</span>2ヶ月前 ― 準備を始める</li>
+      <li><span class="en">B</span>前日〜当日 ― 現場の稼働</li>
+      <li><span class="en">C</span>翌日〜支払日 ― 精算と受け渡し</li>
+      <li><span class="en">D</span>支払後〜月末 ― 書類の整える</li>
+      <li><span class="en">E</span>年末年始 ― 確定申告に備える</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 1-A 準備 -->
+<section class="page new-chapter">
+  <div class="page-label">PART 01 / PHASE A</div>
+  <h1>A ― 2ヶ月前、準備を始める</h1>
+  <p class="ref-lead">
+    大会本番の質は、準備期間で決まります。この局面のゴールは「本番中に経理判断を必要としない状態」を作ることです。
+  </p>
+
+  <h2>スタッフとイベントを揃える</h2>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="idx">1</div>
+      <div class="body">
+        <h4>新規スタッフを登録する</h4>
+        <p><span class="who">経理担当</span>スタッフ管理から登録します。本名・住所・メール・雇用区分の四点は必須です。</p>
+        <p>大会1週間前に駆け込みで登録するケースが最も事故を招きます。候補が出た段階で即登録しましょう。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">2</div>
+      <div class="body">
+        <h4>業務委託契約書を発行する</h4>
+        <p><span class="who">責任者</span>契約書発行から業務委託契約を一括発行します。スタッフ登録とセットで処理するのがコツです。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">3</div>
+      <div class="body">
+        <h4>イベントを作成しレートを設定する</h4>
+        <p>開催日・会場・時給・深夜時給・休憩時間を決めます。プレミアム日（日曜・祝日）は時給を一段上げてください。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">4</div>
+      <div class="body">
+        <h4>交通費の地域別ルールを設定する</h4>
+        <p>開催地と同じ地域は一律少額、遠方は上限を設けます。関東大会なら関東=一律1,000円、九州=上限20,000円のように。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <span class="label">事前チェック</span>
+    新規スタッフの本名・住所・メールが欠けていると、領収書PDFの宛名がディーラーネームになり、後から差し替えの手間が発生します。必ずこの段階で補完してください。
+  </div>
+
+  <div class="checklist">
+    <div class="label">PHASE A CHECKLIST</div>
+    <h3>この局面で完了させておくこと</h3>
+    <ul>
+      <li>参加予定スタッフが全員マスタに登録されている</li>
+      <li>本名・住所・メール・雇用区分が全員入っている</li>
+      <li>業務委託契約書が発行され、LINE等で送付済み</li>
+      <li>イベントが作成され、日別レートがプレミアム日まで設定されている</li>
+      <li>交通費の地域別ルールが登録されている</li>
+    </ul>
+  </div>
+</section>
+
+<section class="page">
+  <div class="page-label">PART 01 / PHASE A — 続</div>
+  <h2>1週間前に最終確認する</h2>
+  <p>
+    大会1週間前には「シフト表の取込」と「支払予測の確認」を行います。ここで想定外の出費が見えたら、まだ調整できます。
+  </p>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="idx">5</div>
+      <div class="body">
+        <h4>シフト表CSVを取り込む</h4>
+        <p><span class="who">現場</span>完成したシフト表CSVを2_シフト取込ページからアップロードします。既存シフトは上書きされます。</p>
+        <p>26:00 のような深夜跨ぎ時刻、× による欠勤マーク、どちらも対応済みです。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">6</div>
+      <div class="body">
+        <h4>支払予測をざっと見る</h4>
+        <p><span class="who">責任者</span>3_支払い計算ページで総額を確認します。銀行での両替量を予測するのが目的です。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">7</div>
+      <div class="body">
+        <h4>現金準備のため銀行に両替を予約する</h4>
+        <p>封筒リストの紙幣内訳を参考に、一万円札・千円札・五百円玉を手配します。大会前日の早朝には揃えておきます。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">8</div>
+      <div class="body">
+        <h4>未署名の契約書を督促する</h4>
+        <p><span class="who">責任者</span>契約書発行ページで sent / viewed のまま残っているスタッフにLINEで再送します。本番当日に未署名が残らないようにします。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidenote">
+    <span class="label">SIDE NOTE</span>
+    シフトを取り込む前に、シフト表に載っているスタッフが全員マスタに登録されているか確認してください。未登録のスタッフは取込時に自動でスキップされます。
+  </div>
+</section>
+
+<!-- 1-B 当日 -->
+<section class="page new-chapter">
+  <div class="page-label">PART 01 / PHASE B</div>
+  <h1>B ― 前日から当日、現場の稼働</h1>
+  <p class="ref-lead">
+    本番期間中は現場リーダーの笹尾さん専属のフェーズです。経理は当日打刻の例外対応だけに絞ります。
+  </p>
+
+  <h2>当日朝のひと手間</h2>
+  <p>
+    当日朝に全員のシフトが最新に同期されているか確認します。前日までに追加・変更があれば、2_シフト取込でCSVを再アップロードしてください。差分だけが上書きされます。
+  </p>
+
+  <h2>発生した例外を即座に記録する</h2>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="idx">◯</div>
+      <div class="body">
+        <h4>欠勤が出たら</h4>
+        <p><span class="who">現場</span>出退勤ページの「欠勤登録」タブで該当スタッフを選び、欠勤にします。支払いは自動でゼロ円になります。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">◯</div>
+      <div class="body">
+        <h4>遅刻が出たら</h4>
+        <p>実際の出勤時刻にチェックインを打ち直します。支払い計算で差分が反映されます。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">◯</div>
+      <div class="body">
+        <h4>雑費（弁当・両替手数料）が出たら</h4>
+        <p><span class="who">経理担当</span>精算レポートのPetty Cashに即日記録します。誰が、何円、何に使ったかを残します。</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>最終日の「凍結一括退勤」</h2>
+  <p>
+    最終日は現場が長引き、全員がほぼ同時刻まで残る運用です。シフト表の退勤時刻を守らせるより、実態に合わせた一括処理が楽で正確です。
+  </p>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="idx">★</div>
+      <div class="body">
+        <h4>凍結退勤を実行する</h4>
+        <p><span class="who">現場</span>出退勤ページ「凍結退勤」タブで日付と退勤時刻を指定（例：26:00）し、対象スタッフを一括選択して実行します。</p>
+      </div>
+    </div>
+  </div>
+  <div class="callout warn">
+    <span class="label">自動で起きること</span>
+    凍結退勤を行うと、その影響を受けたスタッフのうち<strong>承認済み（approved）</strong>の支払いは自動で<strong>未承認（pending）</strong>に戻ります。これは深夜手当が再計算されるためで、経理は承認し直す必要があります。
+  </div>
+
+  <div class="checklist">
+    <div class="label">PHASE B CHECKLIST</div>
+    <h3>大会期間中に済ませること</h3>
+    <ul>
+      <li>当日朝にシフトが最新になっている</li>
+      <li>欠勤・遅刻は発生次第ただちに入力する</li>
+      <li>雑費はその場で Petty Cash に記録する</li>
+      <li>最終日に凍結退勤を実行する</li>
+      <li>凍結退勤後、承認済みが pending に戻っていることを確認する</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 1-C 翌日 支払 -->
+<section class="page new-chapter">
+  <div class="page-label">PART 01 / PHASE C</div>
+  <h1>C ― 翌日から支払日、精算と受け渡し</h1>
+  <p class="ref-lead">
+    ここが経理業務の山場です。この局面を<em>2時間以内</em>に回せるようになるのが、ツールを使いこなす目安です。
+  </p>
+
+  <h2>前日夜までに、内訳を確定する</h2>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="idx">1</div>
+      <div class="body">
+        <h4>スタッフから集めた領収書を入力する</h4>
+        <p><span class="who">経理担当</span>交通費ページで、開催地以外から来たスタッフ全員の実費を記録します。上限を超えた金額は自動で上限値に丸められます。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">2</div>
+      <div class="body">
+        <h4>支払額を再計算する</h4>
+        <p><span class="who">経理担当</span>3_支払い計算で「支払い額を計算」を押します。500円単位に丸めるオプションは ON にしてください。両替の手間が約4割減ります。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">3</div>
+      <div class="body">
+        <h4>内容を精査する</h4>
+        <p>金額に違和感のあるスタッフの日別内訳を確認します。深夜割増・精勤手当・交通費の過不足を見抜けるのは経理担当だけです。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">4</div>
+      <div class="body">
+        <h4>承認する</h4>
+        <p><span class="who">責任者</span>伊藤さんが最終承認を行います。承認した支払いの金額は、以降は書き換えにくくなります。</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>支払日当日</h2>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="idx">5</div>
+      <div class="body">
+        <h4>封筒リストで紙幣内訳を印刷する</h4>
+        <p><span class="who">経理担当</span>4_封筒リストページでラベルCSVをダウンロードし、封筒に貼り付けます。全体合計の紙幣内訳は銀行の両替依頼書にそのまま使えます。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">6</div>
+      <div class="body">
+        <h4>現金を封入して手渡す</h4>
+        <p>スタッフ一人ずつに封筒を渡します。受け取りの証跡として、後述の領収書発行をセットで行います。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">7</div>
+      <div class="body">
+        <h4>支払済み（paid）に更新する</h4>
+        <p><span class="who">責任者</span>承認済みかつ領収書受領済みのスタッフだけを paid にします。二段階の確認ダイアログが表示されるので、内容を読んでから進めてください。</p>
+      </div>
+    </div>
+  </div>
+  <div class="callout">
+    <span class="label">POINT</span>
+    paid の状態は後から戻すにはデータベースへの直接操作が必要です。誤って paid にしてしまった場合は、必ず中野さんに連絡してください。
+  </div>
+
+  <div class="checklist">
+    <div class="label">PHASE C CHECKLIST</div>
+    <h3>支払日までにやりきること</h3>
+    <ul>
+      <li>全員の交通費領収書入力が完了している</li>
+      <li>500円丸めがON、合計金額を確認した</li>
+      <li>責任者の承認が全員分ついている</li>
+      <li>封筒リストの紙幣内訳で両替量を把握した</li>
+      <li>手渡した全員を paid に更新した</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 1-D 書類整理 -->
+<section class="page new-chapter">
+  <div class="page-label">PART 01 / PHASE D</div>
+  <h1>D ― 支払後から月末、書類を整える</h1>
+  <p class="ref-lead">
+    現金の受け渡しが済んだら、紙の証跡を電子で整えます。ここを怠ると税務調査で詰まります。
+  </p>
+
+  <h2>領収書を一括発行して配布する</h2>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="idx">1</div>
+      <div class="body">
+        <h4>発行者情報が最新か確認する</h4>
+        <p><span class="who">経理担当</span>発行者設定でパシフィックの社名・住所を確認します。インボイス番号は空欄のままで構いません（後日登録したら、ここに入れれば過去分の強制再生成で反映可能です）。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">2</div>
+      <div class="body">
+        <h4>領収書を一括発行する</h4>
+        <p>領収書発行ページで「支払い済みのみ」を選び、全員にチェックを入れて発行します。80名で2分程度で完了します。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">3</div>
+      <div class="body">
+        <h4>DLリンクを配布する</h4>
+        <p>画面下部の「コピー」を押すとクリップボードにURLが入ります。個別送信のほか「一括（全員分まとめて）」モードで LINE の文面に貼るだけの形式でも出せます。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">4</div>
+      <div class="body">
+        <h4>DL状況を追う</h4>
+        <p>7日経ってもDL回数が0のスタッフには個別に声をかけます。URLの有効期限は発行時に設定した日数（標準7日）です。</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>現金の差異を解消する</h2>
+  <p>
+    精算レポートで、理論残高と実残高を突き合わせます。1円でも差があれば原因を探り、月内に解消するのが「差異ゼロ運動」です。
+  </p>
+  <div class="callout note">
+    <span class="label">よくある差異の原因</span>
+    Petty Cash の記録漏れ／両替時の端数／スタッフへの仮払いを精算時に戻していない、の三点が九割を占めます。順番に確認してください。
+  </div>
+
+  <div class="checklist">
+    <div class="label">PHASE D CHECKLIST</div>
+    <h3>月内に終えること</h3>
+    <ul>
+      <li>領収書が全員分、発行済み</li>
+      <li>DLリンクが全員に配布された</li>
+      <li>DL回数0のスタッフに個別フォローした</li>
+      <li>精算レポートで現金差異を解消した</li>
+      <li>紙の領収書原本を大会別フォルダに保管した</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 1-E 年末 -->
+<section class="page new-chapter">
+  <div class="page-label">PART 01 / PHASE E</div>
+  <h1>E ― 年末年始、確定申告に備える</h1>
+  <p class="ref-lead">
+    年が切り替わる直前のひと月が、税務の山場です。前倒しの段取りが勝負を決めます。
+  </p>
+
+  <h2>12月 ― 情報を集める</h2>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="idx">1</div>
+      <div class="body">
+        <h4>スタッフ情報の健全性をチェックする</h4>
+        <p><span class="who">経理担当</span>年間累計ページ下部の「スタッフ情報健全性チェック」を開きます。本名・メール・住所のいずれかが欠けているスタッフが一覧表示されます。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">2</div>
+      <div class="body">
+        <h4>マイナンバー収集を依頼する</h4>
+        <p>50万円超のスタッフ全員に、マイナンバー・住所・扶養情報の提出を依頼します。受領後はスタッフ管理で反映します。</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>1月 ― 法定調書を提出する</h2>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="idx">3</div>
+      <div class="body">
+        <h4>法定調書対象者を抽出する</h4>
+        <p>年間累計ページで「¥500,000超」セクションを開きます。この一覧がそのまま支払調書の提出対象です。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">4</div>
+      <div class="body">
+        <h4>支払調書・合計表を作成し、税務署に提出する</h4>
+        <p><span class="who">責任者</span>1月末日が提出期限です。税理士が居る場合はこの一覧を渡せば作業がほぼ完結します。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <span class="label">遅れると罰則あり</span>
+    法定調書の提出遅延は加算税・延滞税の対象です。年明けすぐに動けるよう、前年12月のうちにスタッフ情報を確定させておくのが最も安全です。
+  </div>
+
+  <div class="checklist">
+    <div class="label">PHASE E CHECKLIST</div>
+    <h3>年末年始に済ませること</h3>
+    <ul>
+      <li>12月中旬に健全性チェックで未登録者ゼロ</li>
+      <li>50万円超スタッフのマイナンバー収集完了</li>
+      <li>1月第1週に法定調書対象リストをCSV抽出</li>
+      <li>1月末日までに税務署へ支払調書・合計表を提出</li>
+    </ul>
+  </div>
+</section>
+
+<!-- =============================================================
+     PART 02 — FUNCTION REFERENCE
+     ============================================================= -->
+<section class="chapter-opening">
+  <div class="part-badge">PART 02 / FUNCTION REFERENCE</div>
+  <div class="part-num">02</div>
+  <h1>機能リファレンス</h1>
+  <p class="lead">
+    PART 01 の流れで「この機能はなんだったっけ」と迷ったら<br>
+    このパートを開いてください。使用頻度の高い順に並べています。<br>
+    各見出しの右上の番号で、ページを素早く辿れます。
+  </p>
+  <div class="chapter-idx">
+    <div class="chapter-idx-title">FUNCTIONS BY FREQUENCY</div>
+    <ul>
+      <li><span class="en">01</span>支払い計算</li>
+      <li><span class="en">02</span>出退勤</li>
+      <li><span class="en">03</span>封筒リスト</li>
+      <li><span class="en">04</span>領収書発行</li>
+      <li><span class="en">05</span>契約書発行</li>
+      <li><span class="en">06</span>シフト取込</li>
+      <li><span class="en">07</span>スタッフ管理</li>
+      <li><span class="en">08</span>交通費</li>
+      <li><span class="en">09</span>その他（精算・年間・発行者・契約テンプレ）</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 2-01 支払い計算 -->
+<section class="page">
+  <div class="ref-head">
+    <div class="ref-num">01</div>
+    <h2 class="ref-title">支払い計算</h2>
+    <div class="ref-meta">REFERENCE<br>使用頻度 ★★★★★</div>
+  </div>
+  <p class="ref-lead">
+    スタッフ一人ひとりの支払い額を算出し、承認・支払済みへと状態を進めます。ツールの中心にある画面です。
+  </p>
+
+  <h3>計算ロジック</h3>
+  <table>
+    <thead><tr><th style="width:35%">項目</th><th>算出</th></tr></thead>
+    <tbody>
+      <tr><td>通常時間給</td><td>時給 × 実働時間（休憩控除後）</td></tr>
+      <tr><td>深夜割増</td><td>深夜時給 × 22時以降の時間</td></tr>
+      <tr><td>フロア手当</td><td>ロール=Floor で日額3,000円（プレミアム日5,000円）</td></tr>
+      <tr><td>MIX手当</td><td>MIX担当日は +1,500円</td></tr>
+      <tr><td>精勤手当</td><td>全日稼働で10,000円、4日以上で6,000円</td></tr>
+      <tr><td>500円丸め</td><td>合計額を500円単位で繰り上げ（任意・推奨）</td></tr>
+    </tbody>
+  </table>
+
+  <h3>ステータスの進み方</h3>
+  <div class="grid-3">
+    <div>
+      <h4>pending（未承認）</h4>
+      <p>計算直後の初期状態。金額は自由に変更可能。</p>
+    </div>
+    <div>
+      <h4>approved（承認済）</h4>
+      <p>責任者が承認した状態。金額の再計算はできるが、paid になる前に再度承認が必要。</p>
+    </div>
+    <div>
+      <h4>paid（支払済）</h4>
+      <p>現金を手渡した最終状態。通常手段では戻せない。</p>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <span class="label">凍結退勤との関係</span>
+    凍結退勤を行うと、該当スタッフの approved は自動で pending に戻ります。paid は保護されます。承認のやり直しが必要になるので、凍結の後に承認する運用を徹底してください。
+  </div>
+</section>
+
+<!-- 2-02 出退勤 -->
+<section class="page">
+  <div class="ref-head">
+    <div class="ref-num">02</div>
+    <h2 class="ref-title">出退勤</h2>
+    <div class="ref-meta">REFERENCE<br>使用頻度 ★★★★</div>
+  </div>
+  <p class="ref-lead">
+    チェックイン・チェックアウトの打刻、欠勤・遅刻の記録、最終日の凍結退勤をすべてここから行います。
+  </p>
+
+  <h3>4つのタブの役割</h3>
+  <table>
+    <thead><tr><th style="width:22%">タブ</th><th>使うタイミング</th></tr></thead>
+    <tbody>
+      <tr><td><strong>凍結退勤</strong></td><td>最終日夜、全員を一括で残業扱いに</td></tr>
+      <tr><td><strong>個別打刻</strong></td><td>遅刻時、計画と実際の出勤時刻がずれた場合</td></tr>
+      <tr><td><strong>欠勤登録</strong></td><td>当日来なかったスタッフを登録（支払いが自動でゼロに）</td></tr>
+      <tr><td><strong>リセット</strong></td><td>打刻ミスを戻す（承認済みの支払いに影響することに注意）</td></tr>
+    </tbody>
+  </table>
+
+  <h3>凍結一括退勤の仕組み</h3>
+  <ul>
+    <li>対象日と退勤時刻を指定します</li>
+    <li>すでに退勤済みのスタッフは対象外となります</li>
+    <li>深夜手当が変わるため、影響を受けたスタッフの <span class="en">approved</span> は自動で <span class="en">pending</span> に戻ります</li>
+    <li><span class="en">paid</span>（支払済）は保護されます</li>
+  </ul>
+
+  <div class="callout note">
+    <span class="label">現場の運用Tips</span>
+    凍結退勤は笹尾さん専属の操作としてください。誰がいつ凍結したかがログに残りますが、操作者を固定することで「聞いてない」を防げます。
+  </div>
+</section>
+
+<!-- 2-03 封筒リスト -->
+<section class="page">
+  <div class="ref-head">
+    <div class="ref-num">03</div>
+    <h2 class="ref-title">封筒リスト</h2>
+    <div class="ref-meta">REFERENCE<br>使用頻度 ★★★★</div>
+  </div>
+  <p class="ref-lead">
+    スタッフに手渡す現金の紙幣内訳を自動で割り出し、封筒ラベル用のCSVを出力します。
+  </p>
+
+  <h3>主な出力</h3>
+  <ul>
+    <li>スタッフ別の紙幣内訳（一万・五千・千・五百円）</li>
+    <li>全体合計の紙幣合算（銀行への両替依頼書に使える）</li>
+    <li>封筒に貼り付けるラベルCSV</li>
+  </ul>
+
+  <h3>紙幣最適化のしくみ</h3>
+  <p>
+    できるだけ大きい額面から使う貪欲法で割り当てられます。500円単位で支払額を設定していれば、五百円玉だけで小口が処理できるケースが多く、両替コストが目に見えて下がります。
+  </p>
+
+  <div class="callout">
+    <span class="label">銀行両替のコツ</span>
+    全体合計の紙幣内訳をそのまま銀行の依頼書に書き写せば、両替機で何度もやり直す時間を省けます。特に千円札の必要枚数は現金両替でネックになりやすい値です。
+  </div>
+
+  <h3>出力タイミング</h3>
+  <p>
+    支払い承認がすべて終わった直後に出すのが鉄則です。承認後に金額が変わると、封筒ラベルと実際の金額が食い違います。
+  </p>
+</section>
+
+<!-- 2-04 領収書発行 -->
+<section class="page">
+  <div class="ref-head">
+    <div class="ref-num">04</div>
+    <h2 class="ref-title">領収書発行</h2>
+    <div class="ref-meta">REFERENCE<br>使用頻度 ★★★★</div>
+  </div>
+  <p class="ref-lead">
+    承認済み・支払済みの支払いをPDF領収書に変換し、スタッフ専用のダウンロードURLを発行します。
+  </p>
+
+  <h3>操作の流れ</h3>
+  <div class="flow">
+    <div class="flow-step"><div class="idx">1</div><div class="body"><h4>対象イベントを選ぶ</h4></div></div>
+    <div class="flow-step"><div class="idx">2</div><div class="body"><h4>絞り込み「支払い済みのみ」を推奨</h4></div></div>
+    <div class="flow-step"><div class="idx">3</div><div class="body"><h4>該当スタッフに一括チェックを入れ、発行ボタンを押す</h4></div></div>
+    <div class="flow-step"><div class="idx">4</div><div class="body"><h4>画面下のDLリンクを「コピー」でクリップボードに入れ、LINEに貼り付ける</h4></div></div>
+  </div>
+
+  <h3>2種類のコピー形式</h3>
+  <table>
+    <thead><tr><th style="width:30%">モード</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td><strong>個別</strong></td><td>スタッフ1名にLINEのDMで送るとき</td></tr>
+      <tr><td><strong>一括</strong></td><td>「〇〇さん／URL」の形式で全員分を一度に出す。コピー→LINEグループでは使いにくいので、送信はDM推奨</td></tr>
+    </tbody>
+  </table>
+
+  <h3>PDFに含まれる情報</h3>
+  <ul>
+    <li>発行日・領収書番号（自動採番）</li>
+    <li>宛名（本名）・住所・メール</li>
+    <li>金額（税込）・但し書き「ポーカー大会運営業務委託費として」</li>
+    <li>発行者情報（発行者設定で変更可）</li>
+    <li>電子発行につき収入印紙不要の注記</li>
+    <li>インボイス番号（登録済みの場合のみ自動表示）</li>
+  </ul>
+
+  <div class="callout note">
+    <span class="label">有効期限と再発行</span>
+    DLリンクの標準有効期限は7日です。切れた場合は「強制再生成」にチェックを入れて再発行するだけで、新しいURLが発行されます。
+  </div>
+</section>
+
+<!-- 2-05 契約書発行 -->
+<section class="page">
+  <div class="ref-head">
+    <div class="ref-num">05</div>
+    <h2 class="ref-title">契約書発行</h2>
+    <div class="ref-meta">REFERENCE<br>使用頻度 ★★★</div>
+  </div>
+  <p class="ref-lead">
+    業務委託契約書やNDAをスタッフに向けて発行し、電子署名を受領します。新規登録スタッフに対して必ず実施してください。
+  </p>
+
+  <h3>操作の流れ</h3>
+  <div class="flow">
+    <div class="flow-step"><div class="idx">1</div><div class="body"><h4>テンプレートを選ぶ（業務委託契約／NDA）</h4></div></div>
+    <div class="flow-step"><div class="idx">2</div><div class="body"><h4>大会連動のチェックは任意（連動させると条文に大会名が入る）</h4></div></div>
+    <div class="flow-step"><div class="idx">3</div><div class="body"><h4>対象スタッフを選んで一括発行</h4></div></div>
+    <div class="flow-step"><div class="idx">4</div><div class="body"><h4>未署名の署名URLをコピーしてLINEで送付</h4></div></div>
+    <div class="flow-step"><div class="idx">5</div><div class="body"><h4>署名完了したら status が <span class="en">signed</span> に変わる。署名済PDFをDLして保管</h4></div></div>
+  </div>
+
+  <h3>ステータスで分かること</h3>
+  <table>
+    <thead><tr><th style="width:20%">状態</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td><span class="en">sent</span></td><td>発行済み・スタッフ未開封</td></tr>
+      <tr><td><span class="en">viewed</span></td><td>スタッフが開封したが未署名</td></tr>
+      <tr><td><span class="en">signed</span></td><td>署名完了・PDFが固定化された</td></tr>
+      <tr><td><span class="en">revoked</span></td><td>発行者が無効化した（ページ下部の無効化UI経由）</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <span class="label">誤発行の取り消し方</span>
+    発行した契約を取り消すには、画面下の「契約を無効化する」から該当契約と理由を指定して無効化します。一度 signed になった契約は取り消せないので、署名前に対応してください。
+  </div>
+
+  <div class="callout note">
+    <span class="label">契約の法的効力</span>
+    電子署名法第2条の電子署名として有効です。発行時点のテンプレ本文をスナップショットとして保存しているため、後からテンプレを変更してもすでに発行した契約には影響しません。
+  </div>
+</section>
+
+<!-- 2-06 シフト取込 -->
+<section class="page">
+  <div class="ref-head">
+    <div class="ref-num">06</div>
+    <h2 class="ref-title">シフト取込</h2>
+    <div class="ref-meta">REFERENCE<br>使用頻度 ★★★</div>
+  </div>
+  <p class="ref-lead">
+    CSV形式のシフト表を取り込み、スタッフごとの勤務予定を登録します。支払い計算の起点となるデータです。
+  </p>
+
+  <h3>取込できるCSV形式</h3>
+  <ul>
+    <li>1行目: ヘッダー（役職, NO., 名前, NAME, 日付列…）</li>
+    <li>2行目以降: スタッフ1人1行、日付列に勤務時間を <span class="en">13:00~22:00</span> 形式で入力</li>
+    <li>休み: <span class="en">×</span>、<span class="en">x</span>、<span class="en">-</span>、または空欄</li>
+    <li><span class="en">26:00</span> のような25時超の記法も対応</li>
+    <li>文字コードは UTF-8（BOM付き）を推奨</li>
+  </ul>
+
+  <h3>取込時のルール</h3>
+  <ul>
+    <li>CSVに載っているスタッフは、事前にスタッフマスタに登録されている必要があります</li>
+    <li>未登録のスタッフは取込時にスキップされます（エラーにはなりません）</li>
+    <li>既存シフトは上書き、新規シフトは追加されます</li>
+  </ul>
+
+  <div class="callout note">
+    <span class="label">取込前のひと手間</span>
+    CSVをアップロードする前に、シフト表に載っている全員がスタッフマスタに登録されているかを確認してください。未登録のまま取り込むと、そのスタッフの勤務が無かったことになります。
+  </div>
+</section>
+
+<!-- 2-07 スタッフ管理 -->
+<section class="page">
+  <div class="ref-head">
+    <div class="ref-num">07</div>
+    <h2 class="ref-title">スタッフ管理</h2>
+    <div class="ref-meta">REFERENCE<br>使用頻度 ★★★</div>
+  </div>
+  <p class="ref-lead">
+    スタッフの基本情報を登録・検索・編集します。すべての機能のベースになるマスタデータです。
+  </p>
+
+  <h3>3通りの一括登録方式</h3>
+  <table>
+    <thead><tr><th style="width:18%">方式</th><th>使う場面</th></tr></thead>
+    <tbody>
+      <tr><td><strong>CSVアップロード</strong></td><td>別ファイルで管理しているスタッフ名簿を初期投入する</td></tr>
+      <tr><td><strong>テキスト貼り付け</strong></td><td>Excel や Google スプレッドシートからコピーして一括登録</td></tr>
+      <tr><td><strong>表編集</strong></td><td>数名を追加・修正する。その場でセルを編集できる</td></tr>
+    </tbody>
+  </table>
+
+  <h3>雇用区分ごとの違い</h3>
+  <table>
+    <thead><tr><th>区分</th><th>時給</th><th>深夜</th><th>手当</th><th>精勤</th></tr></thead>
+    <tbody>
+      <tr><td>業務委託</td><td>レート準拠</td><td>あり</td><td>フロア/MIX</td><td>対象</td></tr>
+      <tr><td>タイミー</td><td>個別設定</td><td>なし（同一）</td><td>なし</td><td>対象外</td></tr>
+      <tr><td>正社員</td><td>レート準拠</td><td>あり</td><td>フロア/MIX</td><td>対象</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <span class="label">地域の自動判定</span>
+    スタッフの住所を入力すると、47都道府県が11地域（近畿・東海・関東・九州など）に自動分類されます。この地域情報が交通費の上限適用に使われます。
+  </div>
+</section>
+
+<!-- 2-08 交通費 -->
+<section class="page">
+  <div class="ref-head">
+    <div class="ref-num">08</div>
+    <h2 class="ref-title">交通費</h2>
+    <div class="ref-meta">REFERENCE<br>使用頻度 ★★★</div>
+  </div>
+  <p class="ref-lead">
+    大会ごとの地域別上限を設定し、スタッフから提出された領収書金額を記録・承認します。
+  </p>
+
+  <h3>4つのセクション</h3>
+  <table>
+    <thead><tr><th style="width:30%">セクション</th><th>内容</th></tr></thead>
+    <tbody>
+      <tr><td>地域別ルール設定</td><td>11地域それぞれに上限・領収書要否・開催地フラグを設定</td></tr>
+      <tr><td>事前見積</td><td>スタッフ人数 × 地域別上限で予算を把握</td></tr>
+      <tr><td>領収書入力</td><td>スタッフごとに実費を記録。上限超過は自動で丸める</td></tr>
+      <tr><td>合計サマリ</td><td>大会全体の交通費予算と実費を照合</td></tr>
+    </tbody>
+  </table>
+
+  <h3>運用例（大阪開催の場合）</h3>
+  <table>
+    <thead><tr><th style="width:20%">地域</th><th>上限</th><th>領収書</th></tr></thead>
+    <tbody>
+      <tr><td>近畿（開催地）</td><td>一律1,000円</td><td>不要</td></tr>
+      <tr><td>東海</td><td>上限8,000円</td><td>必須</td></tr>
+      <tr><td>関東</td><td>上限15,000円</td><td>必須</td></tr>
+      <tr><td>九州</td><td>上限20,000円</td><td>必須</td></tr>
+      <tr><td>北海道・沖縄</td><td>上限25,000円</td><td>必須</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout note">
+    <span class="label">領収書の保管</span>
+    スタッフから提出された紙の領収書原本は、大会別にファイリングして7年間保管します。電子帳簿保存法の対応書類はこのツールに自動で記録されますが、原本の物理保管も引き続き必要です。
+  </div>
+</section>
+
+<!-- 2-09 その他 -->
+<section class="page">
+  <div class="ref-head">
+    <div class="ref-num">09</div>
+    <h2 class="ref-title">その他の機能</h2>
+    <div class="ref-meta">REFERENCE<br>使用頻度 ★★</div>
+  </div>
+
+  <h2>精算レポート</h2>
+  <p>
+    大会1回分の金銭精算をまとめます。日別の売上・支出、スタッフ支払い合計、交通費、雑費、現金実残額との照合までを一画面で確認できます。CSV出力で会計ソフトへ連携可能です。
+  </p>
+
+  <h2>年間累計</h2>
+  <p>
+    1月1日から12月31日までの全スタッフの累計支払額を集計します。50万円超のスタッフは法定調書提出対象として自動ハイライト表示されます。ページ下部の「スタッフ情報健全性チェック」で、本名・住所・メールが未登録のスタッフを一覧化できます。
+  </p>
+
+  <h2>発行者設定</h2>
+  <p>
+    領収書PDFに印字するパシフィックの情報を設定します。社名・住所・電話番号・但し書き・インボイス番号・電子印影の6項目です。インボイス番号は空欄で構いません（登録後に入力すれば、強制再生成で過去分にも適用できます）。
+  </p>
+
+  <h2>契約書テンプレ</h2>
+  <p>
+    業務委託契約書やNDAのテンプレートを編集します。<span class="en">{{staff_name}}</span> のような変数を使うと、発行時に自動で各スタッフの情報が差し込まれます。
+  </p>
+
+  <div class="callout">
+    <span class="label">使用可能な変数</span>
+    <span class="en">{{staff_name}}</span>、<span class="en">{{staff_address}}</span>、<span class="en">{{staff_email}}</span>、<span class="en">{{role}}</span>、<span class="en">{{event_name}}</span>、<span class="en">{{issuer_name}}</span>、<span class="en">{{issuer_address}}</span>、<span class="en">{{issue_date}}</span>
+  </div>
+</section>
+
+<!-- =============================================================
+     PART 03 — TROUBLESHOOTING
+     ============================================================= -->
+<section class="chapter-opening">
+  <div class="part-badge">PART 03 / TROUBLESHOOTING</div>
+  <div class="part-num">03</div>
+  <h1>困ったときは</h1>
+  <p class="lead">
+    現場でよく遭遇する症状と、すぐに試せる対処法をまとめました。<br>
+    ここにない症状は、中野さん経由でヒダネAI部に連絡してください。
+  </p>
+  <div class="chapter-idx">
+    <div class="chapter-idx-title">IN THIS PART</div>
+    <ul>
+      <li><span class="en">3-1</span>症状別トラブル対処</li>
+      <li><span class="en">3-2</span>FAQ ― よくある質問</li>
+    </ul>
+  </div>
+</section>
+
+<section class="page new-chapter">
+  <div class="page-label">PART 03 / SECTION 1</div>
+  <h1>3-1 ― 症状別トラブル対処</h1>
+
+  <h3>画面が真っ白で動かない</h3>
+  <p>
+    ブラウザを再読み込みしてください（Ctrl+R または Cmd+R）。解消しなければ別タブで同じURLを開き直します。それでもダメな場合はStreamlit Cloudが再ビルド中の可能性があるため、5分ほど待ってから再試行してください。
+  </p>
+
+  <h3>データが表示されない</h3>
+  <p>
+    Supabase接続エラーの可能性があります。他のページが表示されるか確認してください。全画面で起きている場合は中野さんに連絡してください。
+  </p>
+
+  <h3>CSV取込で文字化けする</h3>
+  <p>
+    Excel で保存する際に「CSV UTF-8」を選択してください。Shift-JIS 形式は非対応です。
+  </p>
+
+  <h3>スタッフがCSV取込に反映されない</h3>
+  <p>
+    <span class="en">name_jp</span> 列（ディーラーネーム）が空、あるいは既存スタッフと完全一致している可能性があります。エラーメッセージの行番号を手がかりに該当行を修正してください。
+  </p>
+
+  <h3>領収書や契約書が発行できない</h3>
+  <p>
+    該当の支払いが <span class="en">approved</span> または <span class="en">paid</span> になっているか確認してください。<span class="en">pending</span> 状態では発行対象外です。
+  </p>
+
+  <h3>DLリンクが切れた・有効期限切れ</h3>
+  <p>
+    領収書発行ページで該当スタッフを選び、「強制再生成」にチェックして再発行します。新しいURLが発行されます。
+  </p>
+
+  <h3>金額が合わない</h3>
+  <p>
+    雇用区分（業務委託／タイミー）が正しいか、タイミーの個別時給が設定されているかを確認します。凍結退勤を行った後は承認がリセットされるため、再計算と再承認が必要です。
+  </p>
+
+  <h3>誤って paid にしてしまった</h3>
+  <p>
+    通常手段では戻せません。中野さんに連絡してください。データベースへの直接操作でのみ復旧可能です。
+  </p>
+</section>
+
+<section class="page new-chapter">
+  <div class="page-label">PART 03 / SECTION 2</div>
+  <h1>3-2 ― FAQ</h1>
+
+  <div class="faq">
+    <p class="q">スマートフォンだけで業務を回せますか？</p>
+    <p class="a">画面表示は可能ですが、CSV取込や一括発行などの広い画面を要する操作はPCを推奨します。出退勤の個別打刻や領収書の個別DLはスマートフォンでも問題ありません。</p>
+  </div>
+
+  <div class="faq">
+    <p class="q">複数人で同時に使えますか？</p>
+    <p class="a">可能です。ただし同じスタッフの支払いを二人同時に編集すると競合する可能性があるため、業務ごとに担当者を固定することを推奨します（例：笹尾さん＝出退勤、伊藤さん＝承認、小島さん＝領収書）。</p>
+  </div>
+
+  <div class="faq">
+    <p class="q">データが消える心配はありませんか？</p>
+    <p class="a">Supabaseが自動で7日分のポイントインタイムバックアップを保持しています。手動バックアップも Supabase Dashboard > Database > Backups から可能です。</p>
+  </div>
+
+  <div class="faq">
+    <p class="q">インボイス未登録のまま運用しても問題ありませんか？</p>
+    <p class="a">業務委託スタッフへの領収書は現状インボイス不要です。パシフィック側でインボイス登録が完了したら、発行者設定に番号を入力すれば過去分への反映も可能です。</p>
+  </div>
+
+  <div class="faq">
+    <p class="q">領収書に収入印紙は貼りますか？</p>
+    <p class="a">不要です。電子データで発行する領収書には印紙税がかからず、5万円以上の領収書でも同様です。PDFにもその旨の注記を自動表示しています。</p>
+  </div>
+
+  <div class="faq">
+    <p class="q">契約書の内容を変更したいのですが、すでに発行した契約に影響しますか？</p>
+    <p class="a">影響しません。発行時点の本文がスナップショットとして保存されているため、テンプレートを編集しても既に発行済みの契約には反映されません。以降に新規発行する契約のみ最新のテンプレートが使われます。</p>
+  </div>
+
+  <div class="faq">
+    <p class="q">年末調整はどこでやりますか？</p>
+    <p class="a">このツールでは業務委託の支払管理のみを行います。業務委託には原則として源泉徴収が不要のため、年末調整の対象外です。正社員の年末調整は別途給与計算ソフトをご利用ください。</p>
+  </div>
+
+  <div class="faq">
+    <p class="q">スタッフから「URLを開いたが何も出ない」と言われました</p>
+    <p class="a">URLの有効期限切れか、リンクの一部がLINE上で切れている可能性があります。領収書発行ページでURLを再生成し、改行のない形でスタッフに再送してください。</p>
+  </div>
+</section>
+
+<!-- =============================================================
+     PART 04 — APPENDIX
+     ============================================================= -->
+<section class="chapter-opening">
+  <div class="part-badge">PART 04 / APPENDIX</div>
+  <div class="part-num">04</div>
+  <h1>付録</h1>
+  <p class="lead">
+    用語の確認、税務の根拠、習熟の道筋。<br>
+    必要に応じてこの章を引いてください。
+  </p>
+  <div class="chapter-idx">
+    <div class="chapter-idx-title">IN THIS PART</div>
+    <ul>
+      <li><span class="en">4-1</span>用語集</li>
+      <li><span class="en">4-2</span>税務と法的根拠</li>
+      <li><span class="en">4-3</span>習熟ロードマップ</li>
+    </ul>
+  </div>
+</section>
+
+<section class="page new-chapter">
+  <div class="page-label">PART 04 / APPENDIX 1</div>
+  <h1>4-1 ― 用語集</h1>
+
+  <dl class="glossary">
+    <dt>業務委託</dt>
+    <dd><span class="en">GYOMU ITAKU</span>雇用契約ではなく、独立した個人事業主として業務を請け負う契約形態。労働基準法の適用外で、源泉徴収も原則として不要。</dd>
+
+    <dt>タイミー</dt>
+    <dd><span class="en">TIMEE</span>スポット派遣サービスの一つ。パシフィックではタイミー経由のスタッフを業務委託と区別し、個別時給・深夜割増なしで計算する。</dd>
+
+    <dt>源泉徴収</dt>
+    <dd><span class="en">GENSEN CHOUSHU</span>支払い側が所得税を天引きして国に納付する制度。業務委託報酬には原則として不要だが、報酬金額と業種によっては10.21%の源泉が必要な場合がある。</dd>
+
+    <dt>法定調書</dt>
+    <dd><span class="en">HOUTEI CHOUSHO</span>税務署に提出が義務付けられている書類の総称。パシフィックの場合、年間50万円超を支払った業務委託先について、翌年1月末までに支払調書の提出が必要。</dd>
+
+    <dt>インボイス</dt>
+    <dd><span class="en">INVOICE</span>消費税の仕入税額控除に必要な適格請求書。発行するにはインボイス発行事業者の登録が必要。T+13桁の番号が付与される。</dd>
+
+    <dt>トークン</dt>
+    <dd><span class="en">TOKEN</span>URLに付与されるランダムな文字列。領収書や契約書のURLが本人だけに届くよう、第三者には推測不可能な形式で生成される。</dd>
+
+    <dt>承認／paid</dt>
+    <dd><span class="en">APPROVED / PAID</span>支払いの状態。未承認（pending）→ 承認済（approved）→ 支払済（paid）の順に進む。paid は元に戻せない。</dd>
+
+    <dt>凍結退勤</dt>
+    <dd><span class="en">BULK CHECKOUT</span>最終日に全員を一括で同時刻退勤扱いにする処理。深夜手当の計算が変わるため、影響を受けたスタッフの承認は自動で未承認に戻る。</dd>
+
+    <dt>精勤手当</dt>
+    <dd><span class="en">SEIKIN TEATE</span>皆勤に近い稼働に対して支給される手当。全日稼働で10,000円、4日以上で6,000円。タイミーは対象外。</dd>
+
+    <dt>フロア手当／MIX手当</dt>
+    <dd><span class="en">FLOOR / MIX BONUS</span>役割に応じた加算。フロア担当は日額3,000〜5,000円、MIXディーラー担当日は1,500円が加算される。</dd>
+
+    <dt>電子帳簿保存法</dt>
+    <dd><span class="en">DENSHI CHOUBO HOZON HOU</span>電子的に作成・保存された帳簿・書類に関する法律。2024年1月から電子取引データの電子保存が完全義務化された。</dd>
+
+    <dt>電子署名法</dt>
+    <dd><span class="en">DENSHI SHOMEI HOU</span>電子署名の法的効力を定めた法律。第3条では、一定の要件を満たす電子署名が付された電子文書は、本人の意思によって作成されたものと推定される。</dd>
+
+    <dt>プレミアム日</dt>
+    <dd><span class="en">PREMIUM DAY</span>日曜・祝日・繁忙日など、時給と手当を通常より上げる日。イベント作成時に日別に設定する。</dd>
+
+    <dt>500円丸め</dt>
+    <dd><span class="en">ROUND UP 500YEN</span>支払合計額を500円単位で繰り上げる運用。両替時の小銭を減らし、渡し漏れを防ぐ効果がある。</dd>
+
+    <dt>Supabase</dt>
+    <dd><span class="en">SUPABASE</span>本ツールのバックエンド。PostgreSQL を核としたクラウドデータベースサービス。データは自動でバックアップされる。</dd>
+
+    <dt>Streamlit</dt>
+    <dd><span class="en">STREAMLIT</span>本ツールの Web UI を動かしている Python フレームワーク。GitHub 連携の Streamlit Cloud で自動デプロイされている。</dd>
+  </dl>
+</section>
+
+<section class="page new-chapter">
+  <div class="page-label">PART 04 / APPENDIX 2</div>
+  <h1>4-2 ― 税務と法的根拠</h1>
+
+  <h2>印紙税 ― なぜ印紙を貼らないのか</h2>
+  <p>
+    印紙税法は「課税文書」の作成者に印紙貼付を求めますが、2005年の国税庁通達により<strong>電子的に作成された文書は「文書」に該当しないため、印紙貼付は不要</strong>とされています。本ツールで発行する領収書PDFはこの扱いに該当し、5万円以上でも印紙は不要です。
+  </p>
+
+  <h2>インボイス ― 後日追加できる設計</h2>
+  <p>
+    パシフィックがインボイス発行事業者として登録された時点で、発行者設定に番号を入力すれば以降の領収書に自動反映されます。過去分への反映が必要な場合は、領収書発行ページで「強制再生成」にチェックを入れて再発行してください。
+  </p>
+
+  <h2>電子帳簿保存法 ― 保存要件への対応</h2>
+  <p>
+    本ツールは Supabase Storage 上に領収書PDFを保管し、検索要件（取引日・金額・取引先）と訂正削除履歴要件（監査ログ）を満たしています。ただし、スタッフから受領した紙の領収書原本については、引き続き物理的な保管（7年）が必要です。
+  </p>
+
+  <h2>電子署名 ― 契約の法的効力</h2>
+  <p>
+    本ツールの契約書は、スタッフが署名パッドに手書きで記入した画像を契約書PDFに埋め込み、SHA-256ハッシュを記録することで改ざん防止をしています。電子署名法上の<strong>本人性の担保は送付URLの秘匿（知識認証）</strong>に依拠するため、高額契約や紛争リスクの高い契約については、別途クラウドサインなど第三者認証のサービス利用を推奨します。
+  </p>
+
+  <h2>法定調書 ― 年間50万円超の基準</h2>
+  <p>
+    所得税法第225条に基づき、同一人に対する年間支払額が50万円を超える業務委託については、支払調書の提出が義務付けられています。提出期限は翌年1月末日です。年間累計ページで対象者を自動抽出できます。
+  </p>
+
+  <div class="callout note">
+    <span class="label">参考条文</span>
+    印紙税法基本通達第44条／電子帳簿保存法第7条・第10条／電子署名法第2条・第3条／所得税法第225条
+  </div>
+</section>
+
+<section class="page new-chapter">
+  <div class="page-label">PART 04 / APPENDIX 3</div>
+  <h1>4-3 ― 習熟ロードマップ</h1>
+  <p class="ref-lead">
+    最初の大会から半年間で、操作の習熟から改善提案までを段階的に到達しましょう。
+  </p>
+
+  <div class="flow">
+    <div class="flow-step">
+      <div class="idx">Ⅰ</div>
+      <div class="body">
+        <h4>導入期 ― 1大会目（1〜2週間）</h4>
+        <p>マニュアル片手に、PART 01 のフローに沿って一度通します。迷ったらすぐに中野さんへ連絡を。この期間は「間違えていい」期間です。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">Ⅱ</div>
+      <div class="body">
+        <h4>定着期 ― 2〜3大会目（1ヶ月）</h4>
+        <p>マニュアルを見ずに1大会を一人で回せるようになります。封筒リストと領収書発行のスピードが読めるようになり、銀行両替の段取りが安定します。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">Ⅲ</div>
+      <div class="body">
+        <h4>最適化期 ― 4〜6大会目（2〜3ヶ月）</h4>
+        <p>運用上の違和感を中野さん経由でヒダネAI部に言える状態を目指します。「ここの導線が冗長」「この数字も見たい」といったフィードバックが、ツールの次の改善につながります。</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="idx">Ⅳ</div>
+      <div class="body">
+        <h4>自動化期 ― 半年後</h4>
+        <p>LINE通知の自動化や、期限切れリマインドなどの要望が見えてくる時期です。ここまで来たら、マニュアルは辞書としてのみ開く存在になります。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="checklist">
+    <div class="label">ONBOARDING CHECKLIST</div>
+    <h3>最初の大会で必ずやること</h3>
+    <ul>
+      <li>PART 01 の PHASE A〜E を一度通読した</li>
+      <li>PHASE C の支払日フローを声に出して読み上げた</li>
+      <li>用語集の「承認／paid」「凍結退勤」「源泉徴収」を理解した</li>
+      <li>トラブル時の連絡先（中野さん）をLINEに登録した</li>
+      <li>次の大会で自分が担う役割を責任者と合意した</li>
+    </ul>
+  </div>
+</section>
+
+<!-- =============================================================
+     COLOPHON
+     ============================================================= -->
+<section class="colophon">
+  <h2>奥付</h2>
+  <table>
+    <tr><th>書名</th><td>P1 Staff Manager 取扱説明書</td></tr>
+    <tr><th>版</th><td>v3.5 ／ 2026年4月版</td></tr>
+    <tr><th>発行</th><td>株式会社パシフィック</td></tr>
+    <tr><th>制作</th><td>株式会社ヒダネ AI 部</td></tr>
+    <tr><th>編集</th><td>桐生ソウ</td></tr>
+    <tr><th>構成</th><td>リサ（コンテンツ）／カイト（学習設計）</td></tr>
+    <tr><th>執筆</th><td>ルナ（ライティング）</td></tr>
+    <tr><th>デザイン</th><td>瀬戸ミオ（エディトリアル）</td></tr>
+    <tr><th>実装</th><td>ユイ（PDF制作）</td></tr>
+  </table>
+
+  <p style="margin-top: 30mm; font-family: var(--font-gothic); font-size: 8pt; color: var(--ink-muted); letter-spacing: 0.2em; text-align:center;">
+    P1 STAFF MANAGER OPERATION HANDBOOK / 2026.04<br>
+    HIDANE AI DEPARTMENT × PACIFIC
+  </p>
+</section>
+
+</body>
+</html>

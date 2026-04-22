@@ -202,8 +202,9 @@ BULK_TEMPLATE = (
     "20,久遠,佐藤花子,大阪府大阪市北区梅田1-1-1,hana@example.com,大阪,Dealer,contractor,KUON,,MIXテーブル対応可\n"
 )
 
-import_tab1, import_tab2, import_tab3 = st.tabs([
-    "📁 CSVアップロード", "📋 テキスト貼り付け（CSV/TSV）", "✏️ テーブル入力"
+import_tab1, import_tab2, import_tab3, import_tab4 = st.tabs([
+    "📁 CSVアップロード", "📋 テキスト貼り付け（CSV/TSV）", "✏️ テーブル入力",
+    "🔗 Googleフォーム連携",
 ])
 
 def _run_bulk_import(rows):
@@ -303,3 +304,45 @@ with import_tab3:
         rows = edited.to_dict("records")
         rows = [r for r in rows if r.get("name_jp")]
         _run_bulk_import(rows)
+
+with import_tab4:
+    st.info(
+        "📋 **Google フォームで受付情報を収集 → CSVダウンロード → ここにアップロード**\n\n"
+        "推奨質問テンプレ（コピペ用）: `docs/gform_staff_onboarding_template.md`\n\n"
+        "運用フロー: Googleフォーム作成 → 回答スプレッドシートから「ファイル→ダウンロード→CSV」"
+        "→ このタブにアップロード → プレビュー確認 → 「🔄 P1にインポート」"
+    )
+    from utils.gform_importer import parse_gform_csv, validate_gform_rows
+    import pandas as pd
+
+    gform_uploaded = st.file_uploader(
+        "Google フォーム回答 CSV",
+        type=["csv"],
+        key="gform_csv",
+        help="Google スプレッドシート→ファイル→ダウンロード→カンマ区切り形式（.csv）で保存",
+    )
+    if gform_uploaded:
+        try:
+            rows = parse_gform_csv(gform_uploaded.read())
+        except Exception as exc:
+            st.error(f"CSVパースエラー: {exc}")
+            rows = []
+
+        if rows:
+            st.markdown("**プレビュー（先頭10行）:**")
+            preview_df = pd.DataFrame(rows).head(10)
+            st.dataframe(preview_df, use_container_width=True, hide_index=True)
+            st.caption(f"合計 {len(rows)} 行")
+
+            validation_errors = validate_gform_rows(rows)
+            if validation_errors:
+                with st.expander(
+                    f"⚠️ バリデーションエラー {len(validation_errors)}件（続行は可能）"
+                ):
+                    for row_no, errs in validation_errors:
+                        st.warning(f"行{row_no}: " + " / ".join(errs))
+
+            if st.button("🔄 P1にインポート", type="primary", key="gform_import"):
+                _run_bulk_import(rows)
+        else:
+            st.warning("CSVに取り込み可能な行が見つかりませんでした")
