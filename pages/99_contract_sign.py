@@ -34,6 +34,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+from utils.page_layout import apply_global_style
+apply_global_style()
 st.title("✍ 契約書 電子署名")
 
 # ---- トークン検証 ----

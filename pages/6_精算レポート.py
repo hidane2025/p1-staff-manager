@@ -10,8 +10,14 @@ from utils.event_selector import select_event
 
 st.set_page_config(page_title="精算レポート", page_icon="📊", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
+from utils.page_layout import (
+    apply_global_style, page_header, flow_bar, section_header, kpi_row,
+)
+apply_global_style()
 hide_staff_only_pages()
-st.title("📊 精算レポート")
+
+page_header("📊 精算レポート", "支払い状況・内訳・役職別／雇用区分別の集計、未処理リストとCSV出力をまとめて確認できます。")
+flow_bar(active="payout", done=["setup", "input", "calc"])
 
 # --- イベント選択（全ページ共通） ---
 event_id = select_event(db.get_all_events(), "イベント選択")
@@ -23,7 +29,7 @@ if not payments:
     st.info("支払いデータがありません。")
     st.stop()
 
-st.subheader("支払い状況サマリー")
+section_header("支払い状況サマリー", "「未払い」と「領収書未受領」がゼロになれば締めOKです。")
 
 total_amount = sum(p["total_amount"] for p in payments)
 paid_count = sum(1 for p in payments if p["status"] == "paid")
@@ -33,19 +39,19 @@ no_receipt_count = sum(1 for p in payments if not p["receipt_received"])
 paid_amount = sum(p["total_amount"] for p in payments if p["status"] == "paid")
 unpaid_amount = sum(p["total_amount"] for p in payments if p["status"] != "paid")
 
-col1, col2, col3 = st.columns(3)
-col1.metric("総支払額", f"¥{total_amount:,}")
-col2.metric("支払済み", f"¥{paid_amount:,}", delta=f"{paid_count}名")
-col3.metric("未払い", f"¥{unpaid_amount:,}", delta=f"{unpaid_count}名", delta_color="inverse")
-
-col4, col5, col6 = st.columns(3)
-col4.metric("対象人数", f"{len(payments)}名")
-col5.metric("領収書受領済み", f"{receipt_count}名")
-col6.metric("領収書未受領", f"{no_receipt_count}名", delta_color="inverse")
+kpi_row([
+    {"label": "総支払額", "value": f"¥{total_amount:,}", "detail": f"対象 {len(payments)}名", "accent": True},
+    {"label": "支払済み", "value": f"¥{paid_amount:,}", "detail": f"{paid_count}名"},
+    {"label": "未払い", "value": f"¥{unpaid_amount:,}", "detail": f"{unpaid_count}名", "warning": (unpaid_count > 0)},
+])
+kpi_row([
+    {"label": "対象人数", "value": f"{len(payments)}名"},
+    {"label": "領収書 受領済", "value": f"{receipt_count}名"},
+    {"label": "領収書 未受領", "value": f"{no_receipt_count}名", "warning": (no_receipt_count > 0)},
+])
 
 # --- 内訳 ---
-st.divider()
-st.subheader("支払い内訳")
+section_header("支払い内訳", "費目ごとの構成比。深夜手当・交通費の比率が異常に高い時はレート設定を要確認。")
 
 breakdown = {
     "基本給": sum(p["base_pay"] for p in payments),
@@ -73,8 +79,7 @@ with col_table:
     )
 
 # --- 役職別集計 ---
-st.divider()
-st.subheader("役職別集計")
+section_header("役職別集計", "役職ごとの人数・合計・平均支払額。")
 
 role_summary = {}
 for p in payments:
@@ -99,8 +104,7 @@ role_df = pd.DataFrame([
 st.dataframe(role_df, use_container_width=True, hide_index=True)
 
 # --- 雇用区分別集計 ---
-st.divider()
-st.subheader("雇用区分別集計（業務委託 / タイミー / 正社員）")
+section_header("雇用区分別集計", "業務委託・タイミー・正社員の内訳。法定調書の対象判定に利用。")
 
 EMPLOYMENT_LABELS = {
     "contractor": "業務委託",
@@ -136,8 +140,7 @@ total_labor = sum(d["合計"] for d in emp_summary.values())
 st.metric("人件費トータル（全区分合計）", f"¥{total_labor:,}")
 
 # --- 小口経費 ---
-st.divider()
-st.subheader("小口経費")
+section_header("小口経費", "イベント中のタクシー代・備品購入などの記録。")
 
 petty = db.get_petty_cash_for_event(event_id)
 if petty:
@@ -166,8 +169,7 @@ with st.expander("➕ 小口経費を追加"):
                 st.rerun()
 
 # --- 未払い・未受領リスト ---
-st.divider()
-st.subheader("⚠️ 未処理リスト")
+section_header("⚠️ 未処理リスト", "締めの妨げになっている項目。両方とも空ならイベント締めOKです。")
 
 unpaid = [p for p in payments if p["status"] != "paid"]
 no_receipt = [p for p in payments if not p["receipt_received"]]
@@ -191,8 +193,7 @@ with col_u2:
         st.success("全員領収書受領済み")
 
 # --- CSV一括出力 ---
-st.divider()
-st.subheader("📥 データ出力")
+section_header("📥 データ出力", "支払い一覧と小口経費を経理共有用に CSV でダウンロードできます。")
 
 col_dl1, col_dl2 = st.columns(2)
 

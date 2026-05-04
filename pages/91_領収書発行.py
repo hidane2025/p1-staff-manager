@@ -18,10 +18,12 @@ from utils import event_selector
 
 st.set_page_config(page_title="領収書発行", page_icon="📄", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages, missing_field_warning, copyable_url
+from utils.page_layout import apply_global_style, page_header, flow_bar
+apply_global_style()
 hide_staff_only_pages()
 
-st.title("📄 領収書発行")
-st.caption("支払確定分の領収書をPDF生成し、スタッフ用DLリンクを発行します。")
+page_header("📄 領収書発行", "支払確定分の領収書を PDF 生成し、スタッフ向けの個別 DL URL を発行します。")
+flow_bar(active="payout", done=["setup", "input", "calc"])
 
 # --- イベント選択 ---
 events = db.get_all_events()

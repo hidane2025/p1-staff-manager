@@ -6,10 +6,14 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
 
-st.set_page_config(page_title="スタッフ管理", page_icon="📋", layout="wide")
+st.set_page_config(page_title="スタッフ管理", page_icon="👥", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
+from utils.page_layout import apply_global_style, page_header, flow_bar
+apply_global_style()
 hide_staff_only_pages()
-st.title("📋 スタッフ管理")
+
+page_header("👥 スタッフ管理", "ディーラー・フロア・TD等のスタッフを登録・編集・一括取込する画面です。")
+flow_bar(active="input", done=["setup"])
 
 ROLES = ["Dealer", "Floor", "TD", "DC", "Chip"]
 EMPLOYMENT_TYPES = {

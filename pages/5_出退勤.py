@@ -16,9 +16,12 @@ from utils.event_selector import select_event
 
 st.set_page_config(page_title="出退勤", page_icon="🕐", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
+from utils.page_layout import apply_global_style, page_header, flow_bar
+apply_global_style()
 hide_staff_only_pages()
-st.title("🕐 出退勤管理")
-st.caption("シフト通り＝デフォルト。例外（欠勤・遅刻・延長・早退）だけ記録する")
+
+page_header("🕐 出退勤管理", "シフト通り＝デフォルト。例外（欠勤・遅刻・延長・早退）だけ記録します。")
+flow_bar(active="input", done=["setup"])
 
 # --- イベント・日付選択（全ページ共通のsession_state共有） ---
 event_id = select_event(db.get_all_events(), "イベント")

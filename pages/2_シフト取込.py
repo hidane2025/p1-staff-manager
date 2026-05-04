@@ -16,9 +16,12 @@ from utils.event_selector import select_event
 
 st.set_page_config(page_title="シフト取込", page_icon="📅", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
+from utils.page_layout import apply_global_style, page_header, flow_bar
+apply_global_style()
 hide_staff_only_pages()
-st.title("📅 シフト取込")
-st.caption("完成済みイベントにシフトCSVを取り込む。新規イベントの作成は『📋 イベント設定』ページで先に行ってください。")
+
+page_header("📅 シフト取込", "完成済みイベントにシフトCSVを取り込む。新規イベントは『📋 イベント設定』で先に作成してください。")
+flow_bar(active="input", done=["setup"])
 
 
 # ============================================================

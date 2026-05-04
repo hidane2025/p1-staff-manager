@@ -9,12 +9,14 @@ import db
 from utils import contract_db, contract_issuer, contract_storage
 
 
-st.set_page_config(page_title="契約書発行", page_icon="📄", layout="wide")
+st.set_page_config(page_title="契約書発行", page_icon="✍️", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages, missing_field_warning, copyable_url
+from utils.page_layout import apply_global_style, page_header, flow_bar
+apply_global_style()
 hide_staff_only_pages()
 
-st.title("📄 契約書発行・管理")
-st.caption("スタッフ向け契約書を一括発行し、署名状況を管理します。")
+page_header("✍️ 契約書発行・管理", "スタッフ向け契約書を一括発行し、クラウド署名状況を一覧で管理します。")
+flow_bar(active="payout", done=["setup", "input", "calc"])
 
 # ============================================================
 # テンプレート選択

@@ -10,9 +10,14 @@ import db
 
 st.set_page_config(page_title="年間累計", page_icon="📆", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
+from utils.page_layout import apply_global_style, page_header
+apply_global_style()
 hide_staff_only_pages()
-st.title("📆 年間累計レポート（確定申告用）")
-st.caption("1/1〜12/31の累計支払額。法定調書提出対象者（年¥50万超）を自動フラグ表示。")
+
+page_header(
+    "📆 年間累計レポート",
+    "1/1〜12/31 の累計支払額。法定調書提出対象者（年 ¥50万超）を自動フラグ表示します。",
+)
 
 EMPLOYMENT_LABELS = {
     "contractor": "業務委託",

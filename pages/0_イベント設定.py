@@ -24,9 +24,12 @@ from utils import db_schema
 
 
 st.set_page_config(page_title="イベント設定", page_icon="📋", layout="wide")
+from utils.page_layout import apply_global_style, page_header, flow_bar, section_header
+apply_global_style()
 hide_staff_only_pages()
-st.title("📋 イベント設定")
-st.caption("新しい大会の『型』を一画面で組み立てる。スタッフ・シフトを入れる前にここを完成させる。")
+
+page_header("📋 イベント設定", "新しい大会の『型』を一画面で組み立てる。スタッフ・シフトを入れる前にここを完成させる。")
+flow_bar(active="setup")
 
 
 # ============================================================
