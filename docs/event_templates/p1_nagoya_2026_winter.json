@@ -1,0 +1,39 @@
+{
+  "name": "P1 Nagoya 2026 年末",
+  "venue": "中日ホール",
+  "venue_prefecture": "愛知県",
+  "start_date": "2025-12-29",
+  "end_date": "2026-01-04",
+  "break_minutes_6h": 45,
+  "break_minutes_8h": 60,
+  "rate_template_id": "p1_standard",
+  "dates": [
+    "2025-12-29",
+    "2025-12-30",
+    "2025-12-31",
+    "2026-01-02",
+    "2026-01-03",
+    "2026-01-04"
+  ],
+  "rates": {
+    "2025-12-29": {"hourly": 1500, "night": 1875, "transport": 1000, "floor_bonus": 3000, "mix_bonus": 1500, "date_label": "regular"},
+    "2025-12-30": {"hourly": 1500, "night": 1875, "transport": 1000, "floor_bonus": 3000, "mix_bonus": 1500, "date_label": "regular"},
+    "2025-12-31": {"hourly": 1600, "night": 2000, "transport": 1000, "floor_bonus": 5000, "mix_bonus": 1500, "date_label": "premium"},
+    "2026-01-02": {"hourly": 1600, "night": 2000, "transport": 1000, "floor_bonus": 5000, "mix_bonus": 1500, "date_label": "premium"},
+    "2026-01-03": {"hourly": 1500, "night": 1875, "transport": 1000, "floor_bonus": 3000, "mix_bonus": 1500, "date_label": "regular"},
+    "2026-01-04": {"hourly": 1500, "night": 1875, "transport": 1000, "floor_bonus": 3000, "mix_bonus": 1500, "date_label": "regular"}
+  },
+  "transport_rules": [
+    {"region": "東海",   "max_amount":     0, "receipt_required": 0, "is_venue_region": 1, "note": "開催地（愛知）・一律¥1,000支給はレートに含む"},
+    {"region": "近畿",   "max_amount": 12000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "関東",   "max_amount": 15000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "甲信越", "max_amount": 12000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "北陸",   "max_amount": 10000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "中国",   "max_amount": 15000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "四国",   "max_amount": 15000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "九州",   "max_amount": 20000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "東北",   "max_amount": 25000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "北海道", "max_amount": 30000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "沖縄",   "max_amount": 30000, "receipt_required": 1, "is_venue_region": 0, "note": ""}
+  ]
+}

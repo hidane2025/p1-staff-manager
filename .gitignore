@@ -3,6 +3,11 @@ __pycache__/
 *.db
 *.db-wal
 *.db-shm
+
+# Python 仮想環境（ローカル開発用、コミット対象外）
+.venv/
+venv/
+env/
 manual_images/
 *.pdf
 !docs/MANUAL_*.pdf

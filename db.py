@@ -310,12 +310,67 @@ def get_staff_region(staff_id: int):
 
 # === Event CRUD ===
 
-def create_event(name, venue, start_date, end_date, break_minutes_6h=45, break_minutes_8h=60):
-    r = get_client().table("p1_events").insert({
+def create_event(name, venue, start_date, end_date, break_minutes_6h=45, break_minutes_8h=60,
+                 prefecture=None, rate_template_id=""):
+    """イベントを新規作成
+
+    Args:
+        name: イベント名
+        venue: 会場名
+        start_date / end_date: YYYY-MM-DD
+        break_minutes_6h: 6時間超勤務時の休憩控除（分）
+        break_minutes_8h: 8時間超勤務時の休憩控除（分）
+        prefecture: 開催地都道府県（地域別交通費の起点）。マイグレ未実行時は無視
+        rate_template_id: レートプリセット識別子（例 "p1_standard"）。マイグレ未実行時は無視
+
+    Returns:
+        作成された event_id（失敗時 None）
+    """
+    from utils import db_schema
+    payload = {
         "name": name, "venue": venue, "start_date": start_date, "end_date": end_date,
-        "break_minutes_6h": break_minutes_6h, "break_minutes_8h": break_minutes_8h
-    }).execute()
+        "break_minutes_6h": break_minutes_6h, "break_minutes_8h": break_minutes_8h,
+    }
+    # マイグレ後のカラムは存在チェックして条件付きで投入
+    if prefecture and db_schema.has_column("p1_events", "prefecture"):
+        payload["prefecture"] = prefecture
+    if rate_template_id and db_schema.has_column("p1_events", "rate_template_id"):
+        payload["rate_template_id"] = rate_template_id
+    r = get_client().table("p1_events").insert(payload).execute()
     return r.data[0]["id"] if r.data else None
+
+
+def update_event_meta(event_id: int, **kwargs) -> None:
+    """イベントのメタ情報を更新
+
+    Args:
+        event_id: 対象イベントID
+        **kwargs: name / venue / prefecture / start_date / end_date /
+                  break_minutes_6h / break_minutes_8h / rate_template_id /
+                  show_tax_breakdown のいずれか
+
+    マイグレ未実行のカラムは自動でドロップして更新する（後方互換）。
+    """
+    from utils import db_schema
+    if not kwargs:
+        return
+    # 後方互換が必要なカラム
+    optional_columns = {
+        "prefecture": "prefecture",
+        "rate_template_id": "rate_template_id",
+        "show_tax_breakdown": "show_tax_breakdown",
+    }
+    payload = {}
+    for k, v in kwargs.items():
+        if k in optional_columns:
+            if db_schema.has_column("p1_events", optional_columns[k]):
+                payload[k] = v
+            # マイグレ未実行ならスキップ
+        else:
+            payload[k] = v
+    if not payload:
+        return
+    get_client().table("p1_events").update(payload).eq("id", event_id).execute()
 
 
 def get_all_events():
@@ -342,6 +397,41 @@ def set_event_rate(event_id, date, hourly_rate=1500, night_rate=1875,
 
 def get_event_rates(event_id):
     return get_client().table("p1_event_rates").select("*").eq("event_id", event_id).order("date").execute().data
+
+
+def bulk_set_event_rates(event_id: int, rates: list) -> int:
+    """イベントの日別レートを一括設定
+
+    Args:
+        event_id: 対象イベントID
+        rates: [{"date": "2025-12-29", "hourly": 1500, "night": 1875,
+                 "transport": 1000, "floor_bonus": 3000, "mix_bonus": 1500,
+                 "date_label": "regular"}, ...]
+
+    既存レートは削除して全置換する（イベント単位の冪等操作）。
+    Returns: 投入件数
+    """
+    client = get_client()
+    if not rates:
+        return 0
+    # 一旦全削除（同じevent_idのレコード）
+    client.table("p1_event_rates").delete().eq("event_id", event_id).execute()
+    payload = []
+    for r in rates:
+        payload.append({
+            "event_id": event_id,
+            "date": r.get("date"),
+            "date_label": r.get("date_label", "regular"),
+            "hourly_rate": int(r.get("hourly") or r.get("hourly_rate") or 1500),
+            "night_rate": int(r.get("night") or r.get("night_rate") or 1875),
+            "transport_allowance": int(r.get("transport") or r.get("transport_allowance") or 1000),
+            "floor_bonus": int(r.get("floor_bonus") or 3000),
+            "mix_bonus": int(r.get("mix_bonus") or 1500),
+        })
+    client.table("p1_event_rates").insert(payload).execute()
+    log_action("bulk_set_rates", "event_rates", event_id,
+               detail=f"{len(payload)}日分のレートを一括設定", event_id=event_id)
+    return len(payload)
 
 
 # === Shifts ===

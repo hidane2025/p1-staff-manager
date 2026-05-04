@@ -1,4 +1,8 @@
-"""P1 Staff Manager — シフト取込ページ"""
+"""P1 Staff Manager — シフト取込ページ
+
+役割: 完成済みイベント（基本情報・レート設定済み）に対してシフトCSVを流し込む。
+イベント本体の作成・編集は pages/0_イベント設定.py に集約。
+"""
 
 import streamlit as st
 import pandas as pd
@@ -14,88 +18,62 @@ st.set_page_config(page_title="シフト取込", page_icon="📅", layout="wide"
 from utils.ui_helpers import hide_staff_only_pages
 hide_staff_only_pages()
 st.title("📅 シフト取込")
+st.caption("完成済みイベントにシフトCSVを取り込む。新規イベントの作成は『📋 イベント設定』ページで先に行ってください。")
 
-# --- イベント選択 or 作成 ---
+
+# ============================================================
+# 1. イベント選択
+# ============================================================
 st.subheader("1. イベントを選択")
 events = db.get_all_events()
 
-tab_select, tab_create = st.tabs(["既存イベントを選択", "新規イベント作成"])
+if not events:
+    st.warning(
+        "⚠️ イベントがまだありません。先に **「📋 イベント設定」** ページで "
+        "イベントを作成してください。"
+    )
+    st.page_link("pages/0_イベント設定.py", label="📋 イベント設定を開く", icon="📋")
+    st.stop()
 
-with tab_select:
-    if events:
-        event_id = select_event(events, "イベント")
-    else:
-        st.info("イベントがありません。「新規イベント作成」タブで作成してください。")
-        event_id = None
-
-with tab_create:
-    with st.form("create_event"):
-        ev_name = st.text_input("イベント名", placeholder="例: P1 Nagoya 2026")
-        ev_venue = st.text_input("会場", placeholder="例: 中日ホール")
-        col_s, col_e = st.columns(2)
-        with col_s:
-            ev_start = st.date_input("開始日")
-        with col_e:
-            ev_end = st.date_input("終了日")
-        if st.form_submit_button("作成", type="primary"):
-            new_id = db.create_event(ev_name, ev_venue, str(ev_start), str(ev_end))
-            st.success(f"「{ev_name}」を作成しました")
-            st.rerun()
-
+event_id = select_event(events, "対象イベント")
 if not event_id:
     st.stop()
 
-# --- レート設定 ---
-st.divider()
-st.subheader("2. 日別レート設定")
-
 event = db.get_event_by_id(event_id)
-existing_rates = db.get_event_rates(event_id)
+if event:
+    st.write(
+        f"📍 **{event.get('name')}**　"
+        f"会場: {event.get('venue', '—')}　"
+        f"期間: {event.get('start_date', '—')} 〜 {event.get('end_date', '—')}"
+    )
 
-st.markdown("各日の時給・手当を設定します。設定しない日はデフォルト値（時給¥1,500 / 深夜¥1,875）が適用されます。")
 
-with st.form("rate_form"):
-    st.markdown("**日別設定**")
+# ============================================================
+# 2. 現行レート（読み取り専用） — 編集はイベント設定で
+# ============================================================
+st.divider()
+st.subheader("2. 設定済みレートの確認")
 
-    rate_dates = existing_rates if existing_rates else []
-    if not rate_dates:
-        st.info("シフトを取り込むと、自動で日付が設定されます。または手動で入力してください。")
-
-    manual_date = st.text_input("日付を追加（YYYY-MM-DD）", placeholder="例: 2025-12-31")
-
-    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-    with col_r1:
-        r_hourly = st.number_input("通常時給 (円)", value=1500, step=100)
-    with col_r2:
-        r_night = st.number_input("深夜時給 (円)", value=1875, step=100)
-    with col_r3:
-        r_transport = st.number_input("交通費 (円/日)", value=1000, step=100)
-    with col_r4:
-        r_floor = st.number_input("フロア手当 (円/日)", value=3000, step=500)
-
-    r_mix = st.number_input("MIX手当 (円/日)", value=1500, step=500)
-    r_label = st.selectbox("日の種類", ["regular", "premium"])
-
-    if st.form_submit_button("レート保存"):
-        if manual_date:
-            db.set_event_rate(event_id, manual_date, r_hourly, r_night,
-                              r_transport, r_floor, r_mix, r_label)
-            st.success(f"{manual_date} のレートを保存しました")
-            st.rerun()
-        else:
-            st.error("日付を入力してください")
-
-# 現在のレート表示
 current_rates = db.get_event_rates(event_id)
 if current_rates:
-    st.markdown("**設定済みレート:**")
     rate_df = pd.DataFrame(current_rates)
     display_cols = ["date", "date_label", "hourly_rate", "night_rate",
                     "transport_allowance", "floor_bonus", "mix_bonus"]
-    available_cols = [c for c in display_cols if c in rate_df.columns]
-    st.dataframe(rate_df[available_cols], use_container_width=True, hide_index=True)
+    available = [c for c in display_cols if c in rate_df.columns]
+    st.dataframe(rate_df[available], use_container_width=True, hide_index=True)
+    st.caption("レート編集は『📋 イベント設定』タブ『既存編集』で行ってください。")
+else:
+    st.info(
+        "ℹ️ レート未設定です。シフトを取り込むと日付に対してデフォルト "
+        "（時給¥1,500 / 深夜¥1,875）で自動補完されます。"
+        "プリセットを適用するには『📋 イベント設定』を使ってください。"
+    )
+    st.page_link("pages/0_イベント設定.py", label="📋 レート設定はこちら", icon="📋")
 
-# --- CSV取込 ---
+
+# ============================================================
+# 3. シフトCSV取込
+# ============================================================
 st.divider()
 st.subheader("3. シフト表を取り込み")
 
@@ -112,27 +90,38 @@ st.markdown("""
 
 uploaded = st.file_uploader("CSVまたはTSVファイル", type=["csv", "tsv", "txt"])
 
-year_input = st.number_input("年（12月の年を入力）", value=2025, step=1,
-                              help="12/29は入力年、1/4は翌年として処理します")
+# 年指定: イベント開始年を初期値に
+default_year = 2026
+if event and event.get("start_date"):
+    try:
+        default_year = int(event["start_date"][:4])
+    except Exception:
+        pass
+
+year_input = st.number_input(
+    "年（最初の月の年を入力）",
+    value=default_year, step=1,
+    help="例: 12/29は入力年、1/4は翌年として処理します。8月開催なら開催年。",
+)
 
 if uploaded:
     content = uploaded.read()
     parsed = parse_shift_csv(content, year=year_input)
 
-    st.success(f"パース完了: {len(parsed['staff'])}名のスタッフ / {len(parsed['dates'])}日間 / {len(parsed['shifts'])}シフト")
+    st.success(
+        f"パース完了: {len(parsed['staff'])}名のスタッフ / "
+        f"{len(parsed['dates'])}日間 / {len(parsed['shifts'])}シフト"
+    )
 
     # プレビュー
     if parsed["staff"]:
         st.markdown("**スタッフプレビュー:**")
-        staff_df = pd.DataFrame(parsed["staff"])
-        st.dataframe(staff_df, use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(parsed["staff"]), use_container_width=True, hide_index=True)
 
     if parsed["shifts"]:
         st.markdown("**シフトプレビュー（先頭20件）:**")
-        shift_df = pd.DataFrame(parsed["shifts"][:20])
-        st.dataframe(shift_df, use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(parsed["shifts"][:20]), use_container_width=True, hide_index=True)
 
-    # 取り込み実行
     if st.button("🚀 取り込み実行", type="primary"):
         imported_staff = 0
         imported_shifts = 0
@@ -157,11 +146,16 @@ if uploaded:
             if date not in existing_rate_dates:
                 db.set_event_rate(event_id, date)
 
-        st.success(f"取り込み完了: {imported_staff}名のスタッフ / {imported_shifts}シフトを登録")
+        st.success(
+            f"取り込み完了: {imported_staff}名のスタッフ / {imported_shifts}シフトを登録"
+        )
         st.balloons()
         st.rerun()
 
-# --- 現在のシフト表示 ---
+
+# ============================================================
+# 4. 取り込み済みシフト
+# ============================================================
 st.divider()
 st.subheader("4. 取り込み済みシフト")
 

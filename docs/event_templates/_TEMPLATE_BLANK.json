@@ -1,0 +1,56 @@
+{
+  "_comment": "このファイルをコピーして新しい大会用に編集してください。アンダースコア始まりのキー（_comment, _hint）はアプリ側で無視されます。",
+  "name": "P1 ___ 2026 ___大会",
+  "venue": "○○ホール",
+  "venue_prefecture": "東京都",
+  "start_date": "2026-MM-DD",
+  "end_date": "2026-MM-DD",
+
+  "_hint_break": "休憩控除（分）。6時間超で break_minutes_6h、8時間超で break_minutes_8h を控除。デフォルトは45/60。",
+  "break_minutes_6h": 45,
+  "break_minutes_8h": 60,
+
+  "_hint_template": "rate_template_id はメモ用ラベル。p1_standard / usop_standard / minimum_aichi を推奨。",
+  "rate_template_id": "p1_standard",
+
+  "_hint_dates": "dates は start_date〜end_date の連続日付。アプリ側で自動生成も可能（dates省略時）。",
+  "dates": [
+    "2026-MM-DD",
+    "2026-MM-DD"
+  ],
+
+  "_hint_rates": "rates は日別の単価。date_label は 'regular' か 'premium'。プリセットを使う場合は p1_standard/usop_standard 参照。",
+  "rates": {
+    "2026-MM-DD": {
+      "hourly": 1500,
+      "night": 1875,
+      "transport": 1000,
+      "floor_bonus": 3000,
+      "mix_bonus": 1500,
+      "date_label": "regular"
+    },
+    "2026-MM-DD_2": {
+      "hourly": 1600,
+      "night": 2000,
+      "transport": 1000,
+      "floor_bonus": 5000,
+      "mix_bonus": 1500,
+      "date_label": "premium"
+    }
+  },
+
+  "_hint_transport": "地域別交通費上限。is_venue_region=1 は開催地区分（領収書不要・一律）。",
+  "transport_rules": [
+    {"region": "北海道", "max_amount": 25000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "東北",   "max_amount": 20000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "関東",   "max_amount": 15000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "甲信越", "max_amount": 12000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "北陸",   "max_amount": 10000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "東海",   "max_amount":  8000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "近畿",   "max_amount": 12000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "中国",   "max_amount": 12000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "四国",   "max_amount": 12000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "九州",   "max_amount": 20000, "receipt_required": 1, "is_venue_region": 0, "note": ""},
+    {"region": "沖縄",   "max_amount": 25000, "receipt_required": 1, "is_venue_region": 0, "note": ""}
+  ]
+}

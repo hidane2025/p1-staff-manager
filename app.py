@@ -18,14 +18,24 @@ st.markdown("イベント経理管理システム")
 st.divider()
 
 # ============================================================
+# 0行目: イベントの『型』を作る入口
+# ============================================================
+col0a, col0b, col0c = st.columns(3)
+
+with col0a:
+    st.markdown("### 📋 イベント設定")
+    st.markdown("**新しい大会の最初の入口**。JSONテンプレ／プリセットで一括投入。")
+    st.page_link("pages/0_イベント設定.py", label="イベント設定を開く", icon="📋")
+
+# ============================================================
 # 1行目: 基本機能
 # ============================================================
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.markdown("### 📋 スタッフ管理")
+    st.markdown("### 👥 スタッフ管理")
     st.markdown("スタッフの登録・検索・一覧表示")
-    st.page_link("pages/1_スタッフ管理.py", label="スタッフ管理を開く", icon="📋")
+    st.page_link("pages/1_スタッフ管理.py", label="スタッフ管理を開く", icon="👥")
 
 with col2:
     st.markdown("### 📅 シフト取込")
@@ -104,4 +114,4 @@ with st.expander("📘 スタッフ向けページ（管理者は通常使用し
     st.markdown("- `contract sign` — スタッフが契約書署名用URLからアクセス")
     st.caption("トークン付きURL経由でのみ表示されるため、手動アクセス時は警告が出ます。")
 
-st.caption("P1 Staff Manager v3.5 — 株式会社ヒダネ")
+st.caption("P1 Staff Manager v3.6 — 株式会社ヒダネ")
