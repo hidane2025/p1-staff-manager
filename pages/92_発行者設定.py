@@ -12,8 +12,11 @@ from utils import event_selector
 st.set_page_config(page_title="発行者設定", page_icon="🏢", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header
+from utils.admin_guard import require_admin, admin_logout_button
 apply_global_style()
 hide_staff_only_pages()
+require_admin(page_name="発行者設定")
+admin_logout_button()
 
 page_header("🏢 発行者設定", "領収書PDFに記載する発行者（Pacific）情報を設定します。インボイス番号は後日追加できます。")
 

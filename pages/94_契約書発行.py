@@ -12,11 +12,18 @@ from utils import contract_db, contract_issuer, contract_storage
 st.set_page_config(page_title="契約書発行", page_icon="✍️", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages, missing_field_warning, copyable_url
 from utils.page_layout import apply_global_style, page_header, flow_bar
+from utils.admin_guard import require_admin, admin_logout_button, operator_name
 apply_global_style()
 hide_staff_only_pages()
+require_admin(page_name="契約書発行")
+admin_logout_button()
 
 page_header("✍️ 契約書発行・管理", "スタッフ向け契約書を一括発行し、クラウド署名状況を一覧で管理します。")
 flow_bar(active="payout", done=["setup", "input", "calc"])
+
+# PII閲覧監査ログ
+db.log_action("view_contracts_admin", "contracts",
+              detail=f"page=契約書発行", performed_by=operator_name())
 
 # ============================================================
 # テンプレート選択

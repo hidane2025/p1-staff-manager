@@ -108,6 +108,14 @@ year_input = st.number_input(
 )
 
 if uploaded:
+    # P2#8 (2026-05-04): アップロードサイズの上限チェック（5MB）
+    MAX_UPLOAD_SIZE = 5 * 1024 * 1024
+    if uploaded.size > MAX_UPLOAD_SIZE:
+        st.error(
+            f"❌ ファイルが大きすぎます（{uploaded.size / 1024 / 1024:.1f}MB）。"
+            f"上限は {MAX_UPLOAD_SIZE / 1024 / 1024:.0f}MB です。"
+        )
+        st.stop()
     content = uploaded.read()
     parsed = parse_shift_csv(content, year=year_input)
 

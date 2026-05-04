@@ -13,11 +13,18 @@ from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import (
     apply_global_style, page_header, flow_bar, section_header, kpi_row,
 )
+from utils.admin_guard import require_admin, admin_logout_button, operator_name
 apply_global_style()
 hide_staff_only_pages()
+require_admin(page_name="精算レポート")
+admin_logout_button()
 
 page_header("📊 精算レポート", "支払い状況・内訳・役職別／雇用区分別の集計、未処理リストとCSV出力をまとめて確認できます。")
 flow_bar(active="payout", done=["setup", "input", "calc"])
+
+# PII閲覧監査ログ
+db.log_action("view_settlement_report", "payments",
+              detail=f"page=精算レポート", performed_by=operator_name())
 
 # --- イベント選択（全ページ共通） ---
 event_id = select_event(db.get_all_events(), "イベント選択")

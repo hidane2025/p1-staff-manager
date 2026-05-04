@@ -11,13 +11,20 @@ import db
 st.set_page_config(page_title="年間累計", page_icon="📆", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header
+from utils.admin_guard import require_admin, admin_logout_button, operator_name
 apply_global_style()
 hide_staff_only_pages()
+require_admin(page_name="年間累計レポート")
+admin_logout_button()
 
 page_header(
     "📆 年間累計レポート",
     "1/1〜12/31 の累計支払額。法定調書提出対象者（年 ¥50万超）を自動フラグ表示します。",
 )
+
+# PII閲覧監査ログ（本名・住所・支払額の一覧表示）
+db.log_action("view_yearly_totals", "payments",
+              detail=f"page=年間累計", performed_by=operator_name())
 
 EMPLOYMENT_LABELS = {
     "contractor": "業務委託",

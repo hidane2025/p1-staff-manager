@@ -9,11 +9,18 @@ import db
 st.set_page_config(page_title="スタッフ管理", page_icon="👥", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header, flow_bar
+from utils.admin_guard import require_admin, admin_logout_button, operator_name
 apply_global_style()
 hide_staff_only_pages()
+require_admin(page_name="スタッフ管理")
+admin_logout_button()
 
 page_header("👥 スタッフ管理", "ディーラー・フロア・TD等のスタッフを登録・編集・一括取込する画面です。")
 flow_bar(active="input", done=["setup"])
+
+# PII閲覧監査ログ
+db.log_action("view_staff_list", "staff",
+              detail=f"page=スタッフ管理", performed_by=operator_name())
 
 ROLES = ["Dealer", "Floor", "TD", "DC", "Chip"]
 EMPLOYMENT_TYPES = {
@@ -238,6 +245,15 @@ with import_tab1:
     )
     uploaded = st.file_uploader("CSVファイル", type=["csv", "tsv", "txt"], key="bulk_csv")
     if uploaded:
+        # P2#8 (2026-05-04): アップロードサイズの上限チェック（5MB）
+        MAX_UPLOAD_SIZE = 5 * 1024 * 1024
+        if uploaded.size > MAX_UPLOAD_SIZE:
+            st.error(
+                f"❌ ファイルが大きすぎます（{uploaded.size / 1024 / 1024:.1f}MB）。"
+                f"上限は {MAX_UPLOAD_SIZE / 1024 / 1024:.0f}MB です。"
+                "ファイルを分割してアップロードしてください。"
+            )
+            st.stop()
         import pandas as pd
         content = uploaded.read()
         text = content.decode("utf-8-sig", errors="replace")
@@ -326,6 +342,10 @@ with import_tab4:
         help="Google スプレッドシート→ファイル→ダウンロード→カンマ区切り形式（.csv）で保存",
     )
     if gform_uploaded:
+        # P2#8: アップロードサイズの上限チェック（5MB）
+        if gform_uploaded.size > 5 * 1024 * 1024:
+            st.error("❌ ファイルが大きすぎます（上限5MB）。")
+            st.stop()
         try:
             rows = parse_gform_csv(gform_uploaded.read())
         except Exception as exc:

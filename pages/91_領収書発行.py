@@ -19,11 +19,18 @@ from utils import event_selector
 st.set_page_config(page_title="領収書発行", page_icon="📄", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages, missing_field_warning, copyable_url
 from utils.page_layout import apply_global_style, page_header, flow_bar
+from utils.admin_guard import require_admin, admin_logout_button, operator_name
 apply_global_style()
 hide_staff_only_pages()
+require_admin(page_name="領収書発行")
+admin_logout_button()
 
 page_header("📄 領収書発行", "支払確定分の領収書を PDF 生成し、スタッフ向けの個別 DL URL を発行します。")
 flow_bar(active="payout", done=["setup", "input", "calc"])
+
+# PII閲覧監査ログ
+db.log_action("view_receipts_admin", "payments",
+              detail=f"page=領収書発行", performed_by=operator_name())
 
 # --- イベント選択 ---
 events = db.get_all_events()

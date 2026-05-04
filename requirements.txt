@@ -1,10 +1,13 @@
-streamlit>=1.30.0
-pandas>=2.0.0
-openpyxl>=3.1.0
-supabase>=2.0.0
-reportlab>=4.0.0
-requests>=2.28.0
-Pillow>=10.0.0
-streamlit-drawable-canvas>=0.9.3
-python-docx>=1.0.0
-PyPDF2>=3.0.0
+# Pinned versions (2026-05-04 — P2#9 セキュリティ対策)
+# 上限を緩めにマイナーバージョンまで指定。月次で `pip list --outdated` を実行し、
+# 脆弱性アップデートが出ていれば本ファイルを更新する。
+streamlit==1.50.*
+pandas==2.3.*
+openpyxl==3.1.*
+supabase==2.29.*
+reportlab==4.5.*
+requests==2.32.*
+Pillow==11.3.*
+streamlit-drawable-canvas==0.9.3
+python-docx==1.2.*
+PyPDF2==3.0.*

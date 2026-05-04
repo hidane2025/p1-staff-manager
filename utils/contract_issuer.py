@@ -2,9 +2,21 @@
 
 from __future__ import annotations
 
+from html import escape as _html_escape
 from typing import Optional
 
 import db  # type: ignore
+
+
+def _safe(s: Optional[str]) -> str:
+    """テンプレ変数の HTML エスケープ。
+    本名・住所・メール等のスタッフ入力値が rendered_body_md に埋め込まれるため、
+    Markdown経由のst.markdown表示やPDF再描画時のXSS/構造破壊を防ぐ。
+    Markdown 特有の制御文字（# * _ など）は意図的にエスケープしない（書式保持）。
+    """
+    if s is None:
+        return ""
+    return _html_escape(str(s), quote=True)
 
 from utils import contract_db, contract_storage
 from utils import receipt_token   # secrets.token_urlsafe ベースで共通
@@ -62,14 +74,16 @@ def issue_contract(
     issue_date = today_jst_ymd()
     contract_no = build_contract_no(template_id, staff_id, issue_date)
 
+    # P1#7 (2026-05-04): スタッフ自己申告データを HTML エスケープ
+    # → 本名に <script> 等が混じっていた場合の XSS を防ぐ
     variables = ContractVariables(
-        staff_name=staff.get("real_name") or staff.get("name_jp") or "",
-        staff_address=staff.get("address") or "",
-        staff_email=staff.get("email") or "",
-        role=staff.get("role") or "",
-        event_name=event.get("name") or "大会全般",
-        issuer_name=issuer_name,
-        issuer_address=issuer_address,
+        staff_name=_safe(staff.get("real_name") or staff.get("name_jp")),
+        staff_address=_safe(staff.get("address")),
+        staff_email=_safe(staff.get("email")),
+        role=_safe(staff.get("role")),
+        event_name=_safe(event.get("name") or "大会全般"),
+        issuer_name=_safe(issuer_name),
+        issuer_address=_safe(issuer_address),
         issue_date=issue_date,
     )
     rendered = render_template(tpl["body_markdown"], variables)

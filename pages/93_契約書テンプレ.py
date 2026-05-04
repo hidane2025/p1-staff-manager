@@ -21,8 +21,11 @@ from utils.contract_doc_parser import (
 st.set_page_config(page_title="契約書テンプレート", page_icon="📝", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header
+from utils.admin_guard import require_admin, admin_logout_button
 apply_global_style()
 hide_staff_only_pages()
+require_admin(page_name="契約書テンプレ")
+admin_logout_button()
 
 page_header("📝 契約書テンプレート管理", "業務委託契約書・NDA・個人情報取扱同意書などのテンプレを管理します。")
 
