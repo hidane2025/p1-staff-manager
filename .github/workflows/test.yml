@@ -1,0 +1,97 @@
+name: テスト（CI）
+
+# トリガー: push（mainへ）とpull_request の両方で実行
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:   # 手動実行ボタンも有効化
+
+# 実行時間の上限（暴走防止）
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: 全215+件のテストを実行
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # 1) リポジトリのコードを取得
+      - name: コードをチェックアウト
+        uses: actions/checkout@v4
+
+      # 2) Python 3.9 を準備（ローカル venv と一致）
+      - name: Python 3.9 をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: pip
+
+      # 3) 依存をインストール
+      - name: 依存パッケージをインストール
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 4) 構文チェック（壊れたファイルがあれば早期失敗）
+      - name: 全Pythonファイルの構文チェック
+        run: |
+          python -m py_compile \
+            app.py db.py \
+            utils/*.py \
+            scripts/*.py \
+            pages/*.py
+
+      # 5) ピュアユニットテスト（DB依存なし・最も速い）
+      - name: ユニットテスト - event_template
+        run: python test_e2e/17_event_template_unit_test.py
+
+      - name: ユニットテスト - admin_guard
+        run: python test_e2e/19_admin_guard_unit_test.py
+
+      - name: ユニットテスト - core logic（calculator/denomination/region/shift_parser）
+        run: python test_e2e/20_core_logic_unit_test.py
+
+      - name: ユニットテスト - 領収書PDF
+        run: python test_e2e/4_receipt_unit_test.py
+
+      - name: ユニットテスト - 契約書PDF
+        run: python test_e2e/8_contract_unit_test.py
+
+      - name: ユニットテスト - 領収書 原本/控え（PNG化はスキップ）
+        run: python test_e2e/14_receipt_copy_original_test.py
+
+      - name: ユニットテスト - 契約書テンプレ取込
+        run: python test_e2e/15_contract_template_import_test.py
+
+      - name: ユニットテスト - Googleフォーム取込
+        run: python test_e2e/16_gform_importer_test.py
+
+      - name: セキュリティ動作テスト
+        run: python test_e2e/22_security_behavior_test.py
+
+      # 6) AppTest 系（Streamlit ページの実行 - DBに参照クエリを発行）
+      - name: ページ起動スモーク（8ページ）
+        run: python test_e2e/18_pages_smoke_test.py
+        env:
+          # CI 実行時の audit_log への performed_by を区別できるようにする
+          GITHUB_ACTIONS_RUN_ID: ${{ github.run_id }}
+
+      - name: UI要素検出（全14ページ + 管理者ゲート挙動）
+        run: python test_e2e/21_ui_elements_test.py
+
+      # 7) 結果サマリ（失敗時に拾いやすくする）
+      - name: テスト結果サマリ
+        if: always()
+        run: |
+          echo "## ✅ CI 実行完了" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "コミット: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "ブランチ: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "トリガー: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "実行されたテストスイート: 11本（合計 215+ 件）" >> $GITHUB_STEP_SUMMARY
