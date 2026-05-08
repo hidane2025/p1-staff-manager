@@ -147,7 +147,7 @@ total_labor = sum(d["合計"] for d in emp_summary.values())
 st.metric("人件費トータル（全区分合計）", f"¥{total_labor:,}")
 
 # --- 小口経費 ---
-section_header("小口経費", "イベント中のタクシー代・備品購入などの記録。")
+section_header("小口経費", "イベント中のタクシー代・備品購入などの記録。社内運用＋税務エビデンスとして利用。")
 
 petty = db.get_petty_cash_for_event(event_id)
 if petty:
@@ -155,7 +155,9 @@ if petty:
     st.metric("小口経費合計", f"¥{petty_total:,}")
 
     petty_df = pd.DataFrame(petty)
-    display_cols = ["date", "description", "amount", "requester", "approver", "status"]
+    # 表示列: 勘定科目・宛名は v3.8 で追加（マイグレ後は表示）
+    display_cols = ["date", "account_code", "description", "amount",
+                    "payee_name", "requester", "approver", "status"]
     available = [c for c in display_cols if c in petty_df.columns]
     st.dataframe(petty_df[available], use_container_width=True, hide_index=True)
 else:
@@ -163,15 +165,42 @@ else:
 
 # 小口経費追加
 with st.expander("➕ 小口経費を追加"):
+    # 勘定科目候補（参考リスト・自由入力可）
+    ACCOUNT_CODES = [
+        "（選択しない）", "旅費交通費", "通信費", "消耗品費",
+        "接待交際費", "会議費", "雑費", "修繕費", "福利厚生費",
+        "業務委託費", "広告宣伝費", "その他",
+    ]
     with st.form("add_petty"):
-        pc_date = st.date_input("日付")
+        col_d1, col_d2 = st.columns([1, 1])
+        with col_d1:
+            pc_date = st.date_input("日付")
+            pc_account = st.selectbox(
+                "勘定科目",
+                ACCOUNT_CODES,
+                help="税務エビデンス用。社内運用資料として記録。",
+            )
+        with col_d2:
+            pc_amount = st.number_input("金額 (円)", min_value=0, step=100)
+            pc_payee = st.text_input(
+                "領収書宛名",
+                placeholder="例: 株式会社パシフィック",
+                help="任意。法律上は不要、税務上は記載があると望ましい。",
+            )
         pc_desc = st.text_input("内容", placeholder="例: タクシー代（会場→ホテル）")
-        pc_amount = st.number_input("金額 (円)", min_value=0, step=100)
-        pc_requester = st.text_input("申請者")
-        pc_approver = st.text_input("承認者")
-        if st.form_submit_button("追加"):
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            pc_requester = st.text_input("申請者")
+        with col_r2:
+            pc_approver = st.text_input("承認者")
+        if st.form_submit_button("追加", type="primary"):
             if pc_desc and pc_amount > 0:
-                db.add_petty_cash(event_id, str(pc_date), pc_desc, pc_amount, pc_requester, pc_approver)
+                db.add_petty_cash(
+                    event_id, str(pc_date), pc_desc, pc_amount,
+                    pc_requester, pc_approver,
+                    account_code=("" if pc_account == "（選択しない）" else pc_account),
+                    payee_name=pc_payee,
+                )
                 st.success("小口経費を追加しました")
                 st.rerun()
 

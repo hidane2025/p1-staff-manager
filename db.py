@@ -662,12 +662,31 @@ def mark_receipt_received(payment_id, event_id=None):
 
 # === Petty Cash ===
 
-def add_petty_cash(event_id, date, description, amount, requester, approver=""):
-    get_client().table("p1_petty_cash").insert({
+def add_petty_cash(event_id, date, description, amount, requester, approver="",
+                   account_code: str = "", payee_name: str = ""):
+    """小口経費を追加
+
+    v3.8 (2026-05-08) で account_code（勘定科目）と payee_name（領収書宛名）を追加。
+    マイグレーション 20260508_add_petty_cash_accounting.sql 未実行時は無視される
+    （後方互換）。
+    """
+    from utils import db_schema
+    payload = {
         "event_id": event_id, "date": date, "description": description,
-        "amount": amount, "requester": requester, "approver": approver
-    }).execute()
-    log_action("add_petty_cash", "petty_cash", detail=f"¥{amount:,} {description}", event_id=event_id)
+        "amount": amount, "requester": requester, "approver": approver,
+    }
+    # 後方互換: マイグレ後のカラムは存在チェックして条件付きで投入
+    if account_code and db_schema.has_column("p1_petty_cash", "account_code"):
+        payload["account_code"] = account_code
+    if payee_name and db_schema.has_column("p1_petty_cash", "payee_name"):
+        payload["payee_name"] = payee_name
+    get_client().table("p1_petty_cash").insert(payload).execute()
+    log_action(
+        "add_petty_cash", "petty_cash",
+        detail=f"¥{amount:,} {description}"
+        + (f" [{account_code}]" if account_code else ""),
+        event_id=event_id,
+    )
 
 
 def get_petty_cash_for_event(event_id):

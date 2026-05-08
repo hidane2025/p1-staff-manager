@@ -177,6 +177,45 @@ _check("業務委託の交通費 ¥2,000",
 _check("タイミーも交通費は支給",
        timee.transport_total == 2000)
 
+# Phase 2-1 (2026-05-08): 個別時給を全雇用区分に開放
+print("\n[6.5] calculator: 個別時給（業務委託・正社員）— v3.8")
+contractor_with_custom = calculate_staff_payment(
+    3, "業務委託（個別時給）", "Dealer", shifts, rates, 6,
+    employment_type="contractor",
+    custom_hourly_rate=2000,  # 基本¥1500のところ、このスタッフだけ¥2000
+)
+# 1日10h勤務 - 1h休憩 = 9h（通常8h + 深夜1h）
+# 業務委託 + 個別時給: 通常は2000、深夜は2000*(1875/1500)=2500（自動スケール）
+# 1日: 8h*2000 + 1h*2500 = 16000+2500 = 18500
+# 2日: 37000
+expected_base_2 = 8 * 2000 * 2  # 32000
+expected_night_2 = 1 * 2500 * 2  # 5000
+_check("業務委託の個別時給 ¥2000 で基本給 = ¥32,000",
+       contractor_with_custom.base_pay == expected_base_2,
+       f"got ¥{contractor_with_custom.base_pay}")
+_check("業務委託の個別時給で深夜時給は1.25倍に自動スケール = ¥5,000",
+       contractor_with_custom.night_pay == expected_night_2,
+       f"got ¥{contractor_with_custom.night_pay}")
+_check("業務委託は個別時給ありでも交通費・手当は通常通り（¥2000）",
+       contractor_with_custom.transport_total == 2000)
+_check("業務委託の個別時給ありでも Dealer 役職はフロア手当 0",
+       contractor_with_custom.floor_bonus_total == 0)
+
+# 個別時給なしの業務委託は従来通り
+contractor_default = calculate_staff_payment(
+    4, "業務委託（イベント時給）", "Dealer", shifts, rates, 6,
+    employment_type="contractor",
+    custom_hourly_rate=None,
+)
+_check("個別時給なしならイベント時給で計算（基本給 ¥1500*8h*2 = ¥24,000）",
+       contractor_default.base_pay == 8 * 1500 * 2,
+       f"got ¥{contractor_default.base_pay}")
+_check("個別時給=0 と個別時給なしは同等",
+       calculate_staff_payment(
+           5, "ゼロ", "Dealer", shifts, rates, 6,
+           employment_type="contractor", custom_hourly_rate=0,
+       ).base_pay == contractor_default.base_pay)
+
 
 # ============================================================
 # 7. denomination: 紙幣分解

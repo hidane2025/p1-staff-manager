@@ -148,16 +148,24 @@ with c2b:
 
 # --- ③ 計算 ---
 st.markdown('**STEP 3 — 計算**')
-c3a, c3b, _ = st.columns(3)
+c3a, c3b, c3c = st.columns(3)
 with c3a:
+    action_card(
+        "STEP 3",
+        "🎰",
+        "ピット端末",
+        "退勤打刻と支払い計算を1画面で。NO. を入れて時刻確定するだけで、給与窓口は確認のみに。",
+        "pages/10_ピット端末.py",
+    )
+with c3b:
     action_card(
         "STEP 3",
         "💰",
         "支払い計算",
-        "時給×時間＋深夜＋手当＋精勤を自動計算。タイミー個別時給にも対応。",
+        "時給×時間＋深夜＋手当＋精勤を自動計算。個別時給・タイミーにも対応。",
         "pages/3_支払い計算.py",
     )
-with c3b:
+with c3c:
     action_card(
         "STEP 3",
         "✉️",
@@ -258,7 +266,7 @@ st.markdown(
     '<div style="margin-top: 48px; padding-top: 16px; '
     'border-top: 1px solid #E2E8F0; '
     'color: #94A3B8; font-size: 11.5px; text-align: center;">'
-    'P1 Staff Manager v3.7 · 株式会社ヒダネ'
+    'P1 Staff Manager v3.8 · 株式会社ヒダネ'
     '</div>',
     unsafe_allow_html=True,
 )

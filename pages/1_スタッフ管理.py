@@ -114,17 +114,20 @@ if "editing_staff_id" in st.session_state:
                 if current_pref or current_region:
                     st.caption(f"判定済み: {current_pref or '-'} / {current_region or '-'}地域")
 
-            # タイミー用の個別時給
-            e_custom_rate = None
-            if e_employment == "timee":
-                e_custom_rate = st.number_input(
-                    "個別時給（円） ※タイミーのみ",
-                    value=staff.get("custom_hourly_rate") or 1500,
-                    step=50, min_value=0,
-                    help="タイミー経由の場合、イベントのレートではなく個別時給が適用されます",
-                )
-            else:
-                e_custom_rate = staff.get("custom_hourly_rate")
+            # 個別時給（v3.8 から全雇用区分で利用可）
+            current_rate = staff.get("custom_hourly_rate")
+            e_custom_rate = st.number_input(
+                "個別時給（円）",
+                value=int(current_rate) if current_rate else 0,
+                step=50, min_value=0,
+                help=(
+                    "0 にするとイベントの基本時給を使用。"
+                    "値を入れるとそのスタッフだけ別の時給で計算します（役割や経験で時給が変わる場合に便利）。"
+                    "タイミー: 深夜割増・手当なし／業務委託・正社員: 深夜時給は基本時給×イベント比率で自動算出、手当は通常通り。"
+                ),
+            )
+            # 0 は「個別時給なし」として扱う
+            e_custom_rate = e_custom_rate if e_custom_rate > 0 else None
 
             e_notes = st.text_area("備考・メモ", value=staff.get("notes") or "",
                                     help="イレギュラー対応など自由入力")
@@ -169,9 +172,15 @@ with st.form("add_staff_form"):
     with col3:
         new_email = st.text_input("メールアドレス", placeholder="example@mail.com")
         new_contact = st.text_input("連絡先（LINE等）", placeholder="例: LINE ID")
-        new_custom_rate = None
-        if new_employment == "timee":
-            new_custom_rate = st.number_input("個別時給（円）", value=1500, step=50, min_value=0)
+        new_custom_rate_raw = st.number_input(
+            "個別時給（円）",
+            value=0, step=50, min_value=0,
+            help=(
+                "0 = イベントの基本時給を使用（推奨）。"
+                "値を入れるとこのスタッフだけ別の時給で計算します。"
+            ),
+        )
+        new_custom_rate = new_custom_rate_raw if new_custom_rate_raw > 0 else None
 
     col_addr, col_station = st.columns([2, 1])
     with col_addr:

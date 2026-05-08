@@ -202,16 +202,20 @@ def calculate_staff_payment(
         break_6h: 6h超の休憩時間（分）
         break_8h: 8h超の休憩時間（分）
         employment_type: "contractor"(業務委託) / "timee"(タイミー) / "fulltime"(正社員)
-        custom_hourly_rate: タイミー等の個別時給。指定時は通常時給を上書き
+        custom_hourly_rate: 個別時給。指定時はイベントの基本時給より優先（v3.8 から全雇用区分で使用可）
 
     タイミー:
         - 個別時給を使用（深夜も同一時給で計算。割増・手当なし）
         - 交通費は支給、フロア/MIX/精勤は対象外
     業務委託・正社員:
         - 通常の計算（時給×時間+深夜+手当+精勤）
+        - v3.8 (2026-05-08): custom_hourly_rate が設定されていれば、
+          基本時給はそれを優先し、深夜時給はイベントの night/hourly 比率を保って自動算出。
+          手当（フロア/MIX/精勤）は通常通り適用。
     """
     daily_results = []
     is_timee = employment_type == "timee"
+    has_custom = bool(custom_hourly_rate and custom_hourly_rate > 0)
 
     for shift in shifts:
         time_range = f"{shift['start']}~{shift['end']}"
@@ -226,7 +230,7 @@ def calculate_staff_payment(
         rate = rates_by_date.get(shift["date"], {})
         is_mix = shift.get("is_mix", False)
 
-        if is_timee and custom_hourly_rate:
+        if is_timee and has_custom:
             # タイミー: 個別時給で計算。深夜割増/手当なし
             daily = calculate_daily_pay(
                 shift_hours,
@@ -238,7 +242,25 @@ def calculate_staff_payment(
                 floor_bonus=0,
                 mix_bonus=0,
             )
+        elif has_custom:
+            # 業務委託・正社員 + 個別時給あり (v3.8):
+            # 基本時給を上書き、深夜時給は通常の night/hourly 比率を保ったままスケール
+            event_hourly = rate.get("hourly", 1500) or 1500
+            event_night = rate.get("night", 1875) or 1875
+            night_ratio = event_night / event_hourly if event_hourly else 1.25
+            scaled_night = int(round(custom_hourly_rate * night_ratio))
+            daily = calculate_daily_pay(
+                shift_hours,
+                hourly_rate=custom_hourly_rate,
+                night_rate=scaled_night,
+                transport=rate.get("transport", 1000),
+                role=role,
+                is_mix=is_mix,
+                floor_bonus=rate.get("floor_bonus", 3000),
+                mix_bonus=rate.get("mix_bonus", 1500),
+            )
         else:
+            # 通常（イベントレート）
             daily = calculate_daily_pay(
                 shift_hours,
                 hourly_rate=rate.get("hourly", 1500),

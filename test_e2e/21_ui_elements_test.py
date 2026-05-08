@@ -75,7 +75,7 @@ at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル 'P1 Staff Manager' を含む",
        _has(at, "P1 Staff Manager"))
-_check("バージョン v3.7 表示", _has(at, "v3.7"))
+_check("バージョン v3.8 表示（最新）", _has(at, "v3.8"))
 _check("ダッシュボード見出し",
        _has(at, "今日のダッシュボード"))
 _check("業務の流れ STEP 1〜4 全部",
@@ -243,6 +243,17 @@ print("\n[14] 94_契約書発行")
 at = AppTest.from_file(str(ROOT / "pages/94_契約書発行.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '契約書発行・管理'", _has(at, "契約書発行"))
+
+
+# ============================================================
+# 14.5. 10_ピット端末（v3.8 新規・管理者ガード対象）
+# ============================================================
+print("\n[14.5] 10_ピット端末（v3.8 NEW）")
+at = AppTest.from_file(str(ROOT / "pages/10_ピット端末.py"), default_timeout=30).run()
+_check("例外なし起動", not at.exception)
+_check("タイトル 'ピット端末'", _has(at, "ピット端末"))
+_check("ADMIN_PASSWORD未設定でも警告で通過（フォールバック）",
+       _has(at, "ADMIN_PASSWORD") or _has(at, "管理者認証") or _has(at, "退勤打刻"))
 
 
 # ============================================================
