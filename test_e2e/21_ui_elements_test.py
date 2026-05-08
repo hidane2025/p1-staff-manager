@@ -75,7 +75,7 @@ at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル 'P1 Staff Manager' を含む",
        _has(at, "P1 Staff Manager"))
-_check("バージョン v3.8 表示（最新）", _has(at, "v3.8"))
+_check("バージョン v3.9 表示（最新）", _has(at, "v3.9"))
 _check("ダッシュボード見出し",
        _has(at, "今日のダッシュボード"))
 _check("業務の流れ STEP 1〜4 全部",
@@ -254,6 +254,19 @@ _check("例外なし起動", not at.exception)
 _check("タイトル 'ピット端末'", _has(at, "ピット端末"))
 _check("ADMIN_PASSWORD未設定でも警告で通過（フォールバック）",
        _has(at, "ADMIN_PASSWORD") or _has(at, "管理者認証") or _has(at, "退勤打刻"))
+
+
+# ============================================================
+# 14.6. 11_個別手当（v3.9 新規・管理者ガード対象）
+# ============================================================
+print("\n[14.6] 11_個別手当（v3.9 NEW）")
+at = AppTest.from_file(str(ROOT / "pages/11_個別手当.py"), default_timeout=30).run()
+_check("例外なし起動", not at.exception)
+_check("タイトル '個別手当'", _has(at, "個別手当"))
+# マイグレ未実行ならエラー表示・実行済みなら手当一覧UIが出る
+_check("マイグレ未実行なら案内 or 実行済みなら追加フォーム",
+       _has(at, "20260508_add_individual_allowances")
+       or _has(at, "新規追加") or _has(at, "手当の種類"))
 
 
 # ============================================================

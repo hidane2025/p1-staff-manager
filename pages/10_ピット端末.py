@@ -170,6 +170,20 @@ kpi_row([
     {"label": "個別時給", "value": custom_rate_display, "detail": "0=イベント基本時給"},
 ])
 
+# Phase 3-I: 個別手当の状態を表示（オフレコ手当は内訳非表示）
+indiv_allowances = db.get_individual_allowances(event_id, target["id"])
+if indiv_allowances:
+    open_count = sum(1 for a in indiv_allowances if not a.get("is_off_record"))
+    off_count = sum(1 for a in indiv_allowances if a.get("is_off_record"))
+    open_total = sum(int(a.get("amount") or 0) for a in indiv_allowances if not a.get("is_off_record"))
+    # オフレコは合計だけ含めるが、ピット端末では金額・件数を伏せる
+    msg_parts = []
+    if open_count:
+        msg_parts.append(f"通常 {open_count}件 (¥{open_total:,})")
+    if off_count:
+        msg_parts.append("オフレコ手当あり（金額は支給時画面で確認）")
+    st.info("🎁 個別手当: " + " ／ ".join(msg_parts))
+
 
 # ============================================================
 # 5. 当日のシフト＋退勤打刻
@@ -178,6 +192,99 @@ section_header(
     "当日の勤怠",
     f"今日の日付: {today}（JST）",
 )
+
+# ============================================================
+# Phase 3-F: 交通費領収書をピット端末でも入力可能に
+# ============================================================
+with st.expander("🚃 交通費の領収書金額を入力（任意）", expanded=False):
+    st.caption(
+        "ディーラーから「電車代の領収書あります」と言われたら、ここで金額を入れて保存。"
+        "イベントの地域別ルール（上限・領収書要否）に従って精算額が自動算出されます。"
+        "後で給与窓口でも調整可能です。"
+    )
+    # 既存の請求があれば表示
+    existing_claims = db.get_transport_claims(event_id) or []
+    existing_for_t = next(
+        (c for c in existing_claims if c.get("staff_id") == target["id"]), None
+    )
+    if existing_for_t:
+        st.info(
+            f"📄 既存の領収書金額: ¥{existing_for_t.get('receipt_amount', 0):,}　"
+            f"／ 精算額: ¥{existing_for_t.get('approved_amount', 0):,}"
+            + (f"　（メモ: {existing_for_t.get('note', '')}）"
+               if existing_for_t.get("note") else "")
+        )
+
+    # 地域ルール取得
+    rules = db.get_transport_rules(event_id) or []
+    region, _pref = db.get_staff_region(target["id"])
+    rule = next((r for r in rules if r.get("region") == region), None)
+    if rule:
+        max_amt = int(rule.get("max_amount") or 0)
+        is_venue = bool(rule.get("is_venue_region"))
+        receipt_required = bool(rule.get("receipt_required"))
+        st.caption(
+            f"📍 適用ルール（地域: {region or '未設定'}）— "
+            f"上限 ¥{max_amt:,}　／ "
+            f"開催地: {'はい' if is_venue else 'いいえ'}　／ "
+            f"領収書: {'必要' if receipt_required else '不要'}"
+        )
+    else:
+        max_amt = 0
+        is_venue = False
+        receipt_required = False
+        if region:
+            st.warning(f"⚠️ 地域 {region} の交通費ルールが未設定です。")
+        else:
+            st.warning("⚠️ このスタッフの住所から地域が判定できていません。")
+
+    with st.form("pit_transport_form"):
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            receipt_amt = st.number_input(
+                "領収書金額（円）",
+                min_value=0, step=100,
+                value=int((existing_for_t or {}).get("receipt_amount") or 0),
+                help="ディーラーから受け取った領収書の合計金額",
+            )
+        with col_t2:
+            has_receipt = st.checkbox(
+                "領収書あり",
+                value=bool((existing_for_t or {}).get("has_receipt", 1)),
+                help="領収書を物理的に受け取ったか",
+            )
+        t_note = st.text_input(
+            "メモ（任意）",
+            value=(existing_for_t or {}).get("note", "") or "",
+            placeholder="例: 帰路分も含む / Suicaチャージのみ",
+        )
+        if st.form_submit_button("💾 交通費を保存", type="secondary"):
+            # 精算額を算出: 開催地ルールなら一律 max_amount、それ以外は min(領収書金額, 上限)
+            if is_venue:
+                approved = max_amt
+            elif receipt_required and not has_receipt:
+                approved = 0  # 領収書必須なのに無し → 精算0
+            else:
+                approved = min(receipt_amt, max_amt) if max_amt > 0 else receipt_amt
+            db.upsert_transport_claim(
+                event_id=event_id, staff_id=target["id"],
+                receipt_amount=int(receipt_amt),
+                approved_amount=int(approved),
+                has_receipt=int(has_receipt),
+                note=t_note,
+            )
+            db.log_action(
+                "pit_transport_claim", "transport_claims", target["id"],
+                detail=f"{target['name_jp']} 領収書¥{receipt_amt:,} → 精算¥{approved:,}",
+                event_id=event_id,
+                performed_by=operator_name(),
+            )
+            st.success(
+                f"💾 交通費を保存しました。"
+                f"領収書 ¥{receipt_amt:,} → 精算額 **¥{approved:,}**"
+            )
+            st.rerun()
+
 
 if not today_shift:
     st.warning(
@@ -224,6 +331,15 @@ else:
                 "✅ この退勤時刻で支払い計算も同時に実行する（推奨）",
                 value=True,
                 help="チェックを外すと打刻だけ行います。給与支払い側で別途計算が必要になります。",
+            )
+            # Phase 3-C (2026-05-08): 承認まで進めるオプション
+            # 計算と同時に承認まで進めれば、給与窓口は「支払いボタン押すだけ」に
+            auto_approve = st.checkbox(
+                "🟡 計算と同時に承認まで進める（給与窓口は支払いだけで済む）",
+                value=False,
+                help="ピット側で確認できているなら ON 推奨。"
+                "金額が大きい・疑わしいケースは OFF にして給与窓口での承認を残す。"
+                "事後的に承認取消も可能（精算レポートから）。",
             )
             submitted = st.form_submit_button("🔴 退勤＋支払い確定", type="primary")
 
@@ -278,6 +394,19 @@ else:
                             "is_mix": bool(s.get("is_mix", 0)),
                         })
                     total_event_days = len({s["date"] for s in latest_shifts})
+                    # Phase 3-I: 個別手当を計算に含める（オフレコ含む）
+                    individual_allowances = db.get_individual_allowances(
+                        event_id, target["id"]
+                    )
+                    # 交通費が領収書ベースで保存されていれば、それを transport_override に
+                    transport_override = None
+                    claim = next(
+                        (c for c in (db.get_transport_claims(event_id) or [])
+                         if c.get("staff_id") == target["id"]),
+                        None,
+                    )
+                    if claim is not None:
+                        transport_override = int(claim.get("approved_amount") or 0)
                     payment = calculate_staff_payment(
                         staff_id=target["id"],
                         name=target["name_jp"],
@@ -289,6 +418,8 @@ else:
                         break_8h=int(event.get("break_minutes_8h") or 0),
                         employment_type=target.get("employment_type") or "contractor",
                         custom_hourly_rate=target.get("custom_hourly_rate"),
+                        transport_override=transport_override,
+                        individual_allowances=individual_allowances,
                     )
                     db.save_payment(
                         event_id=event_id,
@@ -312,6 +443,24 @@ else:
                         f"💰 支払い計算も実行しました。"
                         f"合計 **¥{payment.total_amount:,}**（{payment.days_worked}日勤務）"
                     )
+
+                    # Phase 3-C: 承認まで進める
+                    if auto_approve:
+                        # 直近の payment レコードを取得して承認
+                        client_q = db.get_client().table("p1_payments").select(
+                            "id, status").eq("event_id", event_id).eq(
+                            "staff_id", target["id"]).execute().data
+                        if client_q:
+                            payment_id = client_q[0]["id"]
+                            db.approve_payment(
+                                payment_id,
+                                approved_by=f"pit:{operator_name()}",
+                                event_id=event_id,
+                            )
+                            st.success(
+                                "🟡 ピット側で承認まで完了しました。"
+                                "給与窓口は「支払いボタンを押すだけ」で OK です。"
+                            )
                 st.rerun()
 
 

@@ -176,8 +176,16 @@ with c3c:
 
 # --- ④ 渡す ---
 st.markdown('**STEP 4 — 渡す**')
-c4a, c4b, _ = st.columns(3)
+c4a, c4b, c4c = st.columns(3)
 with c4a:
+    action_card(
+        "STEP 4",
+        "🎁",
+        "個別手当",
+        "言語手当・人材確保手当・リーダー手当 等を個別付与。オフレコ対応で給与窓口側のみ閲覧可。",
+        "pages/11_個別手当.py",
+    )
+with c4b:
     action_card(
         "STEP 4",
         "📄",
@@ -185,7 +193,7 @@ with c4a:
         "承認済み支払いを一括PDF化＋スタッフ向けDL用URLを発行。",
         "pages/91_領収書発行.py",
     )
-with c4b:
+with c4c:
     action_card(
         "STEP 4",
         "✍️",
@@ -266,7 +274,7 @@ st.markdown(
     '<div style="margin-top: 48px; padding-top: 16px; '
     'border-top: 1px solid #E2E8F0; '
     'color: #94A3B8; font-size: 11.5px; text-align: center;">'
-    'P1 Staff Manager v3.8 · 株式会社ヒダネ'
+    'P1 Staff Manager v3.9 · 株式会社ヒダネ'
     '</div>',
     unsafe_allow_html=True,
 )

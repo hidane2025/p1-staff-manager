@@ -218,6 +218,59 @@ _check("個別時給=0 と個別時給なしは同等",
 
 
 # ============================================================
+# 6.6 Phase 3-I (2026-05-08): 個別手当の合算
+# ============================================================
+print("\n[6.6] calculator: 個別手当の合算 — v3.9")
+
+# 基本ケース
+contractor_with_allowance = calculate_staff_payment(
+    6, "業務委託（手当付き）", "Dealer", shifts, rates, 6,
+    employment_type="contractor",
+    individual_allowances=[
+        {"amount": 3000, "allowance_type": "language", "label": "中国語"},
+        {"amount": 5000, "allowance_type": "leadership", "label": "シフトリーダー"},
+    ],
+)
+_check("個別手当の合計が StaffPayment に出る",
+       contractor_with_allowance.individual_allowance_total == 8000,
+       f"got ¥{contractor_with_allowance.individual_allowance_total}")
+_check("個別手当が total_amount に加算される",
+       contractor_with_allowance.total_amount == contractor_default.total_amount + 8000,
+       f"got ¥{contractor_with_allowance.total_amount} vs default ¥{contractor_default.total_amount}+8000")
+
+# None / 空リスト の挙動
+_check("individual_allowances=None で従来通り",
+       calculate_staff_payment(
+           7, "なし", "Dealer", shifts, rates, 6,
+           employment_type="contractor", individual_allowances=None,
+       ).individual_allowance_total == 0)
+_check("individual_allowances=[] で 0",
+       calculate_staff_payment(
+           8, "空", "Dealer", shifts, rates, 6,
+           employment_type="contractor", individual_allowances=[],
+       ).individual_allowance_total == 0)
+
+# 不正値の安全処理
+_check("amount=None の項目は無視",
+       calculate_staff_payment(
+           9, "壊れた", "Dealer", shifts, rates, 6,
+           employment_type="contractor",
+           individual_allowances=[{"amount": None}, {"amount": 1000}],
+       ).individual_allowance_total == 1000)
+
+# オフレコ手当も合計には入る（is_off_record は表示用フラグなので計算には影響なし）
+_check("オフレコ手当も計算には含まれる（表示で伏せるだけ）",
+       calculate_staff_payment(
+           10, "オフレコ", "Dealer", shifts, rates, 6,
+           employment_type="contractor",
+           individual_allowances=[
+               {"amount": 5000, "is_off_record": 1},
+               {"amount": 3000, "is_off_record": 0},
+           ],
+       ).individual_allowance_total == 8000)
+
+
+# ============================================================
 # 7. denomination: 紙幣分解
 # ============================================================
 print("\n[7] denomination: 紙幣・硬貨内訳")

@@ -53,6 +53,8 @@ class StaffPayment:
     attendance_bonus: int
     total_amount: int
     daily_breakdown: list
+    # Phase 3-I (2026-05-08): 個別手当の小計（任意・既存コード非破壊）
+    individual_allowance_total: int = 0
 
 
 def parse_time_to_minutes(time_str: str) -> Optional[int]:
@@ -193,6 +195,7 @@ def calculate_staff_payment(
     employment_type: str = "contractor",
     custom_hourly_rate: Optional[int] = None,
     transport_override: Optional[int] = None,
+    individual_allowances: Optional[list] = None,
 ) -> StaffPayment:
     """スタッフ1人の全日程支払いを計算
 
@@ -294,7 +297,17 @@ def calculate_staff_payment(
     if transport_override is not None:
         transport_total = transport_override
 
-    total = base_pay + night_pay + transport_total + floor_total + mix_total + att_bonus
+    # Phase 3-I: 個別手当の合算
+    indiv_total = 0
+    if individual_allowances:
+        for a in individual_allowances:
+            try:
+                indiv_total += int(a.get("amount") or 0)
+            except (TypeError, ValueError):
+                pass
+
+    total = (base_pay + night_pay + transport_total + floor_total
+             + mix_total + att_bonus + indiv_total)
 
     return StaffPayment(
         staff_id=staff_id,
@@ -312,4 +325,5 @@ def calculate_staff_payment(
         attendance_bonus=att_bonus,
         total_amount=total,
         daily_breakdown=daily_results,
+        individual_allowance_total=indiv_total,
     )

@@ -660,6 +660,92 @@ def mark_receipt_received(payment_id, event_id=None):
     log_action("receipt_received", "payments", payment_id, "", event_id)
 
 
+# === Individual Allowances (Phase 3-I, 2026-05-08) ===
+
+def get_individual_allowances(event_id: int, staff_id: Optional[int] = None) -> list:
+    """個別手当を取得
+
+    Args:
+        event_id: 対象イベント
+        staff_id: 指定すればそのスタッフのみ。Noneなら全員分
+
+    Returns:
+        [{id, event_id, staff_id, allowance_type, label, amount,
+          is_off_record, note, created_at, created_by}, ...]
+
+    マイグレ未実行時は空リストを返す（後方互換）。
+    """
+    from utils import db_schema
+    if not db_schema.has_column("p1_staff_event_allowances", "id"):
+        return []
+    q = get_client().table("p1_staff_event_allowances").select(
+        "*").eq("event_id", event_id)
+    if staff_id is not None:
+        q = q.eq("staff_id", staff_id)
+    return q.execute().data or []
+
+
+def add_individual_allowance(event_id: int, staff_id: int,
+                              allowance_type: str, amount: int,
+                              label: str = "", is_off_record: int = 0,
+                              note: str = "", created_by: str = "system") -> Optional[int]:
+    """個別手当を1件追加
+
+    Args:
+        allowance_type: "language" / "recruitment" / "leadership" / "other"
+        amount: 円単位
+        is_off_record: 1 なら ピット端末で内訳非表示
+    Returns:
+        作成された ID（マイグレ未実行時は None）
+    """
+    from utils import db_schema
+    if not db_schema.has_column("p1_staff_event_allowances", "id"):
+        return None
+    r = get_client().table("p1_staff_event_allowances").insert({
+        "event_id": event_id, "staff_id": staff_id,
+        "allowance_type": allowance_type,
+        "label": label or _allowance_default_label(allowance_type),
+        "amount": int(amount),
+        "is_off_record": int(is_off_record),
+        "note": note,
+        "created_by": created_by,
+    }).execute()
+    aid = r.data[0]["id"] if r.data else None
+    if aid:
+        log_action(
+            "add_individual_allowance", "allowances", aid,
+            detail=f"{allowance_type} ¥{amount:,}"
+            + (" (オフレコ)" if is_off_record else ""),
+            event_id=event_id, performed_by=created_by,
+        )
+    return aid
+
+
+def remove_individual_allowance(allowance_id: int, event_id: Optional[int] = None,
+                                 performed_by: str = "system") -> bool:
+    """個別手当を1件削除"""
+    from utils import db_schema
+    if not db_schema.has_column("p1_staff_event_allowances", "id"):
+        return False
+    get_client().table("p1_staff_event_allowances").delete().eq(
+        "id", allowance_id).execute()
+    log_action(
+        "remove_individual_allowance", "allowances", allowance_id,
+        detail="削除", event_id=event_id, performed_by=performed_by,
+    )
+    return True
+
+
+def _allowance_default_label(allowance_type: str) -> str:
+    """allowance_type からデフォルトラベル"""
+    return {
+        "language": "言語手当",
+        "recruitment": "人材確保手当",
+        "leadership": "リーダー手当",
+        "other": "個別手当",
+    }.get(allowance_type, "個別手当")
+
+
 # === Petty Cash ===
 
 def add_petty_cash(event_id, date, description, amount, requester, approver="",

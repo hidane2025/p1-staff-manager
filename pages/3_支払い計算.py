@@ -15,11 +15,18 @@ from utils.event_selector import select_event
 st.set_page_config(page_title="支払い計算", page_icon="💰", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header, flow_bar
+from utils.admin_guard import require_admin, admin_logout_button, operator_name
 apply_global_style()
 hide_staff_only_pages()
+require_admin(page_name="支払い計算")
+admin_logout_button()
 
 page_header("💰 支払い計算", "時給×時間＋深夜＋手当＋精勤を自動計算。承認すると封筒リスト・領収書に進めます。")
 flow_bar(active="calc", done=["setup", "input"])
+
+# PII閲覧監査ログ
+db.log_action("view_payment_calc", "payments",
+              detail="page=支払い計算", performed_by=operator_name())
 
 # --- イベント選択（全ページ共通・session_state共有） ---
 event_id = select_event(db.get_all_events(), "イベント選択")
@@ -122,6 +129,8 @@ if st.button("🔄 支払い額を計算", type="primary"):
         # 新交通費システム（あれば）
         days = len(data["shifts"])
         transport_override, _msg = _calc_transport(data["staff_info"], days)
+        # Phase 3-I (2026-05-08): 個別手当を計算に含める
+        indiv_allowances = db.get_individual_allowances(event_id, staff_id)
         payment = calculate_staff_payment(
             staff_id=staff_id, name=data["name"], role=data["role"],
             shifts=data["shifts"], rates_by_date=rates_by_date,
@@ -130,6 +139,7 @@ if st.button("🔄 支払い額を計算", type="primary"):
             employment_type=data["employment_type"],
             custom_hourly_rate=data["custom_hourly_rate"],
             transport_override=transport_override,
+            individual_allowances=indiv_allowances,
         )
         results.append(payment)
         db.save_payment(
