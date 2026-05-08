@@ -6,9 +6,9 @@
   "start_date": "2026-MM-DD",
   "end_date": "2026-MM-DD",
 
-  "_hint_break": "休憩控除（分）。6時間超で break_minutes_6h、8時間超で break_minutes_8h を控除。デフォルトは45/60。",
-  "break_minutes_6h": 45,
-  "break_minutes_8h": 60,
+  "_hint_break": "休憩控除（分）。Pacific 運用では 0/0 = 控除なし。実労働時間で全額計算。45/60 にすると 6h超で45分・8h超で60分を控除。",
+  "break_minutes_6h": 0,
+  "break_minutes_8h": 0,
 
   "_hint_template": "rate_template_id はメモ用ラベル。p1_standard / usop_standard / minimum_aichi を推奨。",
   "rate_template_id": "p1_standard",

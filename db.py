@@ -310,7 +310,7 @@ def get_staff_region(staff_id: int):
 
 # === Event CRUD ===
 
-def create_event(name, venue, start_date, end_date, break_minutes_6h=45, break_minutes_8h=60,
+def create_event(name, venue, start_date, end_date, break_minutes_6h=0, break_minutes_8h=0,
                  prefecture=None, rate_template_id=""):
     """イベントを新規作成
 
@@ -318,8 +318,9 @@ def create_event(name, venue, start_date, end_date, break_minutes_6h=45, break_m
         name: イベント名
         venue: 会場名
         start_date / end_date: YYYY-MM-DD
-        break_minutes_6h: 6時間超勤務時の休憩控除（分）
-        break_minutes_8h: 8時間超勤務時の休憩控除（分）
+        break_minutes_6h: 6時間超勤務時の休憩控除（分）。デフォルト 0 = 控除なし
+            （Pacific 運用方針: 過去から休憩控除は実施していない）
+        break_minutes_8h: 8時間超勤務時の休憩控除（分）。デフォルト 0 = 控除なし
         prefecture: 開催地都道府県（地域別交通費の起点）。マイグレ未実行時は無視
         rate_template_id: レートプリセット識別子（例 "p1_standard"）。マイグレ未実行時は無視
 

@@ -4,8 +4,8 @@
   "venue_prefecture": "京都府",
   "start_date": "2026-08-13",
   "end_date": "2026-08-17",
-  "break_minutes_6h": 45,
-  "break_minutes_8h": 60,
+  "break_minutes_6h": 0,
+  "break_minutes_8h": 0,
   "rate_template_id": "p1_standard",
   "dates": [
     "2026-08-13",

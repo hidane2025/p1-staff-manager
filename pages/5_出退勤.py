@@ -113,16 +113,19 @@ with col_bulk2:
         st.rerun()
 
 with col_bulk3:
+    # 全体リセット（このボタンは「全員」が対象。1人だけ取り消したいときは
+    # ② 例外を記録 → ↩️ 個別リセット を使用してください）
     if "confirm_reset" not in st.session_state:
         st.session_state["confirm_reset"] = False
     if not st.session_state["confirm_reset"]:
-        if st.button("🔄 リセット", use_container_width=True):
+        if st.button("🔄 全員リセット", use_container_width=True,
+                      help="この日の全員の出退勤記録を未確定に戻します。1人だけ取り消したいときは下の『↩️ 個別リセット』タブを使ってください。"):
             st.session_state["confirm_reset"] = True
             st.rerun()
     else:
-        st.error("⚠️ 全員の出退勤データが消えます")
+        st.error("⚠️ この日の全員の出退勤データが未確定に戻ります")
         col_yes, col_no = st.columns(2)
-        if col_yes.button("はい、リセットする", type="primary"):
+        if col_yes.button("はい、全員リセットする", type="primary"):
             client = db.get_client()
             for s in shifts:
                 client.table("p1_shifts").update({
@@ -144,8 +147,8 @@ st.divider()
 st.subheader("② 例外を記録（来てない人・時間が違う人だけ）")
 
 # タブで操作を分ける（凍結退勤を最初＝最終日の主要操作）
-tab_freeze, tab_absent, tab_late, tab_overtime, tab_early = st.tabs([
-    "🧊 凍結退勤（一括）", "❌ 欠勤", "⏰ 遅刻", "⏩ 延長（残業）", "⏪ 早退"
+tab_freeze, tab_absent, tab_late, tab_overtime, tab_early, tab_reset = st.tabs([
+    "🧊 凍結退勤（一括）", "❌ 欠勤", "⏰ 遅刻", "⏩ 延長（残業）", "⏪ 早退", "↩️ 個別リセット"
 ])
 
 # スタッフ選択肢を生成
@@ -270,6 +273,83 @@ with tab_freeze:
                 st.rerun()
             else:
                 st.warning("スタッフを選択してください")
+
+with tab_reset:
+    st.markdown(
+        "**入力ミスや誤操作の取り消しに使います。** "
+        "選んだ1名だけ、出勤・退勤・欠勤の記録を取り消して **未確定（予定通り）** に戻します。"
+    )
+    # 例外マーク（実時刻記録 or 欠勤）がついているスタッフだけ抽出
+    has_exception = [
+        s for s in shifts
+        if s.get("actual_start") or s.get("actual_end") or s["status"] == "absent"
+    ]
+    if not has_exception:
+        st.info("取り消せる例外記録がついているスタッフはまだいません。")
+    else:
+        # 表示ラベル: NO. 名前 (役職) — 状態：実時刻
+        STATUS_LABEL = {
+            "scheduled": "未確定",
+            "checked_in": "出勤中",
+            "checked_out": "退勤済",
+            "absent": "欠勤",
+        }
+        reset_options = {}
+        for s in has_exception:
+            actual = ""
+            if s.get("actual_start") or s.get("actual_end"):
+                actual = f" [{s.get('actual_start', '—')}〜{s.get('actual_end', '—')}]"
+            label = (
+                f"NO.{s['no']} {s['name_jp']} ({s['role']}) — "
+                f"{STATUS_LABEL.get(s['status'], s['status'])}{actual}"
+            )
+            reset_options[label] = s
+
+        reset_target_label = st.selectbox(
+            "リセットするスタッフ",
+            list(reset_options.keys()),
+            key="reset_target_select",
+        )
+        if reset_target_label:
+            target = reset_options[reset_target_label]
+            st.warning(
+                f"**{target['name_jp']}** の出退勤記録を取り消します。"
+                "既に支払い計算が行われている場合、その支払いを **未承認** に戻して再計算を促します。"
+                "（支払済みの場合は保護されます）"
+            )
+            if st.button(
+                "↩️ この人だけリセット",
+                type="primary",
+                key="exec_reset_individual",
+            ):
+                client = db.get_client()
+                # シフト記録を未確定に戻す
+                client.table("p1_shifts").update({
+                    "actual_start": None,
+                    "actual_end": None,
+                    "status": "scheduled",
+                }).eq("id", target["id"]).execute()
+                # 影響する支払いを未承認に戻す（支払済みは保護される）
+                payment_reset = db.reset_payment_to_pending(
+                    event_id, target["staff_id"],
+                    reason="個別リセット（出退勤）",
+                )
+                # 監査ログ
+                try:
+                    db.log_action(
+                        "reset_attendance_individual", "shifts", target["id"],
+                        detail=f"{target['name_jp']} (NO.{target['no']}) {selected_date}",
+                        event_id=event_id,
+                    )
+                except Exception:
+                    pass
+                st.success(f"✅ {target['name_jp']} の出退勤記録をリセットしました")
+                if payment_reset:
+                    st.info(
+                        "💡 該当の支払いを未承認に戻しました。"
+                        "「💰 支払い計算」ページで再計算してください。"
+                    )
+                st.rerun()
 
 # ============================================================
 # セクション2-B: 当日スタッフ追加

@@ -10,8 +10,8 @@
   "venue_prefecture": "京都府",
   "start_date": "2026-08-13",
   "end_date": "2026-08-17",
-  "break_minutes_6h": 45,
-  "break_minutes_8h": 60,
+  "break_minutes_6h": 0,
+  "break_minutes_8h": 0,
   "rate_template_id": "p1_standard",
   "dates": ["2026-08-13", "2026-08-14", ...],
   "rates": {
@@ -230,8 +230,9 @@ def apply_template(tmpl: dict, *, mode: str = "create",
     prefecture = tmpl.get("venue_prefecture") or tmpl.get("prefecture")
     start_date = tmpl["start_date"]
     end_date = tmpl["end_date"]
-    break_6h = int(tmpl.get("break_minutes_6h", 45))
-    break_8h = int(tmpl.get("break_minutes_8h", 60))
+    # 休憩控除デフォルト 0/0 = 控除なし（Pacific 運用方針）
+    break_6h = int(tmpl.get("break_minutes_6h", 0))
+    break_8h = int(tmpl.get("break_minutes_8h", 0))
     rate_template_id = tmpl.get("rate_template_id", "")
 
     # 1. event 本体
@@ -319,8 +320,8 @@ def export_event_to_template(event_id: int) -> dict:
         "venue_prefecture": ev.get("prefecture") or "",
         "start_date": ev.get("start_date"),
         "end_date": ev.get("end_date"),
-        "break_minutes_6h": int(ev.get("break_minutes_6h") or 45),
-        "break_minutes_8h": int(ev.get("break_minutes_8h") or 60),
+        "break_minutes_6h": int(ev.get("break_minutes_6h") or 0),
+        "break_minutes_8h": int(ev.get("break_minutes_8h") or 0),
         "rate_template_id": ev.get("rate_template_id") or "",
         "dates": daterange(ev["start_date"], ev["end_date"]),
         "rates": rates,

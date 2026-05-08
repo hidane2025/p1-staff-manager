@@ -125,7 +125,12 @@ with tab_import:
                 f"📆 **期間:** {tmpl.get('start_date', '—')} 〜 "
                 f"{tmpl.get('end_date', '—')}"
             )
-            st.write(f"☕ **休憩:** 6h超 {tmpl.get('break_minutes_6h', 45)}分 / 8h超 {tmpl.get('break_minutes_8h', 60)}分")
+            br6 = int(tmpl.get('break_minutes_6h', 0) or 0)
+            br8 = int(tmpl.get('break_minutes_8h', 0) or 0)
+            if br6 == 0 and br8 == 0:
+                st.write("☕ **休憩控除:** なし（実労働時間で計算）")
+            else:
+                st.write(f"☕ **休憩控除:** 6h超 {br6}分 / 8h超 {br8}分")
             st.write(f"🏷 **テンプレID:** `{tmpl.get('rate_template_id', '—')}`")
 
         rates = tmpl.get("rates") or {}
@@ -196,8 +201,14 @@ with tab_create:
         with col2:
             c_start = st.date_input("開始日")
             c_end = st.date_input("終了日")
-            c_break6 = st.number_input("6時間超休憩（分）", value=45, step=5)
-            c_break8 = st.number_input("8時間超休憩（分）", value=60, step=5)
+            c_break6 = st.number_input(
+                "6時間超休憩（分）", value=0, step=5, min_value=0,
+                help="0 = 休憩控除なし（推奨・Pacific運用方針）。ここを変えると、6時間以上勤務した人の支払額からこの分数の休憩時間が控除されます。",
+            )
+            c_break8 = st.number_input(
+                "8時間超休憩（分）", value=0, step=5, min_value=0,
+                help="0 = 休憩控除なし（推奨）。8時間以上勤務した人にだけ適用され、6時間超の値は無視されます。",
+            )
 
         st.markdown("---")
         st.markdown("**レートプリセット**")
@@ -306,10 +317,27 @@ with tab_edit:
                     e_start = st.text_input("開始日 YYYY-MM-DD", value=ev.get("start_date", ""))
                     e_end = st.text_input("終了日 YYYY-MM-DD", value=ev.get("end_date", ""))
                     e_break6 = st.number_input(
-                        "6h超休憩（分）", value=int(ev.get("break_minutes_6h") or 45), step=5
+                        "6h超休憩（分）",
+                        value=int(ev.get("break_minutes_6h") or 0),
+                        step=5, min_value=0,
+                        help="0 = 休憩控除なし（推奨・Pacific運用方針）",
                     )
                     e_break8 = st.number_input(
-                        "8h超休憩（分）", value=int(ev.get("break_minutes_8h") or 60), step=5
+                        "8h超休憩（分）",
+                        value=int(ev.get("break_minutes_8h") or 0),
+                        step=5, min_value=0,
+                        help="0 = 休憩控除なし（推奨）",
+                    )
+                # 既存イベントで控除値が入っている場合は警告
+                _b6 = int(ev.get("break_minutes_6h") or 0)
+                _b8 = int(ev.get("break_minutes_8h") or 0)
+                if _b6 > 0 or _b8 > 0:
+                    st.warning(
+                        f"⚠️ このイベントは休憩控除が設定されています "
+                        f"（6h超 {_b6}分 / 8h超 {_b8}分）。"
+                        "Pacific の運用では休憩控除を実施していないため、"
+                        "0/0 に変更し、影響を受けた支払いを再計算することをおすすめします。",
+                        icon="☕",
                     )
                 if st.form_submit_button("💾 基本情報を保存"):
                     db.update_event_meta(

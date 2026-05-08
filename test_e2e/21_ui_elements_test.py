@@ -156,6 +156,27 @@ print("\n[7] 5_出退勤")
 at = AppTest.from_file(str(ROOT / "pages/5_出退勤.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '出退勤'", _has(at, "出退勤"))
+# Phase 1-2 (2026-05-08): 個別リセットタブが追加されていること
+tab_count_5 = _count_tabs(at)
+_check(f"タブが6個に増えた（旧5: 凍結/欠勤/遅刻/延長/早退 + 新1: 個別リセット）tabs={tab_count_5}",
+       tab_count_5 >= 6, f"got {tab_count_5}")
+_check("『個別リセット』タブの中身が描画されている",
+       _has(at, "入力ミスや誤操作の取り消し") or _has(at, "1名だけ"))
+def _button_labels(at) -> str:
+    """全ボタンの label を1つの文字列に連結（検索用）"""
+    parts = []
+    try:
+        for b in at.button:
+            v = getattr(b, "label", None)
+            if v:
+                parts.append(str(v))
+    except Exception:
+        pass
+    return " | ".join(parts)
+
+
+_check("『全員リセット』ボタンが個別と分離（リネーム済）",
+       "全員リセット" in _button_labels(at))
 
 
 # ============================================================

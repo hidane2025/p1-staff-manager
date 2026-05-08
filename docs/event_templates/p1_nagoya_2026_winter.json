@@ -4,8 +4,8 @@
   "venue_prefecture": "愛知県",
   "start_date": "2025-12-29",
   "end_date": "2026-01-04",
-  "break_minutes_6h": 45,
-  "break_minutes_8h": 60,
+  "break_minutes_6h": 0,
+  "break_minutes_8h": 0,
   "rate_template_id": "p1_standard",
   "dates": [
     "2025-12-29",

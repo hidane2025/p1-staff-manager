@@ -67,6 +67,14 @@ _check("ちょうど6時間は休憩0",
 _check("カスタム値も反映",
        calculate_break_minutes(7 * 60, break_6h=30, break_8h=45) == 30)
 
+# Phase 1-1 (2026-05-08): 休憩控除OFF（0/0）の動作確認
+_check("Pacific 運用: break_6h=0 で 7時間勤務でも控除なし",
+       calculate_break_minutes(7 * 60, break_6h=0, break_8h=60) == 0)
+_check("Pacific 運用: break_8h=0 で 9時間勤務でも控除なし",
+       calculate_break_minutes(9 * 60, break_6h=45, break_8h=0) == 0)
+_check("両方0なら全勤務で控除0（10時間勤務）",
+       calculate_break_minutes(10 * 60, break_6h=0, break_8h=0) == 0)
+
 
 # ============================================================
 # 3. calculator: 1日分の計算（深夜手当）
@@ -80,6 +88,18 @@ _check("10時間勤務の通常時間 = 8h", sh.regular_minutes == 8 * 60,
 _check("10時間勤務の深夜時間 = 1h", sh.night_minutes == 60,
        f"got {sh.night_minutes}")
 _check("10時間勤務の休憩 = 60分", sh.break_minutes == 60)
+
+# Phase 1-1 (2026-05-08): 休憩控除OFF（Pacific 運用）
+sh_no_break = calculate_shift_hours(780, 1380, "2025-12-29",
+                                     break_6h=0, break_8h=0)
+_check("休憩控除OFF: 通常時間 = 9h（13:00〜22:00）",
+       sh_no_break.regular_minutes == 9 * 60,
+       f"got {sh_no_break.regular_minutes}")
+_check("休憩控除OFF: 深夜時間 = 1h（22:00〜23:00）",
+       sh_no_break.night_minutes == 60)
+_check("休憩控除OFF: 休憩 = 0分", sh_no_break.break_minutes == 0)
+_check("休憩控除OFF: 合計勤務 = 10h（控除なし）",
+       sh_no_break.regular_minutes + sh_no_break.night_minutes == 10 * 60)
 
 
 # ============================================================
