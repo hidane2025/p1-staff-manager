@@ -17,11 +17,20 @@ from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import (
     apply_global_style, page_header, flow_bar, section_header, kpi_row, pill,
 )
+from utils.admin_guard import require_admin, admin_logout_button, operator_name
 apply_global_style()
 hide_staff_only_pages()
+# Codex P2 fix #6 (2026-05-09): 封筒明細にオフレコ手当を含む個別手当の合計が
+# 印字されるため、給与窓口担当の管理者ログインを必須化。
+require_admin(page_name="封筒リスト")
+admin_logout_button()
 
 page_header("✉️ 封筒リスト", "支払い計算の結果から、封筒ラベル・紙幣内訳を一括出力します。最終日の現金準備に使います。")
 flow_bar(active="calc", done=["setup", "input"])
+
+# PII閲覧監査ログ
+db.log_action("view_envelope_list", "payments",
+              detail="page=封筒リスト", performed_by=operator_name())
 
 # --- イベント選択（全ページ共通） ---
 st.markdown('<div class="p1-no-print">', unsafe_allow_html=True)
