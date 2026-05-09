@@ -233,15 +233,19 @@ def calculate_staff_payment(
         rate = rates_by_date.get(shift["date"], {})
         is_mix = shift.get("is_mix", False)
 
-        if is_timee and has_custom:
-            # タイミー: 個別時給で計算。深夜割増/手当なし
+        if is_timee:
+            # Codex P2 fix (2026-05-09): タイミーは custom_hourly_rate の有無に
+            # 関わらず常に「タイミー特殊扱い（深夜割増なし・手当なし）」にする。
+            # 個別時給があればそれ、無ければイベント基本時給を使う。
+            timee_rate = (custom_hourly_rate
+                          if has_custom else rate.get("hourly", 1500))
             daily = calculate_daily_pay(
                 shift_hours,
-                hourly_rate=custom_hourly_rate,
-                night_rate=custom_hourly_rate,  # 深夜も同じ時給
+                hourly_rate=timee_rate,
+                night_rate=timee_rate,  # 深夜も同じ時給（割増なし）
                 transport=rate.get("transport", 1000),
-                role="Timee",  # フロア手当対象外にする
-                is_mix=False,  # MIX手当対象外
+                role="Timee",            # フロア手当対象外
+                is_mix=False,            # MIX手当対象外
                 floor_bonus=0,
                 mix_bonus=0,
             )

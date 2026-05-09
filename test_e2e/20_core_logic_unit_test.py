@@ -271,6 +271,50 @@ _check("オフレコ手当も計算には含まれる（表示で伏せるだけ
 
 
 # ============================================================
+# 6.7 Codex P1/P2 fix tests (2026-05-09)
+# ============================================================
+print("\n[6.7] Codex P1/P2 修正の回帰防止テスト")
+
+# --- P1: 部分参加スタッフの精勤手当 ---
+# 6日大会で 4日勤務 → ¥6,000（全勤判定にしない）
+partial_shifts = [
+    {"date": f"2025-12-{29 + i}", "start": "13:00", "end": "23:00", "is_mix": False}
+    for i in range(4)  # 4日のみ
+]
+partial_rates = {
+    f"2025-12-{29 + i}": {"hourly": 1500, "night": 1875, "transport": 1000,
+                           "floor_bonus": 3000, "mix_bonus": 1500}
+    for i in range(4)
+}
+partial_pay = calculate_staff_payment(
+    100, "部分参加", "Dealer", partial_shifts, partial_rates,
+    total_event_days=6,  # ← イベント全体の日数（修正後の正しい呼び方）
+    employment_type="contractor",
+)
+_check("Codex P1: 6日大会×4日勤務 → 精勤 ¥6,000（全勤¥10,000誤付与しない）",
+       partial_pay.attendance_bonus == 6000,
+       f"got ¥{partial_pay.attendance_bonus}")
+
+# --- P2: タイミー fallback（個別時給ナシ） ---
+timee_no_custom = calculate_staff_payment(
+    101, "タイミー個別ナシ", "Dealer", shifts, rates, 6,
+    employment_type="timee",
+    custom_hourly_rate=None,  # 個別時給ナシ
+)
+_check("Codex P2: タイミー個別ナシでもフロア手当ゼロ",
+       timee_no_custom.floor_bonus_total == 0)
+_check("Codex P2: タイミー個別ナシでもMIX手当ゼロ",
+       timee_no_custom.mix_bonus_total == 0)
+_check("Codex P2: タイミー個別ナシでも精勤手当ゼロ",
+       timee_no_custom.attendance_bonus == 0)
+# 深夜割増なし: 通常時給で深夜時間も計算される（イベント時給1500を使う）
+# 1日10h勤務 - 1h休憩 = 9h で 9*1500*2日 = ¥27,000 になる（base_pay+night_pay）
+_check("Codex P2: タイミー個別ナシ → 深夜割増なし（イベント時給で通し計算）",
+       timee_no_custom.base_pay + timee_no_custom.night_pay == 9 * 1500 * 2,
+       f"got ¥{timee_no_custom.base_pay + timee_no_custom.night_pay}")
+
+
+# ============================================================
 # 7. denomination: 紙幣分解
 # ============================================================
 print("\n[7] denomination: 紙幣・硬貨内訳")

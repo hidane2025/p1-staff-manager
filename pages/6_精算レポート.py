@@ -67,6 +67,8 @@ breakdown = {
     "フロア手当": sum(p["floor_bonus_total"] for p in payments),
     "MIX手当": sum(p["mix_bonus_total"] for p in payments),
     "精勤手当": sum(p["attendance_bonus"] for p in payments),
+    # Codex P2 fix #3: 個別手当を内訳に追加（マイグレ未実行時は 0 のまま）
+    "個別手当": sum(int(p.get("individual_allowance_total") or 0) for p in payments),
 }
 
 breakdown_df = pd.DataFrame([

@@ -141,6 +141,8 @@ if st.button("🔄 支払い額を計算", type="primary"):
             transport_override=transport_override,
             individual_allowances=indiv_allowances,
         )
+        # Codex P2 fix #3: 個別手当合計をDBに保存（合計と内訳の整合性確保）
+        _allowance_subtotal = getattr(payment, "individual_allowance_total", 0)
         results.append(payment)
         db.save_payment(
             event_id=event_id, staff_id=staff_id,
@@ -151,6 +153,7 @@ if st.button("🔄 支払い額を計算", type="primary"):
             attendance_bonus=payment.attendance_bonus,
             break_deduction=payment.break_deduction,
             total_amount=payment.total_amount,
+            individual_allowance_total=_allowance_subtotal,
         )
 
     msg = f"{len(results)}名の支払い額を計算・保存しました"

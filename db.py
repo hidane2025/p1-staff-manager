@@ -554,20 +554,34 @@ def set_shift_mix(shift_id, is_mix):
 
 def save_payment(event_id, staff_id, base_pay, night_pay, transport_total,
                  floor_bonus_total, mix_bonus_total, attendance_bonus,
-                 total_amount, break_deduction=0, adjustment=0, adjustment_note=""):
+                 total_amount, break_deduction=0, adjustment=0, adjustment_note="",
+                 individual_allowance_total: int = 0):
+    """支払いレコードを保存（既存の pending/approved は削除して上書き、paid は保護）
+
+    Codex P2 fix #3 (2026-05-09): individual_allowance_total を追加
+    （個別手当の合計を保存して、内訳と合計の整合性を確保）
+    マイグレ未実行時は db_schema.has_column チェックでスキップする後方互換あり。
+    """
+    from utils import db_schema
     client = get_client()
     existing = client.table("p1_payments").select("id, status").eq("event_id", event_id).eq("staff_id", staff_id).execute()
     if existing.data and existing.data[0]["status"] == "paid":
         return  # 支払済みは上書きしない
     if existing.data:
         client.table("p1_payments").delete().eq("id", existing.data[0]["id"]).execute()
-    client.table("p1_payments").insert({
+    payload = {
         "event_id": event_id, "staff_id": staff_id,
         "base_pay": base_pay, "night_pay": night_pay, "transport_total": transport_total,
         "floor_bonus_total": floor_bonus_total, "mix_bonus_total": mix_bonus_total,
         "attendance_bonus": attendance_bonus, "break_deduction": break_deduction,
-        "adjustment": adjustment, "adjustment_note": adjustment_note, "total_amount": total_amount
-    }).execute()
+        "adjustment": adjustment, "adjustment_note": adjustment_note,
+        "total_amount": total_amount,
+    }
+    if individual_allowance_total and db_schema.has_column(
+        "p1_payments", "individual_allowance_total"
+    ):
+        payload["individual_allowance_total"] = int(individual_allowance_total)
+    client.table("p1_payments").insert(payload).execute()
     log_action("calculate_payment", "payments", staff_id, f"合計¥{total_amount:,}", event_id)
 
 

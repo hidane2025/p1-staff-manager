@@ -122,6 +122,11 @@ st.markdown(
 
 for e in envelope_data:
     with st.expander(f"NO.{e['no']} {e['name_jp']}（{e['role']}）— ¥{e['adjusted_amount']:,}"):
+        # Codex P2 fix #3: 個別手当を内訳に表示（合計との整合性）
+        _allow_total = int(e.get("individual_allowance_total") or 0)
+        _allow_row = (
+            f"| 個別手当 | ¥{_allow_total:,} |\n" if _allow_total else ""
+        )
         st.markdown(f"""
 **━━━ P1 支払明細 ━━━**
 
@@ -133,7 +138,7 @@ for e in envelope_data:
 | フロア手当 | ¥{e['floor_bonus_total']:,} |
 | MIX手当 | ¥{e['mix_bonus_total']:,} |
 | 精勤手当 | ¥{e['attendance_bonus']:,} |
-| **合計** | **¥{e['adjusted_amount']:,}** |
+{_allow_row}| **合計** | **¥{e['adjusted_amount']:,}** |
 
 紙幣: {format_denomination(e['denomination'].bills)}
 """)

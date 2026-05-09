@@ -393,7 +393,12 @@ else:
                             "end": end,
                             "is_mix": bool(s.get("is_mix", 0)),
                         })
-                    total_event_days = len({s["date"] for s in latest_shifts})
+                    # Codex P1 fix (2026-05-09): イベント全体の日数を使う
+                    # （staff のシフト日数を使うと部分参加でも全勤扱いになり、
+                    # 精勤手当 ¥10,000 が誤付与される）
+                    total_event_days = len(rates_rows) if rates_rows else len(
+                        {s["date"] for s in latest_shifts}
+                    )
                     # Phase 3-I: 個別手当を計算に含める（オフレコ含む）
                     individual_allowances = db.get_individual_allowances(
                         event_id, target["id"]
@@ -432,6 +437,10 @@ else:
                         attendance_bonus=payment.attendance_bonus,
                         total_amount=payment.total_amount,
                         break_deduction=payment.break_deduction,
+                        # Codex P2 fix #3: 個別手当合計を保存
+                        individual_allowance_total=getattr(
+                            payment, "individual_allowance_total", 0
+                        ),
                     )
                     db.log_action(
                         "pit_payment_calc", "payments", target["id"],
@@ -451,16 +460,33 @@ else:
                             "id, status").eq("event_id", event_id).eq(
                             "staff_id", target["id"]).execute().data
                         if client_q:
-                            payment_id = client_q[0]["id"]
-                            db.approve_payment(
-                                payment_id,
-                                approved_by=f"pit:{operator_name()}",
-                                event_id=event_id,
-                            )
-                            st.success(
-                                "🟡 ピット側で承認まで完了しました。"
-                                "給与窓口は「支払いボタンを押すだけ」で OK です。"
-                            )
+                            payment_row = client_q[0]
+                            payment_id = payment_row["id"]
+                            current_status = payment_row.get("status")
+                            # Codex P2 fix #4 (2026-05-09): paid を approved に
+                            # 退行させないようガード（save_payment は paid 保護するが
+                            # approve_payment は別経路なので独立してチェックする）
+                            if current_status == "paid":
+                                st.warning(
+                                    "⚠️ この支払いは既に **支払済み** です。"
+                                    "ピット側からの自動承認はスキップしました。"
+                                    "金額の不一致があれば「📊 精算レポート」で確認してください。"
+                                )
+                            elif current_status == "approved":
+                                st.info(
+                                    "ℹ️ この支払いは既に承認済みでした。"
+                                    "再承認の必要はありません。"
+                                )
+                            else:
+                                db.approve_payment(
+                                    payment_id,
+                                    approved_by=f"pit:{operator_name()}",
+                                    event_id=event_id,
+                                )
+                                st.success(
+                                    "🟡 ピット側で承認まで完了しました。"
+                                    "給与窓口は「支払いボタンを押すだけ」で OK です。"
+                                )
                 st.rerun()
 
 
