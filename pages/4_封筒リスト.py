@@ -25,22 +25,58 @@ hide_staff_only_pages()
 require_admin(page_name="封筒リスト")
 admin_logout_button()
 
-page_header("✉️ 封筒リスト", "支払い計算の結果から、封筒ラベル・紙幣内訳を一括出力します。最終日の現金準備に使います。")
-flow_bar(active="calc", done=["setup", "input"])
+# Codex P2 #17/#18 fix (2026-05-09): 印刷モード判定を最上部で行う
+_print_mode_pre = st.session_state.get("envelope_print_mode", False)
 
-# PII閲覧監査ログ
+# 印刷モード時は @media print で印刷カード以外を強制非表示にする CSS を注入
+# （:has() で「印刷カードを含まないブロック」を狙って display:none）
+if _print_mode_pre:
+    st.markdown(
+        '<style>'
+        '@media print {'
+        '  /* Streamlit のメインコンテナ内、印刷カードを含まないブロックを非表示 */'
+        '  [data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] > div:not(:has(.p1-envelope-print)),'
+        '  [data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stToolbar"] {'
+        '    display: none !important;'
+        '  }'
+        '  /* 印刷カード自体は確実に表示 */'
+        '  .p1-envelope-print { display: block !important; visibility: visible !important; }'
+        '}'
+        '</style>',
+        unsafe_allow_html=True,
+    )
+
+# 印刷モード時はヘッダー・フローバー・監査ログUIをサーバ側でもスキップ
+if not _print_mode_pre:
+    page_header("✉️ 封筒リスト", "支払い計算の結果から、封筒ラベル・紙幣内訳を一括出力します。最終日の現金準備に使います。")
+    flow_bar(active="calc", done=["setup", "input"])
+
+# PII閲覧監査ログ（印刷モード切替に関わらず常に記録）
 db.log_action("view_envelope_list", "payments",
-              detail="page=封筒リスト", performed_by=operator_name())
+              detail="page=封筒リスト" + (" [print_mode]" if _print_mode_pre else ""),
+              performed_by=operator_name())
 
-# --- イベント選択（全ページ共通） ---
+# --- イベント選択（印刷モード時もサーバ側で event_id 取得は必要だが UI は出さない） ---
 st.markdown('<div class="p1-no-print">', unsafe_allow_html=True)
-event_id = select_event(db.get_all_events(), "イベント選択")
+if _print_mode_pre:
+    # session_state から既存の event_id を取得。無ければ最新イベント
+    _events_list = db.get_all_events() or []
+    event_id = (
+        st.session_state.get("selected_event_id")
+        or (_events_list[0]["id"] if _events_list else None)
+    )
+    if not event_id:
+        st.error("印刷モードですが、対象イベントが特定できません。"
+                 "印刷モードをOFFにしてイベントを選び直してください。")
+        st.stop()
+else:
+    event_id = select_event(db.get_all_events(), "イベント選択")
 
 # --- 設定 ---
-# Codex P2 #17 fix (2026-05-09): 印刷モード ON 時は、サーバ側でそもそも
+# Codex P2 #17/#18 fix (2026-05-09): 印刷モード ON 時は、サーバ側でそもそも
 # 通常UI（出力設定・サマリ・テーブル等）を描画しない。これで visibility:hidden
 # で空白ページが残る問題を構造から解消する。
-_print_mode_pre = st.session_state.get("envelope_print_mode", False)
+# （_print_mode_pre は冒頭で定義済み）
 
 if not _print_mode_pre:
     section_header("出力設定", "端数処理と並び順を選んでください。")
