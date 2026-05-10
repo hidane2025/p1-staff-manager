@@ -261,6 +261,11 @@ _check("深夜跨ぎ対応の日付セレクタが追加されている",
        "シフト日付（深夜跨ぎ時はここで前日を選択）" in _pit_src)
 _check("交通費の日数倍計算が追加されている",
        "max_amt * days_worked" in _pit_src or "max_amt × 勤務日数" in _pit_src)
+# Codex 6回目 P2 #13 (2026-05-09): 古い no-show を誤って優先しない
+_check("前日の判定が「厳密に前日」(_prev_date)に絞り込まれている",
+       "_prev_date" in _pit_src and "timedelta(days=1)" in _pit_src)
+_check("前日かつ深夜跨ぎシフトのみ優先（_is_overnight_shift関数）",
+       "_is_overnight_shift" in _pit_src)
 
 
 # ============================================================

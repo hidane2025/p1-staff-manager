@@ -142,35 +142,49 @@ if not all_event_shifts:
     )
     st.stop()
 
-# Codex 4回目 P2 #9 + 5回目 P2 #12 fix (2026-05-09): 深夜跨ぎ対応
+# Codex 4回目 P2 #9 + 5回目 P2 #12 + 6回目 P2 #13 fix (2026-05-09): 深夜跨ぎ対応
 # 25:00 / 29:00 で終わるシフトの退勤打刻は 0:00 を超えてから来ることが多い。
 # 優先順位を以下に統一:
 #   1. checked_in 状態のシフト（出勤中＝必ずこの人を退勤させたい）
-#   2. 前日の scheduled シフト（未check-inの深夜跨ぎケース）
+#   2. 「厳密に前日」かつ「深夜跨ぎ planned_end ≥ 24:00」の scheduled シフト
+#      → 古い no-show（2日以上前の scheduled）を誤って優先しない
 #   3. 当日の scheduled シフト
 #   4. 最新のシフト（全部確定済みのケース）
 _now_date = datetime.now(_JST).strftime("%Y-%m-%d")
+_prev_date = (datetime.now(_JST).date() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def _is_overnight_shift(s: dict) -> bool:
+    """planned_end が 24:00 以降のシフト = 深夜跨ぎシフト判定"""
+    end = (s.get("planned_end") or "").strip()
+    try:
+        h = int(end.split(":")[0])
+        return h >= 24
+    except (ValueError, IndexError):
+        return False
+
 
 # 1. checked_in 最優先
 _checked_in = [s for s in all_event_shifts if s.get("status") == "checked_in"]
 
-# 2. scheduled の中から「前日 < 現在日」を優先、無ければ「現在日」
+# 2. 「厳密に前日 + 深夜跨ぎ」の scheduled シフトのみ
 _scheduled = [s for s in all_event_shifts if s.get("status") == "scheduled"]
-_yesterday_scheduled = [s for s in _scheduled if s.get("date") < _now_date]
+_yesterday_overnight = [
+    s for s in _scheduled
+    if s.get("date") == _prev_date and _is_overnight_shift(s)
+]
 _today_scheduled = [s for s in _scheduled if s.get("date") == _now_date]
 
 if _checked_in:
     # 出勤中があれば最も古い（深夜跨ぎなら前日）を優先
     _default_shift = sorted(_checked_in, key=lambda s: s.get("date", ""))[0]
-elif _yesterday_scheduled:
-    # 未check-inで前日のシフトが残っている → 深夜跨ぎ運用と推定
-    _default_shift = sorted(
-        _yesterday_scheduled, key=lambda s: s.get("date", ""), reverse=True
-    )[0]
+elif _yesterday_overnight:
+    # 未check-in＋前日深夜シフト → 深夜跨ぎ運用と推定
+    _default_shift = _yesterday_overnight[0]
 elif _today_scheduled:
     _default_shift = _today_scheduled[0]
 else:
-    # 全シフト確定済み → 現在日付 or 最新日のシフトを表示
+    # 全シフト確定済み or 古い no-show のみ → 現在日付 or 最新日のシフトを表示
     _default_shift = next(
         (s for s in all_event_shifts if s.get("date") == _now_date),
         all_event_shifts[-1],
