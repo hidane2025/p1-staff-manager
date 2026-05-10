@@ -142,23 +142,33 @@ if not all_event_shifts:
     )
     st.stop()
 
-# Codex 4回目 P2 #9 fix (2026-05-09): 深夜跨ぎ対応
+# Codex 4回目 P2 #9 + 5回目 P2 #12 fix (2026-05-09): 深夜跨ぎ対応
 # 25:00 / 29:00 で終わるシフトの退勤打刻は 0:00 を超えてから来ることが多い。
-# 「現在日付」ではなく「未確定 or 出勤中シフトを優先」にして対応。
-# 操作者は必要なら別の日付に切り替え可能。
+# 優先順位を以下に統一:
+#   1. checked_in 状態のシフト（出勤中＝必ずこの人を退勤させたい）
+#   2. 前日の scheduled シフト（未check-inの深夜跨ぎケース）
+#   3. 当日の scheduled シフト
+#   4. 最新のシフト（全部確定済みのケース）
 _now_date = datetime.now(_JST).strftime("%Y-%m-%d")
 
-# 開いているシフト（scheduled / checked_in）を優先
-_open_shifts = [
-    s for s in all_event_shifts
-    if s.get("status") in ("scheduled", "checked_in")
-]
-# 当日かつ開いているシフトがあればそれを最優先、なければ最も近い未確定/出勤中
-if _open_shifts:
-    _today_open = next(
-        (s for s in _open_shifts if s.get("date") == _now_date), None
-    )
-    _default_shift = _today_open or _open_shifts[0]
+# 1. checked_in 最優先
+_checked_in = [s for s in all_event_shifts if s.get("status") == "checked_in"]
+
+# 2. scheduled の中から「前日 < 現在日」を優先、無ければ「現在日」
+_scheduled = [s for s in all_event_shifts if s.get("status") == "scheduled"]
+_yesterday_scheduled = [s for s in _scheduled if s.get("date") < _now_date]
+_today_scheduled = [s for s in _scheduled if s.get("date") == _now_date]
+
+if _checked_in:
+    # 出勤中があれば最も古い（深夜跨ぎなら前日）を優先
+    _default_shift = sorted(_checked_in, key=lambda s: s.get("date", ""))[0]
+elif _yesterday_scheduled:
+    # 未check-inで前日のシフトが残っている → 深夜跨ぎ運用と推定
+    _default_shift = sorted(
+        _yesterday_scheduled, key=lambda s: s.get("date", ""), reverse=True
+    )[0]
+elif _today_scheduled:
+    _default_shift = _today_scheduled[0]
 else:
     # 全シフト確定済み → 現在日付 or 最新日のシフトを表示
     _default_shift = next(

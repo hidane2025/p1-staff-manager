@@ -54,9 +54,20 @@ DROP POLICY IF EXISTS "p1_allowances_service_role_all" ON p1_staff_event_allowan
 CREATE POLICY "p1_allowances_deny_anon" ON p1_staff_event_allowances
     FOR ALL TO anon USING (false) WITH CHECK (false);
 
--- service_role / authenticated は全許可（管理画面はこちらを使う）
+-- Codex 5回目 P1 #11 fix (2026-05-09): authenticated ロールには許可しない。
+-- Streamlit の require_admin は Supabase RLS のクレームではないため、
+-- authenticated を許可すると、招待ユーザーが REST API 直叩きで
+-- オフレコ手当を読み書きできてしまう。
+-- バックエンド経路（service_role key）のみを許可する。
 CREATE POLICY "p1_allowances_service_role_all" ON p1_staff_event_allowances
-    FOR ALL TO service_role, authenticated USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- 将来 Supabase Auth で「admin claim 付き JWT」を使う運用に切り替える場合は
+-- 以下のような形で claim ベースのポリシーに置換する:
+-- CREATE POLICY "p1_allowances_admin_claim" ON p1_staff_event_allowances
+--     FOR ALL TO authenticated
+--     USING ((auth.jwt() ->> 'role') = 'admin')
+--     WITH CHECK ((auth.jwt() ->> 'role') = 'admin');
 
 -- 確認用クエリ:
 --   SELECT policyname, cmd, roles, qual FROM pg_policies

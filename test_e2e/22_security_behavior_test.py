@@ -139,6 +139,15 @@ _check("anon ロールへの ALL FOR 制限が含まれる",
        "TO anon" in allowance_sql)
 _check("service_role 許可ポリシーが含まれる",
        "service_role" in allowance_sql)
+# Codex 5回目 P1 #11 (2026-05-09): authenticated は許可しない
+import re
+_active_policy_block = re.search(
+    r'CREATE POLICY "p1_allowances_service_role_all"[^;]*;',
+    allowance_sql, re.DOTALL,
+)
+_check("有効ポリシーに authenticated は含まれない（コメント例除く）",
+       _active_policy_block is not None
+       and "authenticated" not in _active_policy_block.group(0))
 
 
 # ============================================================
