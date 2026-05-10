@@ -37,12 +37,29 @@ st.markdown('<div class="p1-no-print">', unsafe_allow_html=True)
 event_id = select_event(db.get_all_events(), "イベント選択")
 
 # --- 設定 ---
-section_header("出力設定", "端数処理と並び順を選んでください。")
-col_s1, col_s2 = st.columns(2)
-with col_s1:
-    rounding = st.selectbox("端数処理", ["なし（そのまま）", "100円単位で切り上げ", "500円単位で切り上げ", "1000円単位で切り上げ"])
-with col_s2:
-    sort_by = st.selectbox("並び順", ["役職 → NO.", "名前順", "金額順（高い順）"])
+# Codex P2 #17 fix (2026-05-09): 印刷モード ON 時は、サーバ側でそもそも
+# 通常UI（出力設定・サマリ・テーブル等）を描画しない。これで visibility:hidden
+# で空白ページが残る問題を構造から解消する。
+_print_mode_pre = st.session_state.get("envelope_print_mode", False)
+
+if not _print_mode_pre:
+    section_header("出力設定", "端数処理と並び順を選んでください。")
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        rounding = st.selectbox("端数処理", ["なし（そのまま）", "100円単位で切り上げ", "500円単位で切り上げ", "1000円単位で切り上げ"])
+    with col_s2:
+        sort_by = st.selectbox("並び順", ["役職 → NO.", "名前順", "金額順（高い順）"])
+else:
+    # 印刷モード時は前回設定値をsession_stateから引き継ぐ（デフォルト値で再構築）
+    rounding = st.session_state.get("_envelope_rounding", "なし（そのまま）")
+    sort_by = st.session_state.get("_envelope_sort", "役職 → NO.")
+    st.info(
+        "🖨 **印刷モード中** - 通常UIは非表示です。"
+        "Cmd+P で印刷／PDF保存。終了時はチェックボックスをOFFに。"
+    )
+# 設定値を session_state に記憶（印刷モードに切り替わった後も同じ並び順を保持）
+st.session_state["_envelope_rounding"] = rounding
+st.session_state["_envelope_sort"] = sort_by
 st.markdown('</div>', unsafe_allow_html=True)
 
 rounding_unit = {"なし（そのまま）": 0, "100円単位で切り上げ": 100,
@@ -73,90 +90,73 @@ if sort_by == "名前順":
 elif sort_by == "金額順（高い順）":
     envelope_data.sort(key=lambda x: x["adjusted_amount"], reverse=True)
 
-# --- サマリー ---
-section_header("銀行で用意する現金", "下記の金額・枚数を、最終日の朝までに準備します。")
-
+# --- サマリー＋封筒リスト（印刷モード時は描画しない） ---
 total_amount = sum(e["adjusted_amount"] for e in envelope_data)
 all_amounts = [e["adjusted_amount"] for e in envelope_data]
 total_denoms = calculate_total_denomination(all_amounts)
 
-# サマリーKPI
-summary_items = [
-    {"label": "総額", "value": f"¥{total_amount:,}", "accent": True},
-    {"label": "封筒数", "value": f"{len(envelope_data)}枚"},
-]
-if rounding_unit > 0:
-    original_total = sum(p["total_amount"] for p in payments)
-    summary_items.append({
-        "label": "端数切り上げ分",
-        "value": f"¥{total_amount - original_total:,}",
-        "detail": f"単位: {rounding_unit}円",
-    })
-kpi_row(summary_items)
+if not _print_mode_pre:
+    section_header("銀行で用意する現金", "下記の金額・枚数を、最終日の朝までに準備します。")
 
-# 紙幣内訳（compact行）
-st.markdown("**紙幣・硬貨の必要数**")
-denom_items = sorted(total_denoms.items(), reverse=True)
-denom_cols = st.columns(min(len(denom_items), 6))
-for i, (denom, count) in enumerate(denom_items):
-    with denom_cols[i % len(denom_cols)]:
-        st.metric(DENOM_LABELS.get(denom, f"¥{denom}"), f"{count}枚")
+    summary_items = [
+        {"label": "総額", "value": f"¥{total_amount:,}", "accent": True},
+        {"label": "封筒数", "value": f"{len(envelope_data)}枚"},
+    ]
+    if rounding_unit > 0:
+        original_total = sum(p["total_amount"] for p in payments)
+        summary_items.append({
+            "label": "端数切り上げ分",
+            "value": f"¥{total_amount - original_total:,}",
+            "detail": f"単位: {rounding_unit}円",
+        })
+    kpi_row(summary_items)
 
-# --- 封筒リスト ---
-section_header("封筒リスト", f"{len(envelope_data)}件分の封筒情報。CSVダウンロードで明細を社内共有可能。")
+    # 紙幣内訳（compact行）
+    st.markdown("**紙幣・硬貨の必要数**")
+    denom_items = sorted(total_denoms.items(), reverse=True)
+    denom_cols = st.columns(min(len(denom_items), 6))
+    for i, (denom, count) in enumerate(denom_items):
+        with denom_cols[i % len(denom_cols)]:
+            st.metric(DENOM_LABELS.get(denom, f"¥{denom}"), f"{count}枚")
 
-display_data = []
-for e in envelope_data:
-    display_data.append({
-        "NO.": e["no"],
-        "名前": e["name_jp"],
-        "役職": e["role"],
-        "支払額": f"¥{e['adjusted_amount']:,}",
-        "紙幣内訳": format_denomination(e["denomination"].bills),
-        "支払状態": "支払済" if e["status"] == "paid" else "未払い",
-        "領収書": "受領済" if e["receipt_received"] else "未受領",
-    })
+    # --- 封筒リスト ---
+    section_header("封筒リスト", f"{len(envelope_data)}件分の封筒情報。CSVダウンロードで明細を社内共有可能。")
 
-df = pd.DataFrame(display_data)
-st.dataframe(df, use_container_width=True, hide_index=True)
+    display_data = []
+    for e in envelope_data:
+        display_data.append({
+            "NO.": e["no"],
+            "名前": e["name_jp"],
+            "役職": e["role"],
+            "支払額": f"¥{e['adjusted_amount']:,}",
+            "紙幣内訳": format_denomination(e["denomination"].bills),
+            "支払状態": "支払済" if e["status"] == "paid" else "未払い",
+            "領収書": "受領済" if e["receipt_received"] else "未受領",
+        })
+
+    df = pd.DataFrame(display_data)
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
 # --- 封筒ラベル印刷用 ---
-section_header("封筒ラベル（印刷用）",
-               "ブラウザの印刷機能（Cmd/Ctrl+P）で各明細をそのまま印刷できます。"
-               "1人=1ページの縦長明細で出力されます。")
+if not _print_mode_pre:
+    section_header("封筒ラベル（印刷用）",
+                   "ブラウザの印刷機能（Cmd/Ctrl+P）で各明細をそのまま印刷できます。"
+                   "1人=1ページの縦長明細で出力されます。")
 
-# UX D2 (2026-05-09): 印刷モード切替トグル
-# ON にすると expander を展開せず、印刷専用レイアウトを直接表示する。
+# UX D2 (2026-05-09): 印刷モード切替トグル（OFF→ON で再描画して通常UIを除く）
+# Codex P2 #17 fix: トグル ON 時はトグル自体だけ常時描画、他はサーバ側で制御
 print_mode = st.checkbox(
     "🖨 印刷モードを表示（1人=1ページ）",
-    value=False,
+    value=_print_mode_pre,
     key="envelope_print_mode",
-    help="ON にすると、画面上に印刷用の明細が全員分展開されます。"
-    "そのまま Cmd+P → PDF保存 で配布資料が完成します。",
+    help="ON にすると、画面上に印刷用の明細が全員分だけ表示されます。"
+    "そのまま Cmd+P → PDF保存 で配布資料が完成します。"
+    "通常UIに戻すにはチェックを外してください。",
 )
 
-st.markdown(
-    '<p class="p1-no-print">'
-    'ヒント: <kbd>Cmd</kbd>+<kbd>P</kbd> → 印刷モードON → 「PDF保存」で全員分のPDF1冊が出ます。'
-    '</p>',
-    unsafe_allow_html=True,
-)
-
-if print_mode:
-    # Codex P2 #15 fix (2026-05-09): 印刷モード時は @media print で
-    # .p1-envelope-print 以外を全て非表示にする。これで Cmd+P 時に
-    # 1人=1ページが厳密に守られる。
-    st.markdown(
-        '<style>'
-        '@media print { '
-        '  body * { visibility: hidden !important; } '
-        '  .p1-envelope-print, .p1-envelope-print * { visibility: visible !important; } '
-        '  .p1-envelope-print { position: relative; left: 0; top: 0; width: 100%; } '
-        '}'
-        '</style>',
-        unsafe_allow_html=True,
-    )
+if _print_mode_pre:
     # UX D2: 印刷専用レイアウト（1人=1ページ縦長）
+    # サーバ側で通常UIを描画していないため、Cmd+Pで純粋に印刷カードのみ印字される
     for e in envelope_data:
         _allow_total = int(e.get("individual_allowance_total") or 0)
         _allow_row = (
@@ -211,29 +211,30 @@ else:
 紙幣: {format_denomination(e['denomination'].bills)}
 """)
 
-# --- CSV出力 ---
-st.markdown('<div class="p1-no-print">', unsafe_allow_html=True)
-section_header("CSV出力", "経理共有用のフル明細を1ファイルでダウンロードできます。")
+# --- CSV出力（印刷モード時は描画しない） ---
+if not _print_mode_pre:
+    st.markdown('<div class="p1-no-print">', unsafe_allow_html=True)
+    section_header("CSV出力", "経理共有用のフル明細を1ファイルでダウンロードできます。")
 
-csv_data = []
-for e in envelope_data:
-    csv_data.append({
-        "NO": e["no"],
-        "名前_JP": e["name_jp"],
-        "名前_EN": e.get("name_en", ""),
-        "役職": e["role"],
-        "基本給": e["base_pay"],
-        "深夜手当": e["night_pay"],
-        "交通費": e["transport_total"],
-        "フロア手当": e["floor_bonus_total"],
-        "MIX手当": e["mix_bonus_total"],
-        "精勤手当": e["attendance_bonus"],
-        "合計": e["adjusted_amount"],
-        "支払状態": e["status"],
-        "領収書": "受領済" if e["receipt_received"] else "未受領",
-    })
+    csv_data = []
+    for e in envelope_data:
+        csv_data.append({
+            "NO": e["no"],
+            "名前_JP": e["name_jp"],
+            "名前_EN": e.get("name_en", ""),
+            "役職": e["role"],
+            "基本給": e["base_pay"],
+            "深夜手当": e["night_pay"],
+            "交通費": e["transport_total"],
+            "フロア手当": e["floor_bonus_total"],
+            "MIX手当": e["mix_bonus_total"],
+            "精勤手当": e["attendance_bonus"],
+            "合計": e["adjusted_amount"],
+            "支払状態": e["status"],
+            "領収書": "受領済" if e["receipt_received"] else "未受領",
+        })
 
-csv_df = pd.DataFrame(csv_data)
-csv_bytes = csv_df.to_csv(index=False).encode("utf-8-sig")
-st.download_button("📥 CSVダウンロード", csv_bytes, "p1_envelope_list.csv", "text/csv")
-st.markdown('</div>', unsafe_allow_html=True)
+    csv_df = pd.DataFrame(csv_data)
+    csv_bytes = csv_df.to_csv(index=False).encode("utf-8-sig")
+    st.download_button("📥 CSVダウンロード", csv_bytes, "p1_envelope_list.csv", "text/csv")
+    st.markdown('</div>', unsafe_allow_html=True)
