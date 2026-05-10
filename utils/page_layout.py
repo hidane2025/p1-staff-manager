@@ -57,6 +57,75 @@ def section_header(title: str, help_text: str = "") -> None:
 
 
 # ============================================================
+# Progress Checklist (UX A: ホーム To-Do)
+# ============================================================
+def progress_checklist(items: list, show_progress_bar: bool = True) -> None:
+    """ホーム画面の「今日のTo-Do」風 進捗チェックリスト
+
+    Args:
+        items: [{"label": str, "status": "done"|"warn"|"pending"|"todo",
+                 "detail": str (任意), "page": str (任意/st.page_link用)}, ...]
+        show_progress_bar: 上部に進捗バーを表示するか
+
+    status:
+      - "done":    ✅ 完了
+      - "warn":    🟡 残作業あり（オレンジ）
+      - "pending": ⏳ 待ち（青）
+      - "todo":    ⬜ 未着手（グレー）
+    """
+    if not items:
+        return
+
+    done = sum(1 for i in items if i.get("status") == "done")
+    total = len(items)
+
+    if show_progress_bar:
+        pct = int((done / total) * 100) if total else 0
+        st.markdown(
+            f'<div class="p1-todo-progress-wrap">'
+            f'<div class="p1-todo-progress-label">'
+            f'今日の進捗: <strong>{done}/{total}</strong>'
+            f'</div>'
+            f'<div class="p1-todo-progress-bar">'
+            f'<div class="p1-todo-progress-fill" style="width:{pct}%;"></div>'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    # アイテム描画
+    icon_map = {
+        "done": "✅", "warn": "🟡", "pending": "⏳", "todo": "⬜",
+    }
+    cls_map = {
+        "done": "p1-todo-done", "warn": "p1-todo-warn",
+        "pending": "p1-todo-pending", "todo": "p1-todo-todo",
+    }
+    for i, item in enumerate(items, 1):
+        status = item.get("status", "todo")
+        icon = icon_map.get(status, "⬜")
+        cls = cls_map.get(status, "p1-todo-todo")
+        label = _escape(item.get("label", ""))
+        detail = _escape(item.get("detail", ""))
+        detail_html = (
+            f'<span class="p1-todo-detail">{detail}</span>' if detail else ""
+        )
+        st.markdown(
+            f'<div class="p1-todo-row {cls}">'
+            f'<span class="p1-todo-icon">{icon}</span>'
+            f'<span class="p1-todo-num">{i}.</span>'
+            f'<span class="p1-todo-label">{label}</span>'
+            f'{detail_html}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        # ページリンクは Streamlit ネイティブ（HTML <a> ではnav動かない）
+        page = item.get("page")
+        if page:
+            st.page_link(page, label=item.get("page_label", "→ このタスクを開く"))
+
+
+# ============================================================
 # Workflow flow bar (4-step)
 # ============================================================
 FLOW_STEPS = [

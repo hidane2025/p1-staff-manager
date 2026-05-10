@@ -75,9 +75,12 @@ at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル 'P1 Staff Manager' を含む",
        _has(at, "P1 Staff Manager"))
-_check("バージョン v3.9 表示（最新）", _has(at, "v3.9"))
-_check("ダッシュボード見出し",
-       _has(at, "今日のダッシュボード"))
+_check("バージョン v3.10 表示（最新）", _has(at, "v3.10"))
+_check("ダッシュボード見出し（v3.10: TODOリスト or 数字でみる現状）",
+       _has(at, "今日のTo-Do") or _has(at, "数字でみる現状"))
+# UX A (2026-05-09): 進捗チェックリストが描画されている
+_check("UX A: ホームに進捗チェックリストが導入されている",
+       _has(at, "今日のTo-Do") or _has(at, "今日の進捗"))
 _check("業務の流れ STEP 1〜4 全部",
        _has(at, "STEP 1", "STEP 2", "STEP 3", "STEP 4"))
 _check("4段階「作る/入れる/計算/渡す」",

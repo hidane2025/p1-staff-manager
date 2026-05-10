@@ -331,24 +331,176 @@ button[kind="secondary"]:hover, button[data-testid="baseButton-secondary"]:hover
 /* Expander: subtle */
 .streamlit-expanderHeader {{ font-weight: 600; }}
 
+/* ============ Progress Checklist (UX A: ホームTo-Do) ============ */
+.p1-todo-progress-wrap {{
+    background: {c["surface"]};
+    border: 1px solid {c["border"]};
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin: 8px 0 16px;
+}}
+.p1-todo-progress-label {{
+    font-size: 13px;
+    color: {c["text_secondary"]};
+    margin-bottom: 8px;
+}}
+.p1-todo-progress-label strong {{
+    color: {c["primary_dark"]};
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+}}
+.p1-todo-progress-bar {{
+    height: 8px;
+    background: {c["surface_muted"]};
+    border-radius: 9999px;
+    overflow: hidden;
+}}
+.p1-todo-progress-fill {{
+    height: 100%;
+    background: linear-gradient(90deg, {c["primary"]} 0%, {c["primary_dark"]} 100%);
+    border-radius: 9999px;
+    transition: width 0.4s ease;
+}}
+.p1-todo-row {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    margin: 4px 0;
+    background: {c["surface"]};
+    border: 1px solid {c["border"]};
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+}}
+.p1-todo-icon {{ font-size: 18px; flex-shrink: 0; }}
+.p1-todo-num {{
+    color: {c["text_muted"]};
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    min-width: 22px;
+}}
+.p1-todo-label {{
+    color: {c["text"]};
+    font-weight: 600;
+    flex: 1;
+}}
+.p1-todo-detail {{
+    color: {c["text_secondary"]};
+    font-size: 12.5px;
+    margin-left: 8px;
+}}
+.p1-todo-done {{
+    background: {c["success_bg"]};
+    border-color: #BBF7D0;
+}}
+.p1-todo-done .p1-todo-label {{ color: {c["success"]}; }}
+.p1-todo-warn {{
+    background: {c["warning_bg"]};
+    border-color: #FDE68A;
+}}
+.p1-todo-warn .p1-todo-label {{ color: #92400E; }}
+.p1-todo-pending {{
+    background: {c["info_bg"]};
+    border-color: #BAE6FD;
+}}
+.p1-todo-pending .p1-todo-label {{ color: #075985; }}
+.p1-todo-todo {{
+    opacity: 0.75;
+}}
+
+/* ============ Pit Terminal Big Buttons (UX B) ============ */
+.p1-pit-summary {{
+    background: linear-gradient(135deg, {c["primary_light"]} 0%, {c["surface"]} 60%);
+    border: 2px solid {c["primary"]};
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin: 4px 0 16px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}}
+.p1-pit-summary-name {{
+    font-size: 22px;
+    font-weight: 700;
+    color: {c["text"]};
+    letter-spacing: -0.02em;
+}}
+.p1-pit-summary-meta {{
+    font-size: 13px;
+    color: {c["text_secondary"]};
+    margin-top: 4px;
+}}
+.p1-pit-confirmed {{
+    background: linear-gradient(135deg, #DCFCE7 0%, #86EFAC 100%);
+    border: 3px solid {c["success"]};
+    border-radius: 16px;
+    padding: 28px 24px;
+    text-align: center;
+    margin: 16px 0;
+}}
+.p1-pit-confirmed-title {{
+    font-size: 14px;
+    color: {c["success"]};
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}}
+.p1-pit-confirmed-amount {{
+    font-size: 38px;
+    font-weight: 800;
+    color: #065F46;
+    line-height: 1.1;
+    margin: 10px 0;
+    font-variant-numeric: tabular-nums;
+}}
+.p1-pit-confirmed-name {{
+    font-size: 18px;
+    color: #065F46;
+    font-weight: 600;
+}}
+
 /* ============ iPad / Tablet ============ */
 @media (max-width: 1280px) {{
     .p1-card {{ padding: 14px 16px 10px; }}
     .p1-kpi-value {{ font-size: 24px; }}
 }}
 @media (max-width: 1024px) {{
-    button {{ min-height: 44px; }}
+    /* iPad では1カラム化＋大ボタン化 */
+    button {{ min-height: 56px !important; font-size: 16px !important; }}
+    [data-baseweb="select"] {{ min-height: 56px !important; }}
+    [data-baseweb="input"] input {{ min-height: 48px !important; font-size: 16px; }}
+    [data-testid="stNumberInput"] input {{ min-height: 48px !important; font-size: 18px; }}
+
     .p1-flow-step {{ padding: 9px 6px 8px; font-size: 12px; }}
     .p1-flow-step .step-num {{ font-size: 10px; }}
     .p1-metric-row {{ gap: 16px; padding: 12px 14px; }}
     .p1-metric-item .value {{ font-size: 16px; }}
+
+    /* ピット端末用：iPad では超大ボタン */
+    .p1-pit-summary-name {{ font-size: 24px; }}
+    .p1-pit-summary-meta {{ font-size: 14px; }}
+    .p1-pit-confirmed-amount {{ font-size: 44px; }}
+
+    /* TODOリストもタップしやすく */
+    .p1-todo-row {{ padding: 14px 16px; font-size: 15px; }}
+}}
+
+/* スマホ: 完全1カラム + フォーム要素を縦積み */
+@media (max-width: 640px) {{
+    .stApp {{ padding: 8px !important; }}
+    [data-testid="column"] {{ width: 100% !important; flex: 100% !important; }}
+    .p1-flow {{ display: none; }}  /* フローバーは非表示（スペース取り過ぎ） */
+    .p1-pit-summary-name {{ font-size: 20px; }}
+    .p1-pit-confirmed-amount {{ font-size: 36px; }}
 }}
 
 /* ============ Print ============ */
 @media print {{
     [data-testid="stSidebar"],
     [data-testid="stHeader"],
-    [data-testid="stToolbar"] {{
+    [data-testid="stToolbar"],
+    [data-testid="stExpanderToggleIcon"] {{
         display: none !important;
     }}
     .stApp {{ background: white !important; }}
@@ -357,6 +509,57 @@ button[kind="secondary"]:hover, button[data-testid="baseButton-secondary"]:hover
     h1 {{ font-size: 20pt; }}
     h2 {{ font-size: 14pt; }}
     h3 {{ font-size: 12pt; }}
+
+    /* 封筒リスト: 1人 = 1ページの縦長明細を強制 */
+    .p1-envelope-print {{
+        page-break-after: always;
+        break-after: always;
+        padding: 30mm 25mm;
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    }}
+    .p1-envelope-print:last-child {{
+        page-break-after: auto;
+    }}
+    .p1-envelope-print h2 {{
+        font-size: 18pt;
+        border-bottom: 2pt solid #000;
+        padding-bottom: 6pt;
+        margin-bottom: 12pt;
+    }}
+    .p1-envelope-print .name-large {{
+        font-size: 24pt;
+        font-weight: 700;
+        margin: 12pt 0;
+    }}
+    .p1-envelope-print .amount-huge {{
+        font-size: 36pt;
+        font-weight: 800;
+        text-align: center;
+        margin: 18pt 0;
+        font-variant-numeric: tabular-nums;
+    }}
+    .p1-envelope-print table {{
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11pt;
+        margin: 10pt 0;
+    }}
+    .p1-envelope-print table td {{
+        border: 1pt solid #000;
+        padding: 5pt 8pt;
+    }}
+    .p1-envelope-print table td:first-child {{
+        background: #f0f0f0;
+        font-weight: 600;
+    }}
+    .p1-envelope-print table td:last-child {{
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }}
+    /* Streamlit の Expander を印刷時はアコーディオン展開状態で出す */
+    [data-testid="stExpander"] details {{
+        open: true !important;
+    }}
 }}
 
 /* ============ Tighten default Streamlit margins ============ */

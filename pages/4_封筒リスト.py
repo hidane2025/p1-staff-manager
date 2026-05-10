@@ -121,22 +121,68 @@ df = pd.DataFrame(display_data)
 st.dataframe(df, use_container_width=True, hide_index=True)
 
 # --- 封筒ラベル印刷用 ---
-section_header("封筒ラベル（印刷用）", "ブラウザの印刷機能（Cmd/Ctrl+P）で各明細をそのまま印刷できます。")
+section_header("封筒ラベル（印刷用）",
+               "ブラウザの印刷機能（Cmd/Ctrl+P）で各明細をそのまま印刷できます。"
+               "1人=1ページの縦長明細で出力されます。")
+
+# UX D2 (2026-05-09): 印刷モード切替トグル
+# ON にすると expander を展開せず、印刷専用レイアウトを直接表示する。
+print_mode = st.checkbox(
+    "🖨 印刷モードを表示（1人=1ページ）",
+    value=False,
+    key="envelope_print_mode",
+    help="ON にすると、画面上に印刷用の明細が全員分展開されます。"
+    "そのまま Cmd+P → PDF保存 で配布資料が完成します。",
+)
+
 st.markdown(
     '<p class="p1-no-print">'
-    'ヒント: <kbd>Cmd</kbd>+<kbd>P</kbd> → 「すべて展開」してから印刷すると一気に全員分が出ます。'
+    'ヒント: <kbd>Cmd</kbd>+<kbd>P</kbd> → 印刷モードON → 「PDF保存」で全員分のPDF1冊が出ます。'
     '</p>',
     unsafe_allow_html=True,
 )
 
-for e in envelope_data:
-    with st.expander(f"NO.{e['no']} {e['name_jp']}（{e['role']}）— ¥{e['adjusted_amount']:,}"):
-        # Codex P2 fix #3: 個別手当を内訳に表示（合計との整合性）
+if print_mode:
+    # UX D2: 印刷専用レイアウト（1人=1ページ縦長）
+    for e in envelope_data:
         _allow_total = int(e.get("individual_allowance_total") or 0)
         _allow_row = (
-            f"| 個別手当 | ¥{_allow_total:,} |\n" if _allow_total else ""
+            f'<tr><td>個別手当</td><td>¥{_allow_total:,}</td></tr>'
+            if _allow_total else ""
         )
-        st.markdown(f"""
+        st.markdown(
+            f'<div class="p1-envelope-print">'
+            f'<h2>P1 支払明細</h2>'
+            f'<div>NO. {e["no"]}　／　{e["role"]}</div>'
+            f'<div class="name-large">{e["name_jp"]} 様</div>'
+            f'<div class="amount-huge">¥{e["adjusted_amount"]:,}</div>'
+            f'<table>'
+            f'<tr><td>基本給</td><td>¥{e["base_pay"]:,}</td></tr>'
+            f'<tr><td>深夜手当</td><td>¥{e["night_pay"]:,}</td></tr>'
+            f'<tr><td>交通費</td><td>¥{e["transport_total"]:,}</td></tr>'
+            f'<tr><td>フロア手当</td><td>¥{e["floor_bonus_total"]:,}</td></tr>'
+            f'<tr><td>MIX手当</td><td>¥{e["mix_bonus_total"]:,}</td></tr>'
+            f'<tr><td>精勤手当</td><td>¥{e["attendance_bonus"]:,}</td></tr>'
+            f'{_allow_row}'
+            f'<tr><td><strong>合計</strong></td>'
+            f'<td><strong>¥{e["adjusted_amount"]:,}</strong></td></tr>'
+            f'</table>'
+            f'<div style="margin-top: 16pt; font-size: 10pt;">'
+            f'紙幣内訳: {format_denomination(e["denomination"].bills)}'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+else:
+    # 通常モード: 折りたたみ表示
+    for e in envelope_data:
+        with st.expander(f"NO.{e['no']} {e['name_jp']}（{e['role']}）— ¥{e['adjusted_amount']:,}"):
+            # Codex P2 fix #3: 個別手当を内訳に表示（合計との整合性）
+            _allow_total = int(e.get("individual_allowance_total") or 0)
+            _allow_row = (
+                f"| 個別手当 | ¥{_allow_total:,} |\n" if _allow_total else ""
+            )
+            st.markdown(f"""
 **━━━ P1 支払明細 ━━━**
 
 | 項目 | 金額 |

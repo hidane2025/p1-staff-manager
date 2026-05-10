@@ -52,6 +52,26 @@ page_header(
 )
 flow_bar(active="calc", done=["setup", "input"])
 
+# UX B (2026-05-09): 直前の確定結果を大きく表示（次のスタッフ受付の前に視覚的に確認）
+_LAST_CONFIRMED_KEY = "_pit_last_confirmed"
+if st.session_state.get(_LAST_CONFIRMED_KEY):
+    _last = st.session_state[_LAST_CONFIRMED_KEY]
+    st.markdown(
+        f'<div class="p1-pit-confirmed">'
+        f'<div class="p1-pit-confirmed-title">直前の確定（次の人を呼ぶ前にここを確認）</div>'
+        f'<div class="p1-pit-confirmed-amount">¥{_last["amount"]:,}</div>'
+        f'<div class="p1-pit-confirmed-name">'
+        f'NO.{_last["no"]} {_last["name"]}　'
+        f'退勤 {_last["checkout"]}　'
+        f'{"🟡 承認済" if _last.get("approved") else "⏳ 未承認"}'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("✅ 確認した（次のスタッフへ）", use_container_width=True):
+        st.session_state.pop(_LAST_CONFIRMED_KEY, None)
+        st.rerun()
+
 
 # ============================================================
 # 1. イベント選択
@@ -209,9 +229,8 @@ today_shift = next(
 )
 
 # ============================================================
-# 4. スタッフ情報サマリー
+# UX B (2026-05-09): スタッフサマリーを「上段固定」風の大きいカードに
 # ============================================================
-section_header(f"👤 {target['name_jp']}（NO.{target.get('no')}）")
 
 EMPLOYMENT_LABELS = {
     "contractor": "業務委託",
@@ -224,13 +243,46 @@ emp_label = EMPLOYMENT_LABELS.get(
 )
 
 custom_rate = target.get("custom_hourly_rate")
-custom_rate_display = f"¥{custom_rate:,}" if custom_rate else "—"
+custom_rate_display = f"¥{custom_rate:,}" if custom_rate else "イベント基本時給"
 
-kpi_row([
-    {"label": "役職", "value": target.get("role", "—")},
-    {"label": "雇用区分", "value": emp_label},
-    {"label": "個別時給", "value": custom_rate_display, "detail": "0=イベント基本時給"},
-])
+# 当日シフト概要を1行で
+_today_shift_quick = next(
+    (s for s in all_event_shifts if s.get("date") == today), None
+)
+if _today_shift_quick:
+    _quick_planned = (
+        f"{_today_shift_quick.get('planned_start', '—')}〜{_today_shift_quick.get('planned_end', '—')}"
+    )
+    _quick_actual = (
+        f"{_today_shift_quick.get('actual_start', '—')}〜{_today_shift_quick.get('actual_end', '—')}"
+    )
+    _quick_status = {
+        "scheduled": "⬜ 未確定",
+        "checked_in": "🟢 出勤中",
+        "checked_out": "✅ 退勤済",
+        "absent": "❌ 欠勤",
+    }.get(_today_shift_quick.get("status", ""), _today_shift_quick.get("status", ""))
+else:
+    _quick_planned = "—"
+    _quick_actual = "—"
+    _quick_status = "—"
+
+# 上段の固定スタッフカード
+st.markdown(
+    f'<div class="p1-pit-summary">'
+    f'<div class="p1-pit-summary-name">'
+    f'👤 NO.{target.get("no", "?")} {target["name_jp"]}　'
+    f'<span style="font-size:14px; color:#475569; font-weight:500;">'
+    f'({target.get("role", "—")} / {emp_label})</span>'
+    f'</div>'
+    f'<div class="p1-pit-summary-meta">'
+    f'時給: <strong>{custom_rate_display}</strong>　／　'
+    f'{today} 予定: <strong>{_quick_planned}</strong>　実績: {_quick_actual}　'
+    f'<span style="margin-left:8px;">{_quick_status}</span>'
+    f'</div>'
+    f'</div>',
+    unsafe_allow_html=True,
+)
 
 # Phase 3-I: 個別手当の状態を表示（オフレコ手当は内訳非表示）
 indiv_allowances = db.get_individual_allowances(event_id, target["id"])
@@ -238,7 +290,6 @@ if indiv_allowances:
     open_count = sum(1 for a in indiv_allowances if not a.get("is_off_record"))
     off_count = sum(1 for a in indiv_allowances if a.get("is_off_record"))
     open_total = sum(int(a.get("amount") or 0) for a in indiv_allowances if not a.get("is_off_record"))
-    # オフレコは合計だけ含めるが、ピット端末では金額・件数を伏せる
     msg_parts = []
     if open_count:
         msg_parts.append(f"通常 {open_count}件 (¥{open_total:,})")
@@ -532,6 +583,14 @@ else:
                         f"💰 支払い計算も実行しました。"
                         f"合計 **¥{payment.total_amount:,}**（{payment.days_worked}日勤務）"
                     )
+                    # UX B: 直前確定カード用の情報を保存
+                    st.session_state[_LAST_CONFIRMED_KEY] = {
+                        "no": target.get("no", "?"),
+                        "name": target["name_jp"],
+                        "amount": int(payment.total_amount),
+                        "checkout": checkout_time,
+                        "approved": False,
+                    }
 
                     # Phase 3-C: 承認まで進める
                     if auto_approve:
@@ -567,6 +626,9 @@ else:
                                     "🟡 ピット側で承認まで完了しました。"
                                     "給与窓口は「支払いボタンを押すだけ」で OK です。"
                                 )
+                                # UX B: 確定カードに承認済みフラグを反映
+                                if _LAST_CONFIRMED_KEY in st.session_state:
+                                    st.session_state[_LAST_CONFIRMED_KEY]["approved"] = True
                 st.rerun()
 
 

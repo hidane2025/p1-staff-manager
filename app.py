@@ -24,6 +24,7 @@ from utils.page_layout import (  # noqa: E402
     kpi_card,
     action_card,
     section_header,
+    progress_checklist,
 )
 
 
@@ -42,29 +43,74 @@ flow_bar()
 # 2. 状態ダッシュボード
 # ============================================================
 def _build_status() -> dict:
-    """ホーム表示用に最低限の集計を取得（失敗時は空で返す）"""
+    """ホーム表示用に最低限の集計を取得（失敗時は空で返す）
+
+    UX A (2026-05-09): 「今日のTo-Do」用の進捗情報を追加で集計
+    """
     out = {
         "active_event": None,
         "pending_count": 0,
         "pending_total": 0,
-        "receipt_pending": 0,
+        "approved_count": 0,
         "approved_total": 0,
+        "paid_count": 0,
+        "receipt_pending": 0,
+        # UX A: To-Do 判定用
+        "staff_count": 0,
+        "shift_count": 0,
+        "rates_count": 0,
+        "exception_count": 0,
+        "exception_unconfirmed": 0,
+        "payment_count": 0,
     }
     try:
         events = db.get_all_events() or []
         if events:
             # 一番直近のイベントを「進行中」として扱う
-            out["active_event"] = events[0]
-            payments = db.get_payments_for_event(events[0]["id"]) or []
+            ev = events[0]
+            out["active_event"] = ev
+            event_id = ev["id"]
+
+            # スタッフ数（全イベント横断的）
+            try:
+                out["staff_count"] = len(db.get_all_staff() or [])
+            except Exception:
+                pass
+            # シフト数（このイベント）
+            try:
+                shifts = db.get_shifts_for_event(event_id) or []
+                out["shift_count"] = len(shifts)
+                # 例外記録: status=absent or actual_start/end が予定とズレている
+                out["exception_count"] = sum(
+                    1 for s in shifts
+                    if s.get("actual_start") or s.get("actual_end") or s.get("status") == "absent"
+                )
+                # 未確定（scheduled）
+                out["exception_unconfirmed"] = sum(
+                    1 for s in shifts if s.get("status") == "scheduled"
+                )
+            except Exception:
+                pass
+            # レート数
+            try:
+                out["rates_count"] = len(db.get_event_rates(event_id) or [])
+            except Exception:
+                pass
+
+            payments = db.get_payments_for_event(event_id) or []
+            out["payment_count"] = len(payments)
             for p in payments:
                 status = p.get("status", "pending")
                 if status == "pending":
                     out["pending_count"] += 1
                     out["pending_total"] += int(p.get("total_amount") or 0)
-                if status == "approved":
+                elif status == "approved":
+                    out["approved_count"] += 1
                     out["approved_total"] += int(p.get("total_amount") or 0)
                     if not p.get("receipt_received"):
                         out["receipt_pending"] += 1
+                elif status == "paid":
+                    out["paid_count"] += 1
     except Exception:
         # DB接続失敗等でも画面は壊さない
         pass
@@ -74,7 +120,131 @@ def _build_status() -> dict:
 status = _build_status()
 ev = status["active_event"]
 
-st.markdown('<div class="p1-section"><h3>📊 今日のダッシュボード</h3></div>',
+# ============================================================
+# UX A: 今日のTo-Doリスト（最上部・一番大きい）
+# ============================================================
+st.markdown('<div class="p1-section"><h3>✅ 今日のTo-Do</h3>'
+            '<p class="p1-section-help">大会のセットアップから締めまでの進捗。'
+            'リストの上から順に進めれば締めまで届きます。</p></div>',
+            unsafe_allow_html=True)
+
+
+def _todo_status(condition_done: bool, condition_warn: bool = False,
+                 has_started: bool = True) -> str:
+    if condition_done:
+        return "done"
+    if condition_warn:
+        return "warn"
+    if has_started:
+        return "pending"
+    return "todo"
+
+
+if ev:
+    # 各タスクの状態判定
+    todo_items = [
+        {
+            "label": f"イベント作成: {ev.get('name', '—')}",
+            "detail": f"{ev.get('start_date', '—')} 〜 {ev.get('end_date', '—')}  ／ 会場: {ev.get('venue', '')}",
+            "status": "done",
+        },
+        {
+            "label": "レート設定（日別単価）",
+            "detail": f"{status['rates_count']}日分 設定済み"
+                      if status['rates_count'] else "未設定 — シフト取込で自動補完されます",
+            "status": _todo_status(
+                status['rates_count'] > 0,
+                False,
+            ),
+            "page": "pages/0_イベント設定.py",
+            "page_label": "📋 イベント設定を開く",
+        },
+        {
+            "label": "スタッフ登録",
+            "detail": f"{status['staff_count']}名 登録済み"
+                      if status['staff_count'] else "未登録",
+            "status": _todo_status(
+                status['staff_count'] >= 5,
+                0 < status['staff_count'] < 5,
+            ),
+            "page": "pages/1_スタッフ管理.py",
+            "page_label": "👥 スタッフ管理を開く",
+        },
+        {
+            "label": "シフト取込",
+            "detail": f"{status['shift_count']}件 取込済み"
+                      if status['shift_count'] else "未取込",
+            "status": _todo_status(
+                status['shift_count'] >= 10,
+                0 < status['shift_count'] < 10,
+            ),
+            "page": "pages/2_シフト取込.py",
+            "page_label": "📅 シフト取込を開く",
+        },
+        {
+            "label": "出退勤の例外記録",
+            "detail": (
+                f"未確定 {status['exception_unconfirmed']}人 ／ 例外記録 {status['exception_count']}件"
+                if status['shift_count'] else "シフト取込後に確認できます"
+            ),
+            "status": _todo_status(
+                status['shift_count'] > 0 and status['exception_unconfirmed'] == 0,
+                status['exception_unconfirmed'] > 0,
+            ),
+            "page": "pages/5_出退勤.py",
+            "page_label": "🕐 出退勤を開く",
+        },
+        {
+            "label": "支払い計算",
+            "detail": (
+                f"計算済み {status['payment_count']}人 ／ 未承認 {status['pending_count']}人"
+                if status['payment_count'] else "未実行"
+            ),
+            "status": _todo_status(
+                status['payment_count'] > 0 and status['pending_count'] == 0,
+                status['pending_count'] > 0,
+            ),
+            "page": "pages/3_支払い計算.py",
+            "page_label": "💰 支払い計算を開く",
+        },
+        {
+            "label": "領収書受領",
+            "detail": (
+                f"配布待ち {status['receipt_pending']}件" if status['receipt_pending']
+                else (f"全員受領済み（{status['approved_count']}人）"
+                      if status['approved_count'] else "承認後に表示されます")
+            ),
+            "status": _todo_status(
+                status['approved_count'] > 0 and status['receipt_pending'] == 0,
+                status['receipt_pending'] > 0,
+            ),
+            "page": "pages/91_領収書発行.py",
+            "page_label": "📄 領収書発行を開く",
+        },
+        {
+            "label": "支払い完了",
+            "detail": (
+                f"{status['paid_count']}人 支払済み"
+                + (f" ／ 残り {status['payment_count'] - status['paid_count']}人"
+                   if status['payment_count'] > status['paid_count'] else "")
+                if status['payment_count'] else "計算後に表示されます"
+            ),
+            "status": _todo_status(
+                status['payment_count'] > 0 and status['paid_count'] == status['payment_count'],
+                0 < status['paid_count'] < status['payment_count'],
+            ),
+            "page": "pages/6_精算レポート.py",
+            "page_label": "📊 精算レポートを開く",
+        },
+    ]
+    progress_checklist(todo_items)
+else:
+    st.warning(
+        "⚠️ まだイベントが作成されていません。"
+        "下のカード「📋 イベント設定」から最初の大会を作成してください。"
+    )
+
+st.markdown('<div class="p1-section"><h3>📊 数字でみる現状</h3></div>',
             unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns(3)
@@ -274,7 +444,7 @@ st.markdown(
     '<div style="margin-top: 48px; padding-top: 16px; '
     'border-top: 1px solid #E2E8F0; '
     'color: #94A3B8; font-size: 11.5px; text-align: center;">'
-    'P1 Staff Manager v3.9 · 株式会社ヒダネ'
+    'P1 Staff Manager v3.10 · 株式会社ヒダネ'
     '</div>',
     unsafe_allow_html=True,
 )
