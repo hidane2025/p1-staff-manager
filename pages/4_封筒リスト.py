@@ -143,6 +143,19 @@ st.markdown(
 )
 
 if print_mode:
+    # Codex P2 #15 fix (2026-05-09): 印刷モード時は @media print で
+    # .p1-envelope-print 以外を全て非表示にする。これで Cmd+P 時に
+    # 1人=1ページが厳密に守られる。
+    st.markdown(
+        '<style>'
+        '@media print { '
+        '  body * { visibility: hidden !important; } '
+        '  .p1-envelope-print, .p1-envelope-print * { visibility: visible !important; } '
+        '  .p1-envelope-print { position: relative; left: 0; top: 0; width: 100%; } '
+        '}'
+        '</style>',
+        unsafe_allow_html=True,
+    )
     # UX D2: 印刷専用レイアウト（1人=1ページ縦長）
     for e in envelope_data:
         _allow_total = int(e.get("individual_allowance_total") or 0)

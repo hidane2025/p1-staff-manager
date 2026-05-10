@@ -62,6 +62,8 @@ def _build_status() -> dict:
         "exception_count": 0,
         "exception_unconfirmed": 0,
         "payment_count": 0,
+        # Codex P2 #14 fix: 期待される支払いスタッフ数（出勤シフトのある人数）
+        "expected_paid_staff": 0,
     }
     try:
         events = db.get_all_events() or []
@@ -80,15 +82,35 @@ def _build_status() -> dict:
             try:
                 shifts = db.get_shifts_for_event(event_id) or []
                 out["shift_count"] = len(shifts)
-                # 例外記録: status=absent or actual_start/end が予定とズレている
-                out["exception_count"] = sum(
-                    1 for s in shifts
-                    if s.get("actual_start") or s.get("actual_end") or s.get("status") == "absent"
-                )
+                # Codex P3 #16 fix (2026-05-09): 例外判定を厳密化
+                # 「実績が予定とズレている」or「欠勤」のみ例外としてカウント
+                # （普通に出退勤しただけのシフトは正常扱い）
+                _exception_count = 0
+                for s in shifts:
+                    if s.get("status") == "absent":
+                        _exception_count += 1
+                        continue
+                    actual_start = s.get("actual_start")
+                    actual_end = s.get("actual_end")
+                    planned_start = s.get("planned_start")
+                    planned_end = s.get("planned_end")
+                    # 実績が記録されていて、かつ予定と異なる場合のみ例外
+                    if actual_start and planned_start and actual_start != planned_start:
+                        _exception_count += 1
+                    elif actual_end and planned_end and actual_end != planned_end:
+                        _exception_count += 1
+                out["exception_count"] = _exception_count
                 # 未確定（scheduled）
                 out["exception_unconfirmed"] = sum(
                     1 for s in shifts if s.get("status") == "scheduled"
                 )
+                # Codex P2 #14 fix: 出勤シフトを持つスタッフ数（欠勤除く）
+                # 支払い計算が必要なスタッフ数を期待値として保持
+                _expected_staff_ids = {
+                    s.get("staff_id") for s in shifts
+                    if s.get("status") != "absent" and s.get("staff_id")
+                }
+                out["expected_paid_staff"] = len(_expected_staff_ids)
             except Exception:
                 pass
             # レート数
@@ -197,12 +219,23 @@ if ev:
         {
             "label": "支払い計算",
             "detail": (
-                f"計算済み {status['payment_count']}人 ／ 未承認 {status['pending_count']}人"
-                if status['payment_count'] else "未実行"
+                # Codex P2 #14 fix: 期待スタッフ数と比較
+                f"計算済み {status['payment_count']}/{status['expected_paid_staff']}人 ／ "
+                f"未承認 {status['pending_count']}人"
+                if status['payment_count'] else (
+                    f"未実行（対象 {status['expected_paid_staff']}人）"
+                    if status['expected_paid_staff']
+                    else "未実行"
+                )
             ),
             "status": _todo_status(
-                status['payment_count'] > 0 and status['pending_count'] == 0,
-                status['pending_count'] > 0,
+                # 完了条件: 期待スタッフ全員分の計算 + 未承認ゼロ
+                (status['expected_paid_staff'] > 0
+                 and status['payment_count'] >= status['expected_paid_staff']
+                 and status['pending_count'] == 0),
+                status['pending_count'] > 0
+                or (status['expected_paid_staff'] > 0
+                    and status['payment_count'] < status['expected_paid_staff']),
             ),
             "page": "pages/3_支払い計算.py",
             "page_label": "💰 支払い計算を開く",
@@ -224,14 +257,19 @@ if ev:
         {
             "label": "支払い完了",
             "detail": (
-                f"{status['paid_count']}人 支払済み"
-                + (f" ／ 残り {status['payment_count'] - status['paid_count']}人"
-                   if status['payment_count'] > status['paid_count'] else "")
-                if status['payment_count'] else "計算後に表示されます"
+                # Codex P2 #14 fix: 期待数と比較
+                f"{status['paid_count']}/{status['expected_paid_staff']}人 支払済み"
+                if status['expected_paid_staff'] else (
+                    f"{status['paid_count']}人 支払済み"
+                    if status['payment_count'] else "計算後に表示されます"
+                )
             ),
             "status": _todo_status(
-                status['payment_count'] > 0 and status['paid_count'] == status['payment_count'],
-                0 < status['paid_count'] < status['payment_count'],
+                # 完了条件: 期待スタッフ全員分が paid 状態
+                (status['expected_paid_staff'] > 0
+                 and status['paid_count'] >= status['expected_paid_staff']),
+                0 < status['paid_count'] < (status['expected_paid_staff']
+                                            or status['payment_count']),
             ),
             "page": "pages/6_精算レポート.py",
             "page_label": "📊 精算レポートを開く",
