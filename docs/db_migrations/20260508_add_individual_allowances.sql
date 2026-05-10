@@ -37,6 +37,32 @@ CREATE INDEX IF NOT EXISTS idx_p1_staff_event_allowances_event_staff
     ON p1_staff_event_allowances (event_id, staff_id);
 
 -- ============================================================
+-- Codex 4回目 P1 #7 (2026-05-09): RLS有効化 + anon拒否ポリシー
+-- ============================================================
+-- 個別手当（特にオフレコ手当）は支払い金額・スタッフ氏名を含む高機微データ。
+-- アプリは現在 anon-key フォールバック構成のため、テーブルに RLS が無いと
+-- ページレベルの require_admin だけでは Supabase API 直叩きを防げない。
+-- ここで明示的に anon を拒否し、サービスロール（バックエンド）のみアクセス可能に。
+-- ============================================================
+ALTER TABLE p1_staff_event_allowances ENABLE ROW LEVEL SECURITY;
+
+-- 既存ポリシーがあれば置き換え（再実行可能性のため）
+DROP POLICY IF EXISTS "p1_allowances_deny_anon" ON p1_staff_event_allowances;
+DROP POLICY IF EXISTS "p1_allowances_service_role_all" ON p1_staff_event_allowances;
+
+-- anon ロールは何もできない
+CREATE POLICY "p1_allowances_deny_anon" ON p1_staff_event_allowances
+    FOR ALL TO anon USING (false) WITH CHECK (false);
+
+-- service_role / authenticated は全許可（管理画面はこちらを使う）
+CREATE POLICY "p1_allowances_service_role_all" ON p1_staff_event_allowances
+    FOR ALL TO service_role, authenticated USING (true) WITH CHECK (true);
+
+-- 確認用クエリ:
+--   SELECT policyname, cmd, roles, qual FROM pg_policies
+--   WHERE tablename = 'p1_staff_event_allowances';
+
+-- ============================================================
 -- 参考: 手当タイプの想定例
 -- ============================================================
 --   language       中国語対応 / 韓国語対応 / 英語対応 等（イベント1日 ¥3,000など）

@@ -230,6 +230,14 @@ row2[0].metric("フロア手当", f"¥{sum(p['floor_bonus_total'] for p in payme
 row2[1].metric("MIX手当", f"¥{sum(p['mix_bonus_total'] for p in payments):,}")
 row2[2].metric("精勤手当", f"¥{sum(p['attendance_bonus'] for p in payments):,}")
 
+# Codex 4回目 P2 #10 fix (2026-05-09): 個別手当合計を内訳に表示
+# （表示の一貫性確保。封筒リスト・精算レポートと同じ並び）
+_total_allowance = sum(int(p.get("individual_allowance_total") or 0) for p in payments)
+if _total_allowance > 0:
+    st.metric("🎁 個別手当", f"¥{_total_allowance:,}",
+              help="言語手当・人材確保手当 等の個別付与分。"
+              "オフレコ含む合計（明細は『個別手当』ページで管理者のみ確認可）。")
+
 # 休憩控除合計
 total_break = sum(p.get("break_deduction", 0) for p in payments)
 if total_break > 0:
@@ -314,6 +322,12 @@ if status_filter != "すべて":
     filtered = [p for p in filtered if p["status"] == status_map[status_filter]]
 
 # --- テーブル ---
+# Codex 4回目 P2 #10 fix (2026-05-09): 個別手当列を追加して内訳と合計を一致させる
+# （列が増えすぎないよう、誰かに個別手当があるイベントだけ列を出す）
+_show_allowance_column = any(
+    int(p.get("individual_allowance_total") or 0) > 0 for p in payments
+)
+
 display_data = []
 for p in filtered:
     status_icon = {"pending": "⏳ 未承認", "approved": "✅ 承認済", "paid": "💴 支払済"}.get(p["status"], p["status"])
@@ -323,8 +337,10 @@ for p in filtered:
         "基本給": f"¥{p['base_pay']:,}", "深夜": f"¥{p['night_pay']:,}",
         "交通費": f"¥{p['transport_total']:,}", "Floor": f"¥{p['floor_bonus_total']:,}",
         "MIX": f"¥{p['mix_bonus_total']:,}", "精勤": f"¥{p['attendance_bonus']:,}",
-        "合計": f"¥{p['total_amount']:,}",
     }
+    if _show_allowance_column:
+        row["個別手当"] = f"¥{int(p.get('individual_allowance_total') or 0):,}"
+    row["合計"] = f"¥{p['total_amount']:,}"
     if round_unit:
         row["丸め後"] = f"¥{rounded:,}"
     row["状態"] = status_icon
@@ -332,6 +348,12 @@ for p in filtered:
     display_data.append(row)
 
 st.dataframe(pd.DataFrame(display_data), use_container_width=True, hide_index=True)
+
+# 個別手当を CSV にも含める（精算レポート/封筒リストと整合）
+if _show_allowance_column:
+    st.caption(
+        "💡 個別手当列が表示されています。詳細は『🎁 個別手当』ページで確認可（管理者のみ）。"
+    )
 
 # --- 個別操作 ---
 st.divider()

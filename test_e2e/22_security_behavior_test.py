@@ -126,6 +126,22 @@ for pattern in [".env", "secrets.toml", ".venv", "credentials"]:
 
 
 # ============================================================
+# 5.5 Codex 4回目 P1 #7 (2026-05-09): 個別手当テーブルのRLS設定
+# ============================================================
+print("\n[5.5] 個別手当テーブルのRLS+ポリシー定義（マイグレSQL検証）")
+allowance_sql = (ROOT / "docs/db_migrations/20260508_add_individual_allowances.sql").read_text()
+
+_check("ENABLE ROW LEVEL SECURITY が含まれる",
+       "ENABLE ROW LEVEL SECURITY" in allowance_sql)
+_check("anon 拒否ポリシー（USING (false)）が含まれる",
+       "USING (false)" in allowance_sql)
+_check("anon ロールへの ALL FOR 制限が含まれる",
+       "TO anon" in allowance_sql)
+_check("service_role 許可ポリシーが含まれる",
+       "service_role" in allowance_sql)
+
+
+# ============================================================
 # 6. db.py: anon key にハードコードされた service_role の混入が無い
 # ============================================================
 print("\n[6] db.py: 機微キー混入チェック")

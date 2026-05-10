@@ -254,6 +254,13 @@ _check("例外なし起動", not at.exception)
 _check("タイトル 'ピット端末'", _has(at, "ピット端末"))
 _check("ADMIN_PASSWORD未設定でも警告で通過（フォールバック）",
        _has(at, "ADMIN_PASSWORD") or _has(at, "管理者認証") or _has(at, "退勤打刻"))
+# Codex 4回目 P2 #9 (2026-05-09): 深夜跨ぎ対応のシフト日付セレクタが追加されているか
+# Note: スタッフ未選択状態ではセレクタが表示されないので、ファイル内容で検証
+_pit_src = (ROOT / "pages/10_ピット端末.py").read_text()
+_check("深夜跨ぎ対応の日付セレクタが追加されている",
+       "シフト日付（深夜跨ぎ時はここで前日を選択）" in _pit_src)
+_check("交通費の日数倍計算が追加されている",
+       "max_amt * days_worked" in _pit_src or "max_amt × 勤務日数" in _pit_src)
 
 
 # ============================================================

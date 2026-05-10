@@ -142,9 +142,47 @@ if not all_event_shifts:
     )
     st.stop()
 
-# 今日の日付（JST）
-today = datetime.now(_JST).strftime("%Y-%m-%d")
-today_shift = next((s for s in all_event_shifts if s.get("date") == today), None)
+# Codex 4回目 P2 #9 fix (2026-05-09): 深夜跨ぎ対応
+# 25:00 / 29:00 で終わるシフトの退勤打刻は 0:00 を超えてから来ることが多い。
+# 「現在日付」ではなく「未確定 or 出勤中シフトを優先」にして対応。
+# 操作者は必要なら別の日付に切り替え可能。
+_now_date = datetime.now(_JST).strftime("%Y-%m-%d")
+
+# 開いているシフト（scheduled / checked_in）を優先
+_open_shifts = [
+    s for s in all_event_shifts
+    if s.get("status") in ("scheduled", "checked_in")
+]
+# 当日かつ開いているシフトがあればそれを最優先、なければ最も近い未確定/出勤中
+if _open_shifts:
+    _today_open = next(
+        (s for s in _open_shifts if s.get("date") == _now_date), None
+    )
+    _default_shift = _today_open or _open_shifts[0]
+else:
+    # 全シフト確定済み → 現在日付 or 最新日のシフトを表示
+    _default_shift = next(
+        (s for s in all_event_shifts if s.get("date") == _now_date),
+        all_event_shifts[-1],
+    )
+
+# 操作者が手動で別の日付を選べるように
+_shift_dates = sorted({s["date"] for s in all_event_shifts})
+_default_idx = (
+    _shift_dates.index(_default_shift["date"])
+    if _default_shift["date"] in _shift_dates else 0
+)
+selected_shift_date = st.selectbox(
+    "シフト日付（深夜跨ぎ時はここで前日を選択）",
+    _shift_dates,
+    index=_default_idx,
+    help="現在時刻が 0:00 を超えていても、前日のシフトを選び直せます。"
+    "未確定/出勤中のシフトがある日が自動的に選ばれます。",
+)
+today = selected_shift_date  # 既存変数名を維持（互換性のため）
+today_shift = next(
+    (s for s in all_event_shifts if s.get("date") == today), None
+)
 
 # ============================================================
 # 4. スタッフ情報サマリー
@@ -259,13 +297,26 @@ with st.expander("🚃 交通費の領収書金額を入力（任意）", expand
             placeholder="例: 帰路分も含む / Suicaチャージのみ",
         )
         if st.form_submit_button("💾 交通費を保存", type="secondary"):
-            # 精算額を算出: 開催地ルールなら一律 max_amount、それ以外は min(領収書金額, 上限)
+            # Codex 4回目 P1 #8 fix (2026-05-09): 開催地ルールは max_amount × 勤務日数
+            # （3_支払い計算 ページの _calc_transport と挙動を揃える）
+            # 出勤予定または出退勤実績のある日数を勤務日数とみなす
+            staff_shifts_all = [
+                s for s in all_event_shifts
+                if s.get("status") != "absent"
+            ]
+            days_worked = len({s["date"] for s in staff_shifts_all}) or 1
+
             if is_venue:
-                approved = max_amt
+                # 開催地: max_amount × 勤務日数 を支給
+                approved = max_amt * days_worked
             elif receipt_required and not has_receipt:
                 approved = 0  # 領収書必須なのに無し → 精算0
             else:
-                approved = min(receipt_amt, max_amt) if max_amt > 0 else receipt_amt
+                # 領収書ベース: min(領収書金額, 上限×勤務日数) または 領収書全額
+                if max_amt > 0:
+                    approved = min(receipt_amt, max_amt * days_worked)
+                else:
+                    approved = receipt_amt
             db.upsert_transport_claim(
                 event_id=event_id, staff_id=target["id"],
                 receipt_amount=int(receipt_amt),
@@ -275,13 +326,18 @@ with st.expander("🚃 交通費の領収書金額を入力（任意）", expand
             )
             db.log_action(
                 "pit_transport_claim", "transport_claims", target["id"],
-                detail=f"{target['name_jp']} 領収書¥{receipt_amt:,} → 精算¥{approved:,}",
+                detail=(
+                    f"{target['name_jp']} 領収書¥{receipt_amt:,} "
+                    f"→ 精算¥{approved:,}"
+                    f"（{days_worked}日分・{'venue' if is_venue else '通常'}）"
+                ),
                 event_id=event_id,
                 performed_by=operator_name(),
             )
             st.success(
                 f"💾 交通費を保存しました。"
                 f"領収書 ¥{receipt_amt:,} → 精算額 **¥{approved:,}**"
+                f"（{days_worked}日分計算）"
             )
             st.rerun()
 
