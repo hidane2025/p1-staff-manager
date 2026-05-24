@@ -117,9 +117,22 @@ def friendly_error(user_message: str, technical_detail: str | None = None) -> No
             st.code(technical_detail, language=None)
 
 
-def missing_field_warning(staff_rows: list[dict], fields: list[str]) -> list[dict]:
+def missing_field_warning(
+    staff_rows: list[dict],
+    fields: list[str],
+    warning_text: str | None = None,
+) -> list[dict]:
     """指定フィールドが空のスタッフを抽出して警告表示
-    Returns: 不完全なスタッフのリスト（呼び出し側で「それでも発行」の判定に使える）
+
+    Args:
+        staff_rows: スタッフ行のリスト
+        fields: 必須フィールド名のリスト（例: ["real_name", "address", "email"]）
+        warning_text: 文書種別ごとの追加説明文（任意）。
+            呼び出し側で「このまま発行するとどうなるか」を文書種別に応じて指定する。
+            未指定なら汎用的な警告のみ。
+
+    Returns:
+        不完全なスタッフのリスト（呼び出し側で「それでも発行」の判定に使える）
     """
     bad = []
     label_map = {
@@ -137,9 +150,15 @@ def missing_field_warning(staff_rows: list[dict], fields: list[str]) -> list[dic
                 "missing": "、".join(label_map.get(m, m) for m in missing),
             })
     if bad:
-        st.warning(
-            f"⚠️ 以下の {len(bad)}名 は必須情報が未登録です。"
-            f"このまま発行すると書類の宛名がディーラーネームになります。"
-        )
+        # 共用ヘルパーのため警告本文は呼び出し側でカスタマイズできる設計（2026-05-25）。
+        if warning_text:
+            st.warning(
+                f"⚠️ 以下の {len(bad)}名 は必須情報が未登録です。{warning_text}"
+            )
+        else:
+            st.warning(
+                f"⚠️ 以下の {len(bad)}名 は必須情報が未登録です。"
+                "対応する書類への印字内容が空欄になる可能性があります。"
+            )
         st.dataframe(bad, hide_index=True, use_container_width=True)
     return bad

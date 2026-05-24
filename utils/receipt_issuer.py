@@ -56,17 +56,32 @@ def _load_seal_bytes(seal_url: str) -> Optional[bytes]:
 def _build_receipt_input(
     receipt_no: str,
     staff: dict,
+    payer_name: str,
     amount: int,
     event_name: str,
     issue_date: str,
     purpose: str,
 ) -> ReceiptInput:
-    """PDF生成用の入力データを組み立て（DRY）"""
+    """PDF生成用の入力データを組み立て（DRY）
+
+    2026-05-25 仕様変更:
+        領収書は受領者（ディーラー）が支払者（PRT）に発行するもの。
+        - payer_name = お金を支払った会社（PRT等の主催者）→ 宛名「御中」
+        - receiver_* = お金を受け取った個人（ディーラー）→ 発行者欄
+    """
+    # Codex P2 R3 レビュー対応 (2026-05-25):
+    #   receiver_name は発行者欄（右下）に印字される＝法的に本名でなければならない。
+    #   旧版は real_name → name_jp（ディーラーネーム＝ニックネーム）→ "スタッフ"
+    #   の順でフォールバックしていたが、これだと未登録時にニックネームが
+    #   発行者として印字されてしまい、missing_field_warning の警告とも矛盾する。
+    #   ここでは real_name が無ければ空文字を返し、PDF描画側で空欄にする。
+    #   （UI で「未登録でも発行する」チェックを通った場合のみこのパスに来る）
     return ReceiptInput(
         receipt_no=receipt_no,
-        recipient_name=(staff.get("real_name") or staff.get("name_jp") or "スタッフ"),
-        recipient_address=staff.get("address") or "",
-        recipient_email=staff.get("email") or "",
+        payer_name=payer_name,
+        receiver_name=(staff.get("real_name") or ""),
+        receiver_address=staff.get("address") or "",
+        receiver_email=staff.get("email") or "",
         amount=int(amount),
         event_name=event_name,
         issue_date=issue_date,
@@ -139,16 +154,26 @@ def issue_receipt(
     issue_date = today_jst_ymd()
     receipt_no = build_receipt_no(event_id, staff_id, issue_date)
 
-    issuer_info = IssuerInfo(
-        name=issuer_data["issuer_name"],
-        address=issuer_data["issuer_address"],
-        tel=issuer_data["issuer_tel"],
-        invoice_number=(issuer_data["invoice_number"] or None),
-        seal_image_bytes=_load_seal_bytes(issuer_data["issuer_seal_url"]),
-    )
+    # 2026-05-25 仕様変更:
+    #   旧版は issuer_data（イベント発行者設定）の name/address/tel/invoice_number を
+    #   IssuerInfo に流し込んで右下に描画していたが、領収書の構造逆転に伴い:
+    #     - issuer_data["issuer_name"] は「支払者＝PRT」を意味するようになり、
+    #       ReceiptInput.payer_name（宛名）に流す
+    #     - 発行者欄（右下）は staff（ディーラー）の情報が描画される
+    #
+    # 印影について（Codex P2-A レビュー対応 2026-05-25）:
+    #   issuer_seal_url は旧仕様で PRT（支払者側）の印鑑として登録された値なので、
+    #   構造逆転後のディーラー側発行欄に押すのは誤り。よって印影は読み込まない。
+    #   将来、スタッフ単位の印影が必要になったら、p1_staff テーブルに seal_url を
+    #   追加し、ここで staff.seal_url を読むよう拡張する。
+    issuer_info = IssuerInfo()
     receipt_input = _build_receipt_input(
         receipt_no=receipt_no,
         staff=staff,
+        # Codex P2 R5 (2026-05-25): raw 値ではなく領収書専用フォールバックを通す。
+        #   レガシー値（旧マイグレで入った「株式会社パシフィック」）or 空文字なら
+        #   新しい支払者名にマップ。明示的な上書き値はそのまま使用。
+        payer_name=receipt_db.resolve_payer_name(issuer_data["issuer_name"]),
         amount=int(amount),
         event_name=event.get("name", ""),
         issue_date=issue_date,

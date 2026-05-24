@@ -31,12 +31,18 @@ SCREENSHOTS.mkdir(exist_ok=True)
 
 
 def _sample_receipt() -> ReceiptInput:
-    """テスト用の共通レシートデータ"""
+    """テスト用の共通レシートデータ
+
+    2026-05-25 構造逆転対応:
+        payer_name  = 支払者（PRT等の主催者）→ 宛名「御中」として表示
+        receiver_*  = 受領者（ディーラー本人）→ 発行者欄（右下）に表示
+    """
     return ReceiptInput(
         receipt_no=build_receipt_no(99, 12345, today_jst_ymd()),
-        recipient_name="山田 太郎",
-        recipient_address="東京都渋谷区神南1-2-3",
-        recipient_email="yamada@example.com",
+        payer_name="株式会社 PACIFIC RACING TEAM",
+        receiver_name="山田 太郎",
+        receiver_address="東京都渋谷区神南1-2-3",
+        receiver_email="yamada@example.com",
         amount=100_000,
         event_name="P1 Kyoto 2026 夏大会",
         issue_date=today_jst_ymd(),
@@ -44,12 +50,8 @@ def _sample_receipt() -> ReceiptInput:
 
 
 def _sample_issuer() -> IssuerInfo:
-    return IssuerInfo(
-        name="株式会社パシフィック",
-        address="東京都港区XX",
-        tel="03-0000-0000",
-        invoice_number="T1234567890123",
-    )
+    """電子印影は通常未使用。発行者本体情報は ReceiptInput.receiver_* 側にある。"""
+    return IssuerInfo()
 
 
 def _pdf_to_png(pdf_path: Path) -> Path | None:

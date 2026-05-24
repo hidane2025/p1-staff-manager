@@ -44,17 +44,30 @@ if not event_id:
 
 st.divider()
 
-# --- 発行者情報の状態表示 ---
+# --- 領収書の宛先（支払者）情報の状態表示 ---
+# 2026-05-25 仕様変更: 領収書は受領者（ディーラー）が支払者（PRT等）に発行する。
+# よって従来「発行者情報」と呼んでいた設定値は、実体は「領収書の宛先（支払者）」情報。
+# 発行者欄（右下）にはスタッフマスターの本名・住所・E-mail が自動で入る。
 issuer = receipt_db.get_issuer_settings(event_id)
-with st.expander("📝 発行者情報（現在の設定）", expanded=False):
+# Codex P3 R6 (2026-05-25): 表示する宛名と実発行時の宛名を一致させるため、
+#   resolve_payer_name を通した値を「実際に印字される宛名」として表示する。
+_resolved_payer = receipt_db.resolve_payer_name(issuer["issuer_name"])
+_payer_display = _resolved_payer
+if _resolved_payer != (issuer["issuer_name"] or "").strip():
+    _payer_display = (
+        f"{_resolved_payer}（DB保存値: 『{issuer['issuer_name'] or '(未入力)'}』→ 自動補完）"
+    )
+with st.expander("📝 領収書の宛先（支払者）情報", expanded=False):
+    st.caption(
+        "領収書の宛名（「○○御中」と表示される会社名）と但し書きの設定です。"
+        "発行者欄（右下）はスタッフ本名・住所・E-mailが自動で入ります。"
+    )
     col1, col2 = st.columns(2)
     with col1:
-        st.text(f"発行者名: {issuer['issuer_name']}")
+        st.text(f"宛名（支払者）: {_payer_display}")
         st.text(f"住所: {issuer['issuer_address'] or '(未設定)'}")
         st.text(f"電話: {issuer['issuer_tel'] or '(未設定)'}")
     with col2:
-        inv = issuer["invoice_number"] or "(未登録・後日追加可)"
-        st.text(f"インボイス番号: {inv}")
         st.text(f"但し書き: {issuer['receipt_purpose']}")
         st.text(f"電子印影: {'✅ 設定済み' if issuer['issuer_seal_url'] else '(未設定)'}")
         st.text(f"税額内訳表示: {'✅ ON' if issuer.get('show_tax_breakdown') else 'OFF'}")
@@ -127,13 +140,25 @@ with col2:
 
 st.write(f"選択中: **{len(selected_ids)}名**")
 
-# 選択されたスタッフの本名・住所欠損をチェック
+# 選択されたスタッフの本名・住所・E-mail欠損をチェック
+# 2026-05-25 構造逆転に伴い、発行者欄（右下）に本名・住所・E-mailが印字されるため
+# 3項目すべてが揃っていることが望ましい。
 selected_rows_data = [r for r in rows if r["id"] in selected_ids]
 if selected_rows_data:
-    missing_list = missing_field_warning(selected_rows_data, ["real_name"])
+    # 2026-05-25 構造逆転対応: 不足項目は領収書の「発行者欄」に空欄として現れる。
+    missing_list = missing_field_warning(
+        selected_rows_data,
+        ["real_name", "address", "email"],
+        warning_text=(
+            "このまま発行すると、領収書の発行者欄（本名・住所・E-mail）が"
+            "空欄のままになります。後でスタッフ情報を登録してから"
+            "強制再生成すれば、正しい情報の領収書に差し替えられます。"
+        ),
+    )
     if missing_list:
         proceed = st.checkbox(
-            "⚠️ 本名未登録でも発行する（領収書の宛名はディーラーネームになります）",
+            "⚠️ 必須情報（本名・住所・E-mail）未登録でも発行する"
+            "（発行者欄の該当行が空になります。後で再生成可能）",
             value=False,
         )
     else:
@@ -224,12 +249,17 @@ else:
     # CSV出力
     st.markdown("---")
     csv = df_links.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        "📥 DLリンク一覧をCSVでダウンロード",
-        data=csv,
-        file_name=f"receipt_links_event{event_id}.csv",
-        mime="text/csv",
+    st.warning(
+        "⚠️ このCSVには本名・給与金額が含まれます（T2個人情報）。送付前に受取人を確認してください。"
     )
+    if st.checkbox("受取先を確認しました", key="dl_confirm_receipts"):
+        st.download_button(
+            "📥 DLリンク一覧をCSVでダウンロード",
+            data=csv,
+            file_name=f"receipt_links_event{event_id}.csv",
+            mime="text/csv",
+            key="dl_receipts_csv",
+        )
 
     # --- 原本ZIP一括DL（Pacific保管用） ---
     st.markdown("---")

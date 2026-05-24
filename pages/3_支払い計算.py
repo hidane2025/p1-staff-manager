@@ -441,7 +441,9 @@ if staff_opts:
         staff_info = db.get_staff_by_id(p["staff_id"])
         if staff_info and staff_info.get("real_name") and staff_info.get("address"):
             from utils.receipt import generate_receipt_pdf
+            from utils import receipt_db as _receipt_db
             event_info = db.get_event_by_id(event_id)
+            _issuer_settings = _receipt_db.get_issuer_settings(event_id)
             try:
                 pdf_bytes = generate_receipt_pdf(
                     receipt_no=f"P1-{event_id}-{p['id']}",
@@ -451,6 +453,14 @@ if staff_opts:
                     amount=p["total_amount"],
                     event_name=event_info["name"] if event_info else "P1大会",
                     issue_date=event_info["end_date"] if event_info else "",
+                    # 2026-05-25 構造逆転対応: 宛名はイベント設定の「支払者」情報。
+                    # legacy値・空値フォールバックは receipt_db.resolve_payer_name で処理。
+                    payer_name=_receipt_db.resolve_payer_name(
+                        _issuer_settings.get("issuer_name") or ""
+                    ),
+                    payer_address=_issuer_settings.get("issuer_address") or "",
+                    purpose=(_issuer_settings.get("receipt_purpose")
+                             or "ポーカー大会運営業務委託費として"),
                 )
                 st.download_button(
                     "📥 領収書PDFダウンロード",

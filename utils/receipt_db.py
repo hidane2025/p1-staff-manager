@@ -49,8 +49,14 @@ def get_issuer_settings(event_id: int) -> dict:
     res = client.table("p1_events").select(", ".join(cols)).eq(
         "id", event_id).execute()
     row = res.data[0] if res.data else {}
+    # Codex P2 R5 レビュー対応 (2026-05-25):
+    #   issuer_name は p1_events 上で共有されており、領収書（payer_name）と
+    #   契約書（{{issuer_name}}）の両方で使われる。よって本関数は raw 値を返し、
+    #   領収書向けのフォールバック（レガシー値→新PRT名）は呼び出し側
+    #   （resolve_payer_name + receipt_issuer.py）で局所適用する。
+    #   この設計により、92ページでの保存が契約書側の表示を破壊しない。
     return {
-        "issuer_name": row.get("issuer_name") or "株式会社パシフィック",
+        "issuer_name": row.get("issuer_name") or "",
         "issuer_address": row.get("issuer_address") or "",
         "issuer_tel": row.get("issuer_tel") or "",
         "invoice_number": row.get("invoice_number") or "",
@@ -58,6 +64,38 @@ def get_issuer_settings(event_id: int) -> dict:
         "receipt_purpose": row.get("receipt_purpose") or "ポーカー大会運営業務委託費として",
         "show_tax_breakdown": bool(row.get("show_tax_breakdown") or 0),
     }
+
+
+# 2026-05-25: 旧マイグレーションで p1_events.issuer_name に書き込まれる
+# 既定値。これらが入っているレコードは「未設定」と同等とみなし、
+# 領収書では新しい PRT 名へフォールバックする。
+_LEGACY_ISSUER_NAMES_FOR_RECEIPT: frozenset[str] = frozenset({
+    "株式会社パシフィック",
+    "株式会社 パシフィック",
+})
+
+_DEFAULT_PAYER_NAME = "株式会社 PACIFIC RACING TEAM"
+
+
+def resolve_payer_name(stored_issuer_name: str) -> str:
+    """領収書の宛名として使う payer_name にフォールバックを適用。
+
+    Args:
+        stored_issuer_name: get_issuer_settings() で取得した issuer_name の raw 値。
+
+    Returns:
+        ・空文字 or レガシー値（旧仕様の "株式会社パシフィック" 系）の場合は
+          新しい PRT 名称（_DEFAULT_PAYER_NAME）にマップ。
+        ・それ以外（管理者が明示的に上書きした値）はそのまま返す。
+
+    Note:
+        この関数は領収書発行パス限定。契約書生成（utils.contract_issuer）は
+        raw 値をそのまま使うので、本関数を介さない。
+    """
+    s = (stored_issuer_name or "").strip()
+    if not s or s in _LEGACY_ISSUER_NAMES_FOR_RECEIPT:
+        return _DEFAULT_PAYER_NAME
+    return s
 
 
 def save_issuer_settings(event_id: int, **fields) -> None:

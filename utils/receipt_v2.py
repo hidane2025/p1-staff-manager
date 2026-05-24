@@ -2,16 +2,31 @@
 
 既存 utils/receipt.py を改変せず、自前で拡張版を実装したモジュール。
 
-主な追加点:
-- 発行者情報をイベント設定から動的取得
-- インボイス番号（適格請求書発行事業者登録番号）欄
-  空なら非表示、入れたら自動表示（後日追加OK）
-- 電子印影（URLまたはbytes）オプション
+## 領収書の構造（2026-05-25 修正）
+
+領収書は「お金を受け取った人」が「お金を支払った人」に対して発行する文書。
+P1 のケースでは:
+
+    お金の流れ:  PRT（イベント主催）── 業務委託費 ──▶ ディーラー（受領）
+
+    領収書を発行するのは「受領した側＝ディーラー」。
+    宛先は「支払った側＝PRT」。
+
+PDF上の配置:
+    宛名（上部）      = payer_name（PRT等の主催者）＋「御中」
+    発行者（右下）    = receiver_name / address / email（ディーラー本人）
+
+## 主な機能
+- 発行者情報（IssuerInfo）は電子印影のみ実用（ディーラー個人印は通常未使用）
 - 「電子発行につき印紙不要」注記
 - 領収書番号の自動採番ヘルパー
 - 2026-04-21 拡張:
     * 原本／控えの2バージョン生成（右上に縦書きでネイビー色明記）
     * 消費税額の内訳表示（10%固定・税抜は切り捨て）
+- 2026-05-25 仕様変更:
+    * 構造逆転（payer/receiver の意味を明確化）
+    * インボイス番号欄を完全削除（IssuerInfo.invoice_number は無視）
+    * 左下の住所/メール重複表示を削除（発行者欄に統合）
 """
 
 from __future__ import annotations
@@ -89,21 +104,44 @@ def _compute_tax_breakdown(amount_incl_tax: int,
 
 @dataclass(frozen=True)
 class IssuerInfo:
-    """発行者（Pacific）情報"""
-    name: str = "株式会社パシフィック"
-    address: str = ""
-    tel: str = ""
-    invoice_number: Optional[str] = None   # 空ならインボイス欄を描画しない
-    seal_image_bytes: Optional[bytes] = None  # 電子印影（PNG推奨）
+    """発行者（＝ディーラー）の補助情報。
+
+    2026-05-25 仕様変更:
+        主要な発行者情報は ReceiptInput.receiver_* に移行。
+        本クラスは「電子印影（seal_image_bytes）」のみ実用。
+        他のフィールド（name/address/tel/invoice_number）は後方互換のため
+        残置するが、PDF描画では使用しない。
+    """
+    name: str = ""                          # @deprecated: ReceiptInput.receiver_name を使用
+    address: str = ""                       # @deprecated
+    tel: str = ""                           # @deprecated
+    invoice_number: Optional[str] = None    # @deprecated: 中野指示で完全非表示（2026-05-25）
+    seal_image_bytes: Optional[bytes] = None  # 電子印影（PNG推奨・任意）
 
 
 @dataclass(frozen=True)
 class ReceiptInput:
-    """領収書の内容"""
+    """領収書の内容
+
+    Args:
+        payer_name: 領収書の宛名（お金を支払った会社）。例: "株式会社 PACIFIC RACING TEAM"
+                    PDFでは「{payer_name}  御中」として描画される。
+        receiver_name: 発行者名（お金を受け取った個人＝ディーラー本名）。
+                       PDF右下の発行者ブロックに描画される。
+        receiver_address: 発行者（ディーラー）の住所。
+        receiver_email: 発行者（ディーラー）のメールアドレス。
+        amount: 領収金額（税込）。
+        event_name: 大会名。但し書きに括弧付きで表示される。
+        issue_date: 発行日（YYYY-MM-DD）。
+        purpose: 但し書きの本文。
+    """
     receipt_no: str
-    recipient_name: str
-    recipient_address: str
-    recipient_email: str
+    # 宛名（お金を支払った会社）
+    payer_name: str
+    # 発行者（お金を受け取った個人＝ディーラー）
+    receiver_name: str
+    receiver_address: str
+    receiver_email: str
     amount: int
     event_name: str
     issue_date: str                    # YYYY-MM-DD
@@ -249,10 +287,12 @@ def generate_receipt_pdf_v2(
     c.drawRightString(right_x, height - 32 * mm, f"No. {receipt.receipt_no}")
     c.drawRightString(right_x, height - 37 * mm, f"発行日: {receipt.issue_date}")
 
-    # --- 宛名 ---
+    # --- 宛名（支払者＝PRT等に「御中」） ---
+    # 2026-05-25 仕様変更: 旧版はディーラー名 + 様 を描画していたが、
+    # 領収書は受領側（ディーラー）が発行する文書なので、宛名は支払者側になる。
     y_name = height - 52 * mm
     c.setFont(FONT_JP, 13)
-    c.drawString(15 * mm, y_name, f"{receipt.recipient_name}  様")
+    c.drawString(15 * mm, y_name, f"{receipt.payer_name}  御中")
     c.setStrokeColor(black)
     c.setLineWidth(0.5)
     c.line(15 * mm, y_name - 2 * mm, 120 * mm, y_name - 2 * mm)
@@ -274,25 +314,28 @@ def generate_receipt_pdf_v2(
     c.line(15 * mm, y_purpose - 10 * mm, width - 15 * mm, y_purpose - 10 * mm)
     c.drawString(15 * mm, y_purpose - 17 * mm, "上記金額を正に領収いたしました。")
 
-    # --- 発行者ブロック（右下） ---
+    # --- 発行者ブロック（右下） = 受領者＝ディーラーの情報 ---
+    # 2026-05-25 仕様変更:
+    #   旧版は PRT（issuer_info）の情報を描画していたが、領収書を発行するのは
+    #   受領した側（ディーラー本人）なので、ここにはディーラーの本名・住所・
+    #   メールアドレスを表示する。
+    #   インボイス番号は中野指示で完全削除（ディーラー個人は通常持たないため）。
     y_issuer = 37 * mm
-    c.setFont(FONT_JP, 10)
-    c.drawRightString(width - 15 * mm, y_issuer, f"{issuer.name}")
+    c.setFont(FONT_JP, 11)
+    c.drawRightString(width - 15 * mm, y_issuer, f"{receipt.receiver_name}")
     c.setFont(FONT_JP, 8)
-    if issuer.address:
-        c.drawRightString(width - 15 * mm, y_issuer - 5 * mm, issuer.address)
-    if issuer.tel:
-        c.drawRightString(width - 15 * mm, y_issuer - 10 * mm, f"TEL: {issuer.tel}")
-
-    # インボイス番号（空でない場合のみ描画）
-    if issuer.invoice_number:
-        c.setFont(FONT_JP, 8)
+    if receipt.receiver_address:
         c.drawRightString(
-            width - 15 * mm, y_issuer - 15 * mm,
-            f"適格請求書発行事業者登録番号: {issuer.invoice_number}",
+            width - 15 * mm, y_issuer - 5 * mm,
+            f"住所: {receipt.receiver_address}",
+        )
+    if receipt.receiver_email:
+        c.drawRightString(
+            width - 15 * mm, y_issuer - 10 * mm,
+            f"E-mail: {receipt.receiver_email}",
         )
 
-    # 電子印影（あれば）
+    # 電子印影（任意・通常は未使用）
     if issuer.seal_image_bytes:
         try:
             img = ImageReader(io.BytesIO(issuer.seal_image_bytes))
@@ -302,13 +345,8 @@ def generate_receipt_pdf_v2(
         except Exception:
             pass  # 印影エラーは無視（本体PDFは出す）
 
-    # --- 宛先情報（小さく左下） ---
-    c.setFont(FONT_JP, 7)
-    c.setFillColor(HexColor("#666666"))
-    if receipt.recipient_address:
-        c.drawString(15 * mm, y_issuer - 5 * mm, f"住所: {receipt.recipient_address}")
-    if receipt.recipient_email:
-        c.drawString(15 * mm, y_issuer - 10 * mm, f"E-mail: {receipt.recipient_email}")
+    # NOTE: 旧版にあった「左下の宛先情報（住所/E-mail）」表示は、
+    #       発行者欄と完全重複するため削除（2026-05-25）。
 
     # --- 印紙不要注記（下端） ---
     if include_stamp_free_note:

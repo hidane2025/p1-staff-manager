@@ -1,4 +1,17 @@
-"""P1 Staff Manager — 領収書PDF生成"""
+"""P1 Staff Manager — 領収書PDF生成（legacy・支払い計算ページのプレビュー用）
+
+2026-05-25 仕様変更（構造逆転）:
+    領収書はお金を「受け取った人」が「支払った人」に対して発行する文書。
+    P1 のケース: PRT（イベント主催）→ ディーラー へ業務委託費を支払う。
+    よって発行者はディーラー側、宛名は PRT 側になる。
+
+    PDF配置:
+        宛名（上部）     = payer_name + 「御中」
+        発行者（右下）   = real_name / address / email （ディーラー本人）
+
+    主要パスは utils/receipt_v2.py を推奨。本モジュールは
+    pages/3_支払い計算.py のスタッフ毎クイックDL用に残置。
+"""
 
 from io import BytesIO
 from reportlab.lib.pagesizes import A5, landscape
@@ -32,23 +45,27 @@ def generate_receipt_pdf(
     amount: int,
     event_name: str,
     issue_date: str,
-    issuer_name: str = "株式会社パシフィック",
-    issuer_address: str = "",
+    payer_name: str = "株式会社 PACIFIC RACING TEAM",
+    payer_address: str = "",
     purpose: str = "ポーカー大会運営業務委託費として",
 ) -> bytes:
     """領収書PDFをバイト列で返す
 
     Args:
         receipt_no: 領収書番号
-        real_name: 宛名（本名）
-        address: 宛先住所
-        email: 宛先メール
+        real_name: 発行者（受領者）の本名＝ディーラー本名
+        address: 発行者（受領者）の住所
+        email: 発行者（受領者）のメール
         amount: 金額
         event_name: 大会名
         issue_date: 発行日 (YYYY-MM-DD)
-        issuer_name: 発行者（P1側）
-        issuer_address: 発行者住所
+        payer_name: 支払者名（領収書の宛名・主催者側）。デフォルトは PRT。
+        payer_address: 支払者住所（オプション）。
         purpose: 但し書き
+
+    Note:
+        2026-05-25 構造逆転対応。旧版の issuer_name/issuer_address 引数は
+        payer_name/payer_address にリネーム済み（意味も入れ替わっている）。
     """
     _ensure_font()
 
@@ -66,10 +83,10 @@ def generate_receipt_pdf(
     c.drawRightString(width - 10 * mm, height - 35 * mm, f"No. {receipt_no}")
     c.drawRightString(width - 10 * mm, height - 40 * mm, f"発行日: {issue_date}")
 
-    # 宛名
+    # 宛名（支払者＋御中）
     c.setFont(FONT_JP, 12)
     y_name = height - 55 * mm
-    c.drawString(15 * mm, y_name, f"{real_name}  様")
+    c.drawString(15 * mm, y_name, f"{payer_name}  御中")
     # 下線
     c.setStrokeColor(black)
     c.setLineWidth(0.5)
@@ -99,20 +116,18 @@ def generate_receipt_pdf(
 
     c.drawString(15 * mm, y_purpose - 17 * mm, "上記金額を正に領収いたしました。")
 
-    # 発行者情報 右下
+    # 発行者情報 右下（＝受領者＝ディーラー本人）
     y_issuer = 25 * mm
-    c.setFont(FONT_JP, 9)
-    c.drawRightString(width - 15 * mm, y_issuer + 10 * mm, f"発行者: {issuer_name}")
-    if issuer_address:
-        c.drawRightString(width - 15 * mm, y_issuer + 5 * mm, issuer_address)
-
-    # 宛先情報 左下（小さく）
-    c.setFont(FONT_JP, 7)
-    c.setFillColor(HexColor("#666666"))
+    c.setFont(FONT_JP, 11)
+    c.drawRightString(width - 15 * mm, y_issuer + 10 * mm, real_name)
+    c.setFont(FONT_JP, 8)
     if address:
-        c.drawString(15 * mm, y_issuer + 5 * mm, f"住所: {address}")
+        c.drawRightString(width - 15 * mm, y_issuer + 5 * mm, f"住所: {address}")
     if email:
-        c.drawString(15 * mm, y_issuer, f"E-mail: {email}")
+        c.drawRightString(width - 15 * mm, y_issuer, f"E-mail: {email}")
+
+    # NOTE: 旧版にあった「左下の宛先情報（住所/E-mail）」表示は、
+    #       発行者欄と完全重複するため削除（2026-05-25）。
 
     c.setFillColor(black)
     c.showPage()

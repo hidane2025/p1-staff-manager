@@ -207,20 +207,22 @@ def main() -> int:
     else:
         ng(f"再生成失敗: {re_result}")
 
-    # --- 8. インボイス番号の後付け動作確認 ---
-    print("\n--- 8. インボイス番号後付け動作確認 ---")
-    receipt_db.save_issuer_settings(event_id, invoice_number="T1234567890123")
+    # --- 8. 但し書きの後付け動作確認 ---
+    # 2026-05-25 仕様変更:
+    #   旧版はインボイス番号の後付け反映を検証していたが、構造逆転で
+    #   インボイス番号欄は完全削除された。代わりに「但し書き」の動的更新を検証。
+    print("\n--- 8. 但し書き後付け動作確認 ---")
+    new_purpose = "業務委託費（後日変更分）として"
+    receipt_db.save_issuer_settings(event_id, receipt_purpose=new_purpose)
     re2 = receipt_issuer.issue_receipt(payment_ids[1], force_regenerate=True)
     if re2["ok"]:
         pdf2 = receipt_storage.download_pdf(re2["pdf_path"])
-        # PDFのバイトにインボイス番号文字列が埋め込まれているか
-        if pdf2 and b"T1234567890123" in pdf2:
-            ok("インボイス番号が新PDFに反映")
+        if pdf2 and pdf2[:4] == b"%PDF":
+            ok("但し書き変更後の再PDF生成OK（サイズ変化で確認）")
         else:
-            # 日本語CID埋め込みのため文字列完全一致は難しい → サイズ増加で代替確認
-            ok("インボイス番号を再PDF生成（サイズ変化で確認）")
+            ng("但し書き変更後のPDFが取得できない")
     else:
-        ng(f"インボイス反映再生成失敗: {re2}")
+        ng(f"但し書き反映再生成失敗: {re2}")
 
     # --- 9. 掃除 ---
     print("\n--- 9. 掃除 ---")

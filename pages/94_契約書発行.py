@@ -116,7 +116,14 @@ if selected_rows_data:
     _norm = [{"no": s.get("no"), "name_jp": s.get("name_jp"),
               "real_name": s.get("real_name"), "address": ""}
              for s in selected_rows_data]
-    missing_list = missing_field_warning(_norm, ["real_name"])
+    missing_list = missing_field_warning(
+        _norm,
+        ["real_name"],
+        warning_text=(
+            "このまま発行すると、契約書の乙名義がディーラーネーム"
+            "（本名でなくニックネーム）になります。"
+        ),
+    )
     if missing_list:
         proceed = st.checkbox(
             "⚠️ 本名未登録でも発行する（契約書の乙名義はディーラーネームになります）",
