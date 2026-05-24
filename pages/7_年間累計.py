@@ -187,12 +187,15 @@ with st.expander("🩺 スタッフ情報健全性チェック（運用品質確
         st.dataframe(issues, hide_index=True, use_container_width=True)
         st.info("💡 法定調書提出や領収書・契約書発行の前に、スタッフ管理画面で補完してください。")
         csv_issues = pd.DataFrame(issues).to_csv(index=False).encode("utf-8-sig")
-        st.download_button(
-            "📥 未登録スタッフ一覧CSV",
-            csv_issues,
-            f"p1_staff_incomplete_{year}.csv",
-            "text/csv",
-        )
+        st.warning("⚠️ 氏名・メール等が含まれます（T2個人情報）。送付前に受取人を確認してください。")
+        if st.checkbox("受取先を確認しました", key="dl_confirm_incomplete"):
+            st.download_button(
+                "📥 未登録スタッフ一覧CSV",
+                csv_issues,
+                f"p1_staff_incomplete_{year}.csv",
+                "text/csv",
+                key="dl_incomplete_csv",
+            )
     else:
         st.success(f"✅ 今年稼働した {len(active_staff)}名全員の本名・メール・住所が登録済みです。")
 
@@ -215,9 +218,15 @@ for t in totals:
         "法定調書対象": "対象" if t["total_amount"] > 500000 else "",
     })
 csv_bytes = pd.DataFrame(csv_data).to_csv(index=False).encode("utf-8-sig")
-st.download_button(
-    f"📥 {year}年 年間累計CSVダウンロード",
-    csv_bytes,
-    f"p1_yearly_{year}.csv",
-    "text/csv",
+st.warning(
+    "⚠️ このCSVには本名・住所・メール・給与情報が含まれます（T2個人情報・最高濃度）。\n"
+    "経理・税務以外への共有禁止。送付前に受取先を必ず確認してください。"
 )
+if st.checkbox("受取先を確認しました", key="dl_confirm_yearly"):
+    st.download_button(
+        f"📥 {year}年 年間累計CSVダウンロード",
+        csv_bytes,
+        f"p1_yearly_{year}.csv",
+        "text/csv",
+        key="dl_yearly_csv",
+    )

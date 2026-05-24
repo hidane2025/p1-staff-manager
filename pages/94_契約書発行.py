@@ -250,12 +250,17 @@ else:
     st.markdown("---")
     # CSV出力
     csv = df_contracts.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        "📥 署名URL一覧CSV",
-        data=csv,
-        file_name="contract_signing_urls.csv",
-        mime="text/csv",
+    st.warning(
+        "⚠️ このCSVには氏名・署名URLが含まれます（T2個人情報）。送付前に受取人を確認してください。"
     )
+    if st.checkbox("受取先を確認しました", key="dl_confirm_contracts"):
+        st.download_button(
+            "📥 署名URL一覧CSV",
+            data=csv,
+            file_name="contract_signing_urls.csv",
+            mime="text/csv",
+            key="dl_contracts_csv",
+        )
 
     # 署名済みPDFダウンロード（個別）
     with st.expander("📑 署名済みPDFダウンロード"):

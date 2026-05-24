@@ -272,5 +272,16 @@ if not _print_mode_pre:
 
     csv_df = pd.DataFrame(csv_data)
     csv_bytes = csv_df.to_csv(index=False).encode("utf-8-sig")
-    st.download_button("📥 CSVダウンロード", csv_bytes, "p1_envelope_list.csv", "text/csv")
+    st.warning(
+        "⚠️ このCSVには氏名・給与情報が含まれます（T2個人情報）。\n"
+        "送付前に受取人を必ず確認してください。"
+    )
+    if st.checkbox("受取先を確認しました", key="dl_confirm_envelope"):
+        st.download_button(
+            "📥 CSVダウンロード",
+            csv_bytes,
+            "p1_envelope_list.csv",
+            "text/csv",
+            key="dl_envelope_csv",
+        )
     st.markdown('</div>', unsafe_allow_html=True)

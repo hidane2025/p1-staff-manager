@@ -256,7 +256,17 @@ with col_dl1:
             "支払日": p.get("paid_at", ""),
         })
     payment_csv = pd.DataFrame(csv_payment).to_csv(index=False).encode("utf-8-sig")
-    st.download_button("📥 支払い一覧CSV", payment_csv, "p1_payments.csv", "text/csv")
+    st.warning(
+        "⚠️ 氏名・給与情報を含みます（T2個人情報）。送付前に受取人を確認してください。"
+    )
+    if st.checkbox("受取先を確認しました", key="dl_confirm_payment"):
+        st.download_button(
+            "📥 支払い一覧CSV",
+            payment_csv,
+            "p1_payments.csv",
+            "text/csv",
+            key="dl_payment_csv",
+        )
 
 with col_dl2:
     # 小口経費CSV
