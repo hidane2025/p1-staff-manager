@@ -460,6 +460,25 @@ button[kind="secondary"]:hover, button[data-testid="baseButton-secondary"]:hover
     font-weight: 600;
 }}
 
+/* ============ Quick Nav (sidebar) ============ */
+/* 既定のフラットな自動ページナビ（16項目・優先度なし）は隠し、
+   グループ化クイックナビ（render_quick_nav）に一本化する（UX-1）。
+   ※新規ページを追加したら _QUICK_NAV_GROUPS に必ず登録すること（未登録は導線から消える）。 */
+[data-testid="stSidebarNav"] {{ display: none; }}
+.p1-quicknav-title {{
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    color: {c["text_muted"]}; text-transform: uppercase; margin: 2px 0 4px;
+}}
+.p1-quicknav-group {{
+    font-size: 12px; font-weight: 700; color: {c["text"]};
+    margin: 9px 0 1px;
+}}
+/* クイックナビ直後の page_link は詰めて表示（毎日タップする導線） */
+[data-testid="stSidebar"] [data-testid="stPageLink"] {{ margin: 0; }}
+[data-testid="stSidebar"] [data-testid="stPageLink"] a {{
+    padding-top: 4px; padding-bottom: 4px;
+}}
+
 /* ============ iPad / Tablet ============ */
 @media (max-width: 1280px) {{
     .p1-card {{ padding: 14px 16px 10px; }}
@@ -484,6 +503,15 @@ button[kind="secondary"]:hover, button[data-testid="baseButton-secondary"]:hover
 
     /* TODOリストもタップしやすく */
     .p1-todo-row {{ padding: 14px 16px; font-size: 15px; }}
+
+    /* UX-2: タブレットではサイドバーの幅・余白を詰めて内容領域を広げる。
+       （Streamlit の initial_sidebar_state は幅依存にできないため、折りたたみではなく
+       圧縮で footprint を減らす。折りたたみたい時は左上の « ボタンで手動折りたたみ可。） */
+    [data-testid="stSidebar"] {{ min-width: 200px !important; width: 200px !important; }}
+    [data-testid="stSidebarNav"] a span {{ font-size: 13px; }}
+    [data-testid="stSidebarNav"] li {{ margin: 0; }}
+    [data-testid="stSidebar"] [data-testid="stPageLink"] a p {{ font-size: 13px; }}
+    .p1-quicknav-group {{ margin: 7px 0 1px; }}
 }}
 
 /* スマホ: 完全1カラム + フォーム要素を縦積み */

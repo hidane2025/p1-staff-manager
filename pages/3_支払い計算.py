@@ -64,8 +64,8 @@ break_6h = event.get("break_minutes_6h", 45) if event else 45
 break_8h = event.get("break_minutes_8h", 60) if event else 60
 
 # --- 計算実行 ---
-st.divider()
-st.markdown(f"**休憩控除:** 6h超={break_6h}分 / 8h超={break_8h}分")
+# UX-3: ファーストビューの余白を詰め、主要アクション（計算ボタン）を引き上げる。
+st.caption(f"休憩控除: 6h超={break_6h}分 / 8h超={break_8h}分")
 
 # A-6: 端数処理（イベント単位）。ここで丸めた確定額が「封筒で渡す現金＝領収書の額面＝
 # 年間累計」すべてに共通で反映される。封筒ページ側の個別トグルは廃止（正の二重化を防ぐ）。
@@ -112,7 +112,7 @@ if _rounding_ok and _picked_ru != _cur_ru:
         )
     st.rerun()
 
-if st.button("🔄 支払い額を計算", type="primary"):
+if st.button("🔄 支払い額を計算", type="primary", use_container_width=True):
     shifts = db.get_shifts_for_event(event_id)
     if not shifts:
         st.warning("シフトが登録されていません。先にシフト取込を行ってください。")

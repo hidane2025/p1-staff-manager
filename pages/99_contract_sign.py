@@ -35,7 +35,8 @@ st.markdown(
 )
 
 from utils.page_layout import apply_global_style
-apply_global_style()
+# スタッフ向け公開ページ。管理ページのクイックナビは出さない。
+apply_global_style(show_quicknav=False)
 st.title("✍ 契約書 電子署名")
 
 # ---- トークン検証 ----

@@ -31,7 +31,8 @@ st.markdown(
 )
 
 from utils.page_layout import apply_global_style
-apply_global_style()
+# スタッフ向け公開ページ。サイドバーは隠す＋管理ページのクイックナビも出さない。
+apply_global_style(show_quicknav=False)
 st.title("📄 領収書ダウンロード")
 
 query_params = st.query_params

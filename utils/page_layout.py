@@ -25,8 +25,8 @@ from utils.design_system import COLORS, build_global_css
 # ============================================================
 # Global CSS injection
 # ============================================================
-def apply_global_style() -> None:
-    """ページ冒頭で呼ぶ。グローバルCSSを注入する。
+def apply_global_style(show_quicknav: bool = True) -> None:
+    """ページ冒頭で呼ぶ。グローバルCSS注入＋（任意で）サイドバーのクイックナビ描画。
 
     A-10 (2026-06-01): 旧版は st.session_state ガードで「1回だけ注入」していたが、
     Streamlit はリラン毎にスクリプトを再実行し、その run で再生成されない要素を
@@ -34,8 +34,76 @@ def apply_global_style() -> None:
     CSS を emit したページ以外ではガードが効いて <style> が剥がれ、封筒印刷カード・
     KPIカード・iPad用大ボタン等のスタイルが崩れていた（マルチページのアンチパターン）。
     冪等かつ低コスト（約13KB）なので、毎回無条件に注入する（ui_helpers と同方式）。
+
+    UX-1 (2026-06-01): 全管理ページが本関数を呼ぶことを利用し、サイドバー上部に
+    「毎日／締め／設定」のグループ化クイックナビを描画する（既定ナビは残置）。
+    16ファイルに個別実装せず一箇所で全ページに反映する。スタッフ向け公開ページ
+    （領収書DL・契約署名）はサイドバー自体を隠すうえ管理リンクを出すべきでないため、
+    show_quicknav=False で無効化する。
     """
     st.markdown(build_global_css(), unsafe_allow_html=True)
+    if show_quicknav:
+        render_quick_nav()
+
+
+# クイックナビの定義。全管理ページを「優先度・業務フロー順」にグループ化し、
+# 既定のフラットな自動ナビ（16項目・優先度なし）を置き換える。
+# page は実在ファイル名と完全一致させること（st.page_link は不在ページで例外）。
+# スタッフ向け公開ページ（9_receipt_download / 99_contract_sign）は管理ナビに含めない。
+_QUICK_NAV_GROUPS = [
+    ("🏠 ホーム", [
+        ("🃏 トップ（今日のTo-Do）", "app.py"),
+    ]),
+    ("🔴 当日運用（毎日）", [
+        ("🎰 ピット端末", "pages/10_ピット端末.py"),
+        ("🕐 出退勤", "pages/5_出退勤.py"),
+        ("💰 支払い計算", "pages/3_支払い計算.py"),
+    ]),
+    ("📦 締め・配布", [
+        ("✉️ 封筒リスト", "pages/4_封筒リスト.py"),
+        ("📄 領収書発行", "pages/91_領収書発行.py"),
+        ("✍️ 契約書発行", "pages/94_契約書発行.py"),
+        ("📊 精算レポート", "pages/6_精算レポート.py"),
+    ]),
+    ("🛠 準備・設定", [
+        ("📋 イベント設定", "pages/0_イベント設定.py"),
+        ("👥 スタッフ管理", "pages/1_スタッフ管理.py"),
+        ("📅 シフト取込", "pages/2_シフト取込.py"),
+        ("🚃 交通費", "pages/8_交通費.py"),
+        ("🎁 個別手当", "pages/11_個別手当.py"),
+        ("🏢 発行者設定", "pages/92_発行者設定.py"),
+        ("📑 契約書テンプレ", "pages/93_契約書テンプレ.py"),
+    ]),
+    ("📈 集計", [
+        ("📅 年間累計", "pages/7_年間累計.py"),
+    ]),
+]
+
+
+def render_quick_nav() -> None:
+    """サイドバー上部に、毎日使うページのグループ化ショートカットを描画する。
+
+    既定のページナビ（全ページ網羅）はそのまま下に残す。本ナビは「16項目フラットで
+    優先度が無い」問題を解消するための、厳選＋グループ見出し付きショートカット。
+    st.page_link は存在しないページを指すと例外になるため、page は実在ファイル名と一致必須。
+    """
+    with st.sidebar:
+        st.markdown('<div class="p1-quicknav">', unsafe_allow_html=True)
+        st.markdown('<div class="p1-quicknav-title">クイックナビ</div>',
+                    unsafe_allow_html=True)
+        for group_label, items in _QUICK_NAV_GROUPS:
+            st.markdown(
+                f'<div class="p1-quicknav-group">{group_label}</div>',
+                unsafe_allow_html=True,
+            )
+            for label, page in items:
+                try:
+                    st.page_link(page, label=label)
+                except Exception:
+                    # ページ未存在・実行コンテキスト外でも画面を壊さない
+                    pass
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.divider()
 
 
 # ============================================================
