@@ -38,13 +38,14 @@ if not payments:
 
 section_header("支払い状況サマリー", "「未払い」と「領収書未受領」がゼロになれば締めOKです。")
 
-total_amount = sum(p["total_amount"] for p in payments)
+# A-6: 金額は確定額(payable_amount)で集計し、封筒・領収書・年間累計と一致させる。
+total_amount = sum(db.get_payable(p) for p in payments)
 paid_count = sum(1 for p in payments if p["status"] == "paid")
 unpaid_count = sum(1 for p in payments if p["status"] != "paid")
 receipt_count = sum(1 for p in payments if p["receipt_received"])
 no_receipt_count = sum(1 for p in payments if not p["receipt_received"])
-paid_amount = sum(p["total_amount"] for p in payments if p["status"] == "paid")
-unpaid_amount = sum(p["total_amount"] for p in payments if p["status"] != "paid")
+paid_amount = sum(db.get_payable(p) for p in payments if p["status"] == "paid")
+unpaid_amount = sum(db.get_payable(p) for p in payments if p["status"] != "paid")
 
 kpi_row([
     {"label": "総支払額", "value": f"¥{total_amount:,}", "detail": f"対象 {len(payments)}名", "accent": True},
@@ -60,6 +61,9 @@ kpi_row([
 # --- 内訳 ---
 section_header("支払い内訳", "費目ごとの構成比。深夜手当・交通費の比率が異常に高い時はレート設定を要確認。")
 
+# A-5/A-6: 臨時調整・端数調整も費目に含め、費目合計＝確定額(total_amount) を成立させる。
+_sum_total_raw = sum(int(p.get("total_amount") or 0) for p in payments)
+_sum_rounding = total_amount - _sum_total_raw  # 端数調整の総和（payable - 丸め前）
 breakdown = {
     "基本給": sum(p["base_pay"] for p in payments),
     "深夜手当": sum(p["night_pay"] for p in payments),
@@ -69,10 +73,14 @@ breakdown = {
     "精勤手当": sum(p["attendance_bonus"] for p in payments),
     # Codex P2 fix #3: 個別手当を内訳に追加（マイグレ未実行時は 0 のまま）
     "個別手当": sum(int(p.get("individual_allowance_total") or 0) for p in payments),
+    "臨時調整": sum(int(p.get("adjustment") or 0) for p in payments),
 }
+if _sum_rounding:
+    breakdown["端数調整"] = _sum_rounding
 
 breakdown_df = pd.DataFrame([
-    {"項目": k, "金額": v, "構成比": f"{v / total_amount * 100:.1f}%"}
+    {"項目": k, "金額": v,
+     "構成比": f"{(v / total_amount * 100) if total_amount else 0:.1f}%"}
     for k, v in breakdown.items()
 ])
 breakdown_df["金額表示"] = breakdown_df["金額"].apply(lambda x: f"¥{x:,}")
@@ -96,7 +104,7 @@ for p in payments:
     if role not in role_summary:
         role_summary[role] = {"人数": 0, "合計": 0, "平均": 0}
     role_summary[role]["人数"] += 1
-    role_summary[role]["合計"] += p["total_amount"]
+    role_summary[role]["合計"] += db.get_payable(p)  # A-6: 確定額で集計
 
 for role in role_summary:
     role_summary[role]["平均"] = role_summary[role]["合計"] // role_summary[role]["人数"]
@@ -131,7 +139,7 @@ for p in payments:
     if label not in emp_summary:
         emp_summary[label] = {"人数": 0, "合計": 0}
     emp_summary[label]["人数"] += 1
-    emp_summary[label]["合計"] += p["total_amount"]
+    emp_summary[label]["合計"] += db.get_payable(p)  # A-6: 確定額で集計
 
 emp_df = pd.DataFrame([
     {
@@ -218,7 +226,7 @@ with col_u1:
     st.markdown(f"**未払い（{len(unpaid)}名）**")
     if unpaid:
         for p in unpaid:
-            st.warning(f"NO.{p['no']} {p['name_jp']} — ¥{p['total_amount']:,}")
+            st.warning(f"NO.{p['no']} {p['name_jp']} — ¥{db.get_payable(p):,}")
     else:
         st.success("全員支払い済み")
 
@@ -226,7 +234,7 @@ with col_u2:
     st.markdown(f"**領収書未受領（{len(no_receipt)}名）**")
     if no_receipt:
         for p in no_receipt:
-            st.warning(f"NO.{p['no']} {p['name_jp']} — ¥{p['total_amount']:,}")
+            st.warning(f"NO.{p['no']} {p['name_jp']} — ¥{db.get_payable(p):,}")
     else:
         st.success("全員領収書受領済み")
 
@@ -250,6 +258,9 @@ with col_dl1:
             "フロア手当": p["floor_bonus_total"],
             "MIX手当": p["mix_bonus_total"],
             "精勤手当": p["attendance_bonus"],
+            "個別手当": int(p.get("individual_allowance_total") or 0),
+            "臨時調整": int(p.get("adjustment") or 0),
+            "確定額": db.get_payable(p),
             "合計": p["total_amount"],
             "支払状態": "支払済" if p["status"] == "paid" else "未払",
             "領収書": "受領済" if p["receipt_received"] else "未受領",

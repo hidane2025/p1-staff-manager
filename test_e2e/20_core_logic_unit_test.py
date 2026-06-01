@@ -271,6 +271,77 @@ _check("オフレコ手当も計算には含まれる（表示で伏せるだけ
 
 
 # ============================================================
+print("\n[6.7] calculator: 臨時調整(adjustment)の合算 — A-5 (2026-06-01)")
+
+_adj_plus = calculate_staff_payment(
+    11, "調整プラス", "Dealer", shifts, rates, 6,
+    employment_type="contractor", adjustment=5000,
+)
+_check("adjustment=+5000 が total_amount に加算される",
+       _adj_plus.total_amount == contractor_default.total_amount + 5000,
+       f"got ¥{_adj_plus.total_amount} vs default+5000")
+_check("StaffPayment.adjustment に保持される", _adj_plus.adjustment == 5000)
+
+_adj_minus = calculate_staff_payment(
+    12, "調整マイナス", "Dealer", shifts, rates, 6,
+    employment_type="contractor", adjustment=-3000,
+)
+_check("adjustment=-3000（マイナス調整）も反映",
+       _adj_minus.total_amount == contractor_default.total_amount - 3000,
+       f"got ¥{_adj_minus.total_amount}")
+
+_check("adjustment 未指定なら 0（従来通り）",
+       calculate_staff_payment(
+           13, "なし", "Dealer", shifts, rates, 6, employment_type="contractor",
+       ).adjustment == 0)
+_check("adjustment=None も安全に 0 扱い",
+       calculate_staff_payment(
+           14, "None", "Dealer", shifts, rates, 6,
+           employment_type="contractor", adjustment=None,
+       ).adjustment == 0)
+
+# 個別手当と臨時調整の併用（両方 total に乗る）
+_combo = calculate_staff_payment(
+    15, "併用", "Dealer", shifts, rates, 6, employment_type="contractor",
+    individual_allowances=[{"amount": 2000}], adjustment=1000,
+)
+_check("個別手当+臨時調整 が両方 total に乗る",
+       _combo.total_amount == contractor_default.total_amount + 3000,
+       f"got ¥{_combo.total_amount}")
+
+
+# ============================================================
+print("\n[6.8] db: payable_amount（確定額）の算出と取り出し — A-6 (2026-06-01)")
+import db  # noqa: E402  （compute_payable_amount/get_payable は client 非依存の純関数）
+
+_check("丸めなし(unit=0)は total そのまま",
+       db.compute_payable_amount(16375, 0) == 16375)
+_check("100円切り上げ: 16375 → 16400",
+       db.compute_payable_amount(16375, 100) == 16400)
+_check("500円切り上げ: 16375 → 16500",
+       db.compute_payable_amount(16375, 500) == 16500)
+_check("1000円切り上げ: 16375 → 17000",
+       db.compute_payable_amount(16375, 1000) == 17000)
+_check("ちょうど割り切れる額は据え置き(16500,500→16500)",
+       db.compute_payable_amount(16500, 500) == 16500)
+_check("unit が負でもゼロ除算せず total を返す",
+       db.compute_payable_amount(16375, -1) == 16375)
+
+_check("get_payable: payable_amount があればそれを返す",
+       db.get_payable({"payable_amount": 16500, "total_amount": 16375}) == 16500)
+_check("get_payable: payable_amount が無ければ total_amount にフォールバック",
+       db.get_payable({"total_amount": 16375}) == 16375)
+_check("get_payable: payable_amount が None でも total にフォールバック",
+       db.get_payable({"payable_amount": None, "total_amount": 16375}) == 16375)
+_check("get_payable: None 入力は 0",
+       db.get_payable(None) == 0)
+# 内訳整合: total(調整込) + 端数調整 = payable が常に成立
+_pay = db.compute_payable_amount(_combo.total_amount, 500)
+_check("端数調整 = payable - total が内訳を閉じる",
+       _combo.total_amount + (_pay - _combo.total_amount) == _pay)
+
+
+# ============================================================
 # 6.7 Codex P1/P2 fix tests (2026-05-09)
 # ============================================================
 print("\n[6.7] Codex P1/P2 修正の回帰防止テスト")

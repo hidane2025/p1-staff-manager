@@ -107,7 +107,7 @@ for r in rows:
         "No.": r.get("no", 0),
         "ディーラーネーム": r.get("name_jp", ""),
         "本名": r.get("real_name", ""),
-        "金額": r.get("total_amount", 0),
+        "金額": db.get_payable(r),  # A-6: 確定額（PDF額面・封筒の現金と一致）
         "ステータス": status_jp,
         "領収書": "✅ 発行済み" if r.get("receipt_pdf_path") else "未発行",
         "DL回数": r.get("receipt_download_count") or 0,
@@ -205,7 +205,7 @@ else:
             "No.": r.get("no", 0),
             "ディーラーネーム": r.get("name_jp", ""),
             "本名": r.get("real_name", ""),
-            "金額": r.get("total_amount", 0),
+            "金額": db.get_payable(r),  # A-6: 確定額（PDF額面・封筒の現金と一致）
             "DL回数": r.get("receipt_download_count") or 0,
             "有効期限": r.get("receipt_token_expires_at") or "",
             "URL": url,

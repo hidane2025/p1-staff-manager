@@ -118,6 +118,9 @@ def issue_receipt(
     ]
     if db_schema.has_column("p1_payments", "receipt_original_path"):
         p_cols.insert(5, "receipt_original_path")
+    # A-6: 領収書の額面は確定額(payable_amount)＝封筒で渡す現金と一致させる
+    if db_schema.has_column("p1_payments", "payable_amount"):
+        p_cols.append("payable_amount")
     p_row = client.table("p1_payments").select(", ".join(p_cols)).eq(
         "id", payment_id).execute().data
     if not p_row:
@@ -144,7 +147,8 @@ def issue_receipt(
 
     event_id = p["event_id"]
     staff_id = p["staff_id"]
-    amount = p["total_amount"]
+    # A-6: 確定額(payable_amount)を額面に使う。未適用環境では total_amount に代替。
+    amount = db.get_payable(p)
 
     # 発行者情報・イベント・スタッフ取得
     issuer_data = receipt_db.get_issuer_settings(event_id)

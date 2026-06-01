@@ -6,6 +6,7 @@ URL: /?token=xxxx でアクセス
 
 import streamlit as st
 
+import db
 from utils import receipt_db
 from utils import receipt_storage
 from utils import receipt_token
@@ -62,7 +63,8 @@ if not pdf_bytes:
     st.stop()
 
 receipt_no = record.get("receipt_no") or "receipt"
-amount = record.get("total_amount", 0)
+# A-6: 表示額は確定額(payable_amount)＝PDFの額面・封筒の現金と一致させる
+amount = db.get_payable(record)
 
 # C-1: 証憑アクセスの監査ログ。トークン保持者が本名・住所入りPDFを取得した記録を残す。
 # （発行側は記録するのに DL 側が無記録だった非対称を解消）。

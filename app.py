@@ -123,12 +123,15 @@ def _build_status() -> dict:
             out["payment_count"] = len(payments)
             for p in payments:
                 status = p.get("status", "pending")
+                # A-6: ダッシュボードの金額も確定額(payable_amount)で集計し、
+                # 封筒・領収書・精算レポートと一致させる（端数処理ありで過小表示しない）。
+                _amt = db.get_payable(p)
                 if status == "pending":
                     out["pending_count"] += 1
-                    out["pending_total"] += int(p.get("total_amount") or 0)
+                    out["pending_total"] += _amt
                 elif status == "approved":
                     out["approved_count"] += 1
-                    out["approved_total"] += int(p.get("total_amount") or 0)
+                    out["approved_total"] += _amt
                     if not p.get("receipt_received"):
                         out["receipt_pending"] += 1
                 elif status == "paid":

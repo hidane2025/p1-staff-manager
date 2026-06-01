@@ -211,6 +211,9 @@ def find_payment_by_token(token: str) -> Optional[dict]:
     ]
     if _has_receipt_original_path():
         cols.insert(6, "receipt_original_path")  # receipt_pdf_path の後ろへ
+    # A-6: DLページの表示額を確定額に揃えるため payable_amount も取得
+    if db_schema.has_column("p1_payments", "payable_amount"):
+        cols.append("payable_amount")
     res = client.table("p1_payments").select(", ".join(cols)).eq(
         "receipt_token", token).execute()
     return res.data[0] if res.data else None
@@ -235,6 +238,9 @@ def get_payments_needing_receipt(event_id: int,
     ]
     if _has_receipt_original_path():
         payment_cols.insert(7, "receipt_original_path")
+    # A-6: 発行一覧の金額も確定額(payable_amount)で表示するため取得
+    if db_schema.has_column("p1_payments", "payable_amount"):
+        payment_cols.append("payable_amount")
     select_expr = ", ".join(payment_cols) + (
         ", p1_staff(name_jp, name_en, no, role, real_name, address, email)"
     )

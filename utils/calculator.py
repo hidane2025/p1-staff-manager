@@ -55,6 +55,9 @@ class StaffPayment:
     daily_breakdown: list
     # Phase 3-I (2026-05-08): 個別手当の小計（任意・既存コード非破壊）
     individual_allowance_total: int = 0
+    # A-5 (2026-06-01): 臨時調整額（±）。「+5,000円」等のイレギュラー手当を
+    # 正式な計算項目として total_amount に含める。明細の内訳行にも出す。
+    adjustment: int = 0
 
 
 def parse_time_to_minutes(time_str: str) -> Optional[int]:
@@ -196,6 +199,7 @@ def calculate_staff_payment(
     custom_hourly_rate: Optional[int] = None,
     transport_override: Optional[int] = None,
     individual_allowances: Optional[list] = None,
+    adjustment: int = 0,
 ) -> StaffPayment:
     """スタッフ1人の全日程支払いを計算
 
@@ -310,8 +314,14 @@ def calculate_staff_payment(
             except (TypeError, ValueError):
                 pass
 
+    # A-5 (2026-06-01): 臨時調整額（±）を正式な計算項目として総額に含める。
+    try:
+        adj = int(adjustment or 0)
+    except (TypeError, ValueError):
+        adj = 0
+
     total = (base_pay + night_pay + transport_total + floor_total
-             + mix_total + att_bonus + indiv_total)
+             + mix_total + att_bonus + indiv_total + adj)
 
     return StaffPayment(
         staff_id=staff_id,
@@ -330,4 +340,5 @@ def calculate_staff_payment(
         total_amount=total,
         daily_breakdown=daily_results,
         individual_allowance_total=indiv_total,
+        adjustment=adj,
     )

@@ -599,6 +599,12 @@ else:
                         )
                         if claim is not None:
                             transport_override = int(claim.get("approved_amount") or 0)
+                        # A-5: 既存の臨時調整を保全（ピット再退勤で消さない）
+                        _existing_pay = db.get_client().table("p1_payments").select(
+                            "adjustment, adjustment_note").eq(
+                            "event_id", event_id).eq("staff_id", target["id"]).execute().data
+                        _existing_adj = int(_existing_pay[0].get("adjustment") or 0) if _existing_pay else 0
+                        _existing_adjnote = (_existing_pay[0].get("adjustment_note") or "") if _existing_pay else ""
                         payment = calculate_staff_payment(
                             staff_id=target["id"],
                             name=target["name_jp"],
@@ -612,6 +618,7 @@ else:
                             custom_hourly_rate=target.get("custom_hourly_rate"),
                             transport_override=transport_override,
                             individual_allowances=individual_allowances,
+                            adjustment=_existing_adj,  # A-5: 既存の臨時調整を引き継ぐ
                         )
                         db.save_payment(
                             event_id=event_id,
@@ -624,27 +631,33 @@ else:
                             attendance_bonus=payment.attendance_bonus,
                             total_amount=payment.total_amount,
                             break_deduction=payment.break_deduction,
+                            adjustment=getattr(payment, "adjustment", 0),  # A-5
+                            adjustment_note=_existing_adjnote,
                             # Codex P2 fix #3: 個別手当合計を保存
                             individual_allowance_total=getattr(
                                 payment, "individual_allowance_total", 0
                             ),
                         )
+                        # A-6: 確定額（端数処理後）を表示。封筒・領収書と一致する金額。
+                        _pit_payable = db.compute_payable_amount(
+                            payment.total_amount, db.get_event_rounding_unit(event_id)
+                        )
                         db.log_action(
                             "pit_payment_calc", "payments", target["id"],
-                            detail=f"{target['name_jp']} ¥{payment.total_amount:,}",
+                            detail=f"{target['name_jp']} ¥{_pit_payable:,}",
                             event_id=event_id,
                             performed_by=operator_name(),
                         )
                         st.success(
                             _checkout_msg + "\n\n"
                             f"💰 支払い計算も実行しました。"
-                            f"合計 **¥{payment.total_amount:,}**（{payment.days_worked}日勤務）"
+                            f"確定額 **¥{_pit_payable:,}**（{payment.days_worked}日勤務）"
                         )
                         # UX B: 直前確定カード用の情報を保存
                         st.session_state[_LAST_CONFIRMED_KEY] = {
                             "no": target.get("no", "?"),
                             "name": target["name_jp"],
-                            "amount": int(payment.total_amount),
+                            "amount": int(_pit_payable),
                             "checkout": checkout_time,
                             "approved": False,
                         }
@@ -750,8 +763,8 @@ if existing_for_target:
     }
     kpi_row([
         {
-            "label": "合計支払額",
-            "value": f"¥{existing_for_target.get('total_amount', 0):,}",
+            "label": "確定支払額",
+            "value": f"¥{db.get_payable(existing_for_target):,}",  # A-6: 確定額表示
             "accent": True,
         },
         {

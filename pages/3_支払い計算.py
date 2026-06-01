@@ -67,6 +67,51 @@ break_8h = event.get("break_minutes_8h", 60) if event else 60
 st.divider()
 st.markdown(f"**休憩控除:** 6h超={break_6h}分 / 8h超={break_8h}分")
 
+# A-6: 端数処理（イベント単位）。ここで丸めた確定額が「封筒で渡す現金＝領収書の額面＝
+# 年間累計」すべてに共通で反映される。封筒ページ側の個別トグルは廃止（正の二重化を防ぐ）。
+_round_opts = {"なし（そのまま）": 0, "100円単位で切り上げ": 100,
+               "500円単位で切り上げ": 500, "1000円単位で切り上げ": 1000}
+_cur_ru = int((event or {}).get("rounding_unit") or 0)
+_ru_labels = list(_round_opts.keys())
+_cur_ru_label = next((k for k, v in _round_opts.items() if v == _cur_ru), "なし（そのまま）")
+# マイグレ(20260601)未適用だと rounding_unit を保存できず無限リランになるため、
+# 未適用環境ではセレクタを無効化し、適用を促す（false-success/rerun の防止）。
+_rounding_ok = db.rounding_supported()
+_picked_ru_label = st.selectbox(
+    "端数処理（封筒・領収書・年間累計に共通反映）",
+    _ru_labels, index=_ru_labels.index(_cur_ru_label),
+    disabled=not _rounding_ok,
+    help="選んだ単位で支払額を切り上げ、その確定額(payable_amount)を封筒・領収書・年間累計"
+    "すべてに反映します。封筒で渡す現金と領収書の額面が常に一致します。",
+)
+if not _rounding_ok:
+    st.caption(
+        "⚠️ 端数処理を使うにはマイグレーション "
+        "`20260601_add_payable_amount_and_rounding.sql` の適用が必要です（未適用のため無効）。"
+    )
+_picked_ru = _round_opts[_picked_ru_label]
+if _rounding_ok and _picked_ru != _cur_ru:
+    db.update_event_meta(event_id, rounding_unit=_picked_ru)
+    _res = db.recompute_payable_for_event(event_id, _picked_ru)
+    _upd = _res.get("updated", 0) if isinstance(_res, dict) else _res
+    _inv = _res.get("invalidated", 0) if isinstance(_res, dict) else 0
+    _rev = _res.get("reverted", 0) if isinstance(_res, dict) else 0
+    st.success(
+        f"端数処理を「{_picked_ru_label}」に変更し、未払い {_upd}名 の確定額を更新しました。"
+        "（支払済みは確定済みのため変更しません）"
+    )
+    if _rev:
+        st.warning(
+            f"⚠️ 確定額が変わった {_rev}名 を**未承認に差し戻しました**（再承認が必要です）。"
+            "無承認のまま金額が変わるのを防ぐためです。"
+        )
+    if _inv:
+        st.warning(
+            f"⚠️ 確定額が変わった {_inv}名 の**発行済み領収書を無効化**しました。"
+            "『領収書発行』ページで**再発行**し、新しいDLリンクを配布してください。"
+        )
+    st.rerun()
+
 if st.button("🔄 支払い額を計算", type="primary"):
     shifts = db.get_shifts_for_event(event_id)
     if not shifts:
@@ -78,6 +123,9 @@ if st.button("🔄 支払い額を計算", type="primary"):
     protected_ids = {p["staff_id"] for p in existing_payments if p["status"] in ("paid", "approved")}
     if protected_ids:
         st.warning(f"⚠️ {len(protected_ids)}名が承認済み/支払済みです。スキップします。")
+    # A-5: 既存の臨時調整額を staff 単位で保持し、再計算で消えないよう引き継ぐ。
+    adj_map = {p["staff_id"]: int(p.get("adjustment") or 0) for p in existing_payments}
+    adjnote_map = {p["staff_id"]: (p.get("adjustment_note") or "") for p in existing_payments}
 
     # 全スタッフの雇用区分・個別時給をまとめて取得
     all_staff_map = {s["id"]: s for s in db.get_all_staff()}
@@ -153,6 +201,7 @@ if st.button("🔄 支払い額を計算", type="primary"):
             custom_hourly_rate=data["custom_hourly_rate"],
             transport_override=transport_override,
             individual_allowances=indiv_allowances,
+            adjustment=adj_map.get(staff_id, 0),  # A-5: 既存の臨時調整を引き継ぐ
         )
         # Codex P2 fix #3: 個別手当合計をDBに保存（合計と内訳の整合性確保）
         _allowance_subtotal = getattr(payment, "individual_allowance_total", 0)
@@ -166,6 +215,8 @@ if st.button("🔄 支払い額を計算", type="primary"):
             attendance_bonus=payment.attendance_bonus,
             break_deduction=payment.break_deduction,
             total_amount=payment.total_amount,
+            adjustment=getattr(payment, "adjustment", 0),  # A-5
+            adjustment_note=adjnote_map.get(staff_id, ""),
             individual_allowance_total=_allowance_subtotal,
         )
 
@@ -183,48 +234,22 @@ if not payments:
 
 # --- サマリー ---
 st.subheader("支払い一覧")
-total_all = sum(p["total_amount"] for p in payments)
+# A-6: 表示金額は保存済みの確定額(payable_amount)に統一。端数処理は上の
+# 「端数処理」セレクトボックス（イベント単位・save時に payable へ反映）が唯一の制御。
+# 旧・表示専用の per-view 丸めUIは、封筒/領収書との不一致の原因だったため撤去。
+total_all = sum(p["total_amount"] for p in payments)          # 丸め前の素の合計
+total_payable = sum(db.get_payable(p) for p in payments)      # 確定額（封筒・領収書と一致）
 pending_count = sum(1 for p in payments if p["status"] == "pending")
 approved_count = sum(1 for p in payments if p["status"] == "approved")
 paid_count = sum(1 for p in payments if p["status"] == "paid")
 
-# 丸め単位の選択
-def _round_up(n: int, unit: int) -> int:
-    """unit単位で切り上げ"""
-    if unit <= 0 or n % unit == 0:
-        return n
-    return ((n // unit) + 1) * unit
-
-
-ROUND_OPTIONS = {
-    "なし": 0,
-    "100円切り上げ": 100,
-    "500円切り上げ（推奨）": 500,
-    "1000円切り上げ": 1000,
-}
-# 前回の選択を記憶（session_state）
-_labels = list(ROUND_OPTIONS.keys())
-_prev = st.session_state.get("payment_round_label", "500円切り上げ（推奨）")
-_prev_idx = _labels.index(_prev) if _prev in _labels else 2
-round_label = st.selectbox(
-    "💰 端数丸め（個別金額・合計に適用）",
-    _labels,
-    index=_prev_idx,
-    help="例: 500円切り上げなら 16,300→16,500 / 18,600→19,000",
-    key="payment_round_label",
-)
-round_unit = ROUND_OPTIONS[round_label]
-
-# 個別金額を丸めた場合の合計
-total_rounded = sum(_round_up(p["total_amount"], round_unit) for p in payments) if round_unit else total_all
-
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("総支払額", f"¥{total_all:,}")
-col2.metric(
-    f"丸め後合計（{round_label}）",
-    f"¥{total_rounded:,}",
-    delta=f"+¥{total_rounded - total_all:,}" if total_rounded > total_all else None,
+col1.metric(
+    "総支払額（確定）", f"¥{total_payable:,}",
+    delta=f"端数調整 +¥{total_payable - total_all:,}" if total_payable != total_all else None,
+    help="封筒で渡す現金・領収書の額面・年間累計と一致する確定額（端数処理反映後）。",
 )
+col2.metric("丸め前合計", f"¥{total_all:,}")
 col3.metric("⏳ 未承認", f"{pending_count}名")
 col4.metric("💴 支払済", f"{paid_count}名")
 
@@ -401,11 +426,13 @@ if status_filter != "すべて":
 _show_allowance_column = any(
     int(p.get("individual_allowance_total") or 0) > 0 for p in payments
 )
+_show_adjustment_column = any(int(p.get("adjustment") or 0) != 0 for p in payments)
+# A-6: 端数処理が効いている（確定額≠丸め前）場合のみ「確定額」列を出す
+_any_rounded = any(db.get_payable(p) != p["total_amount"] for p in payments)
 
 display_data = []
 for p in filtered:
     status_icon = {"pending": "⏳ 未承認", "approved": "✅ 承認済", "paid": "💴 支払済"}.get(p["status"], p["status"])
-    rounded = _round_up(p["total_amount"], round_unit) if round_unit else p["total_amount"]
     row = {
         "NO.": p["no"], "名前": p["name_jp"], "役職": p["role"],
         "基本給": f"¥{p['base_pay']:,}", "深夜": f"¥{p['night_pay']:,}",
@@ -414,9 +441,11 @@ for p in filtered:
     }
     if _show_allowance_column:
         row["個別手当"] = f"¥{int(p.get('individual_allowance_total') or 0):,}"
+    if _show_adjustment_column:
+        row["臨時調整"] = f"¥{int(p.get('adjustment') or 0):,}"
     row["合計"] = f"¥{p['total_amount']:,}"
-    if round_unit:
-        row["丸め後"] = f"¥{rounded:,}"
+    if _any_rounded:
+        row["確定額"] = f"¥{db.get_payable(p):,}"
     row["状態"] = status_icon
     row["領収書"] = "✅" if p["receipt_received"] else "❌"
     display_data.append(row)
@@ -432,17 +461,26 @@ if _show_allowance_column:
 # --- 個別操作 ---
 st.divider()
 st.subheader("個別スタッフ操作")
-staff_opts = {f"NO.{p['no']} {p['name_jp']} ({p['role']}) — ¥{p['total_amount']:,}": p for p in filtered}
+staff_opts = {f"NO.{p['no']} {p['name_jp']} ({p['role']}) — ¥{db.get_payable(p):,}": p for p in filtered}
 if staff_opts:
     sel = st.selectbox("スタッフを選択", list(staff_opts.keys()))
     p = staff_opts[sel]
 
     col_d1, col_d2 = st.columns(2)
     with col_d1:
-        p_rounded = _round_up(p["total_amount"], round_unit) if round_unit else p["total_amount"]
-        rounded_row = (
-            f"| **{round_label}後** | **¥{p_rounded:,}**（+¥{p_rounded - p['total_amount']:,}） |\n"
-            if round_unit and p_rounded != p["total_amount"] else ""
+        # A-5/A-6: 個別手当・臨時調整を内訳行に出し、確定額(payable)も明示。
+        # 内訳の総和 = 合計、合計 + 端数調整 = 確定額 が常に成立する。
+        _allow = int(p.get("individual_allowance_total") or 0)
+        _allow_row = f"| 個別手当 | ¥{_allow:,} |\n" if _allow else ""
+        _adj = int(p.get("adjustment") or 0)
+        _adj_row = (
+            f"| 臨時調整 | {'+' if _adj >= 0 else '-'}¥{abs(_adj):,} |\n" if _adj else ""
+        )
+        _payable = db.get_payable(p)
+        _payable_row = (
+            f"| **確定額（端数処理後）** | **¥{_payable:,}**"
+            f"（端数調整 +¥{_payable - p['total_amount']:,}） |\n"
+            if _payable != p["total_amount"] else ""
         )
         st.markdown(f"""
 **{p['name_jp']}** (NO.{p['no']}) — {p['role']}
@@ -456,8 +494,8 @@ if staff_opts:
 | フロア手当 | ¥{p['floor_bonus_total']:,} |
 | MIX手当 | ¥{p['mix_bonus_total']:,} |
 | 精勤手当 | ¥{p['attendance_bonus']:,} |
-| **合計** | **¥{p['total_amount']:,}** |
-{rounded_row}
+{_allow_row}{_adj_row}| **合計** | **¥{p['total_amount']:,}** |
+{_payable_row}
 承認者: {p.get('approved_by') or '未承認'}
 """)
 
@@ -524,6 +562,43 @@ if staff_opts:
         elif p["status"] == "paid":
             st.success("支払済み 💴")
 
+        # A-5: 臨時調整額の編集（イレギュラー手当を正式な計算項目として記録）
+        # 内部統制上、編集できるのは未承認(pending)のみ。承認後は再承認の牽制を効かせるため、
+        # 変更したい場合は一旦未承認に戻す運用にする。
+        st.divider()
+        st.markdown("**➕ 臨時調整（±）**")
+        _cur_adj = int(p.get("adjustment") or 0)
+        if p["status"] != "pending":
+            st.caption(
+                f"現在の臨時調整: ¥{_cur_adj:,}"
+                f"（{'支払済' if p['status'] == 'paid' else '承認済'}のため編集不可。"
+                "変更するには未承認に戻してください）"
+            )
+        elif not operator_ok:
+            st.caption("⚠️ 臨時調整の編集にはオペレーター名の設定（再ログイン）が必要です")
+        else:
+            with st.form(f"adj_form_{p['id']}"):
+                _adj_val = st.number_input(
+                    "臨時調整額（円・マイナス可）",
+                    value=_cur_adj, step=500, format="%d",
+                    help="深夜の急な残業・立替の戻し等。入れた額が合計・確定額・封筒・領収書に反映されます。",
+                )
+                _adj_note = st.text_input(
+                    "調整理由（任意）", value=(p.get("adjustment_note") or ""),
+                    placeholder="例: 深夜の急な残業代",
+                )
+                if st.form_submit_button("➕ 調整を適用", type="primary"):
+                    if db.set_payment_adjustment(
+                        p["id"], int(_adj_val), _adj_note,
+                        event_id=event_id, performed_by=approver,
+                    ):
+                        st.success(
+                            f"{p['name_jp']} の臨時調整を ¥{int(_adj_val):,} に更新しました"
+                        )
+                        st.rerun()
+                    else:
+                        st.warning("支払済みのため変更できません（または対象なし）")
+
         # 領収書PDF発行
         st.divider()
         st.markdown("**📄 領収書PDF**")
@@ -539,7 +614,7 @@ if staff_opts:
                     real_name=staff_info["real_name"],
                     address=staff_info["address"],
                     email=staff_info.get("email") or "",
-                    amount=p["total_amount"],
+                    amount=db.get_payable(p),  # A-6: 領収書額面＝確定額（封筒の現金と一致）
                     event_name=event_info["name"] if event_info else "P1大会",
                     issue_date=event_info["end_date"] if event_info else "",
                     # 2026-05-25 構造逆転対応: 宛名はイベント設定の「支払者」情報。

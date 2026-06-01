@@ -78,28 +78,26 @@ else:
 # で空白ページが残る問題を構造から解消する。
 # （_print_mode_pre は冒頭で定義済み）
 
+# A-6: 端数処理は「支払い計算」ページのイベント単位設定に一本化（payable_amount に保存済み）。
+# 封筒は保存済みの確定額(payable_amount)をそのまま使うため、ここに per-view 丸めUIは置かない。
+# （封筒で渡す現金＝領収書額面＝年間累計 を常に一致させるための単一の正。）
+_event_rounding = int((db.get_event_by_id(event_id) or {}).get("rounding_unit") or 0)
+_round_label_map = {0: "なし", 100: "100円切り上げ", 500: "500円切り上げ", 1000: "1000円切り上げ"}
 if not _print_mode_pre:
-    section_header("出力設定", "端数処理と並び順を選んでください。")
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        rounding = st.selectbox("端数処理", ["なし（そのまま）", "100円単位で切り上げ", "500円単位で切り上げ", "1000円単位で切り上げ"])
-    with col_s2:
-        sort_by = st.selectbox("並び順", ["役職 → NO.", "名前順", "金額順（高い順）"])
+    section_header("出力設定", "並び順を選んでください。端数処理は『支払い計算』ページで設定します。")
+    sort_by = st.selectbox("並び順", ["役職 → NO.", "名前順", "金額順（高い順）"])
+    st.caption(
+        f"現在の端数処理: **{_round_label_map.get(_event_rounding, _event_rounding)}**"
+        "（封筒の現金・領収書・年間累計に共通反映。変更は『支払い計算』ページから）"
+    )
 else:
-    # 印刷モード時は前回設定値をsession_stateから引き継ぐ（デフォルト値で再構築）
-    rounding = st.session_state.get("_envelope_rounding", "なし（そのまま）")
     sort_by = st.session_state.get("_envelope_sort", "役職 → NO.")
     st.info(
         "🖨 **印刷モード中** - 通常UIは非表示です。"
         "Cmd+P で印刷／PDF保存。終了時はチェックボックスをOFFに。"
     )
-# 設定値を session_state に記憶（印刷モードに切り替わった後も同じ並び順を保持）
-st.session_state["_envelope_rounding"] = rounding
 st.session_state["_envelope_sort"] = sort_by
 st.markdown('</div>', unsafe_allow_html=True)
-
-rounding_unit = {"なし（そのまま）": 0, "100円単位で切り上げ": 100,
-                 "500円単位で切り上げ": 500, "1000円単位で切り上げ": 1000}[rounding]
 
 # --- データ取得 ---
 payments = db.get_payments_for_event(event_id)
@@ -107,16 +105,14 @@ if not payments:
     st.warning("支払いデータがありません。先に「支払い計算」ページで計算を実行してください。")
     st.stop()
 
-# 端数処理
+# A-6: 表示額は保存済みの確定額(payable_amount)。紙幣内訳もこの確定額から算出する。
 envelope_data = []
 for p in payments:
-    amount = p["total_amount"]
-    if rounding_unit > 0:
-        amount = round_amount(amount, rounding_unit)
+    amount = db.get_payable(p)
     breakdown = calculate_denomination(amount)
     envelope_data.append({
         **p,
-        "adjusted_amount": amount,
+        "adjusted_amount": amount,        # 確定額（payable）。以降の表示・内訳の基準。
         "denomination": breakdown,
     })
 
@@ -135,15 +131,16 @@ if not _print_mode_pre:
     section_header("銀行で用意する現金", "下記の金額・枚数を、最終日の朝までに準備します。")
 
     summary_items = [
-        {"label": "総額", "value": f"¥{total_amount:,}", "accent": True},
+        {"label": "総額（確定）", "value": f"¥{total_amount:,}", "accent": True},
         {"label": "封筒数", "value": f"{len(envelope_data)}枚"},
     ]
-    if rounding_unit > 0:
-        original_total = sum(p["total_amount"] for p in payments)
+    # A-6: 端数切り上げ分は「丸め前合計」と「確定額合計」の差。イベントの rounding_unit で表示。
+    if _event_rounding > 0:
+        original_total = sum(int(p.get("total_amount") or 0) for p in payments)
         summary_items.append({
             "label": "端数切り上げ分",
             "value": f"¥{total_amount - original_total:,}",
-            "detail": f"単位: {rounding_unit}円",
+            "detail": f"単位: {_event_rounding}円",
         })
     kpi_row(summary_items)
 
@@ -199,6 +196,17 @@ if _print_mode_pre:
             f'<tr><td>個別手当</td><td>¥{_allow_total:,}</td></tr>'
             if _allow_total else ""
         )
+        # A-5: 臨時調整、A-6: 端数調整 を内訳に明示し、内訳和＋端数調整＝合計 を成立させる。
+        _adj = int(e.get("adjustment") or 0)
+        _adj_row = (
+            f'<tr><td>臨時調整</td><td>{"+" if _adj >= 0 else "-"}¥{abs(_adj):,}</td></tr>'
+            if _adj else ""
+        )
+        _tanchosei = int(e["adjusted_amount"]) - int(e.get("total_amount") or 0)
+        _tan_row = (
+            f'<tr><td>端数調整</td><td>+¥{_tanchosei:,}</td></tr>'
+            if _tanchosei else ""
+        )
         st.markdown(
             f'<div class="p1-envelope-print">'
             f'<h2>P1 支払明細</h2>'
@@ -213,6 +221,8 @@ if _print_mode_pre:
             f'<tr><td>MIX手当</td><td>¥{e["mix_bonus_total"]:,}</td></tr>'
             f'<tr><td>精勤手当</td><td>¥{e["attendance_bonus"]:,}</td></tr>'
             f'{_allow_row}'
+            f'{_adj_row}'
+            f'{_tan_row}'
             f'<tr><td><strong>合計</strong></td>'
             f'<td><strong>¥{e["adjusted_amount"]:,}</strong></td></tr>'
             f'</table>'
@@ -231,6 +241,15 @@ else:
             _allow_row = (
                 f"| 個別手当 | ¥{_allow_total:,} |\n" if _allow_total else ""
             )
+            # A-5/A-6: 臨時調整・端数調整を内訳に明示（足し算が合計と一致する）
+            _adj = int(e.get("adjustment") or 0)
+            _adj_row = (
+                f"| 臨時調整 | {'+' if _adj >= 0 else '-'}¥{abs(_adj):,} |\n" if _adj else ""
+            )
+            _tanchosei = int(e["adjusted_amount"]) - int(e.get("total_amount") or 0)
+            _tan_row = (
+                f"| 端数調整 | +¥{_tanchosei:,} |\n" if _tanchosei else ""
+            )
             st.markdown(f"""
 **━━━ P1 支払明細 ━━━**
 
@@ -242,7 +261,7 @@ else:
 | フロア手当 | ¥{e['floor_bonus_total']:,} |
 | MIX手当 | ¥{e['mix_bonus_total']:,} |
 | 精勤手当 | ¥{e['attendance_bonus']:,} |
-{_allow_row}| **合計** | **¥{e['adjusted_amount']:,}** |
+{_allow_row}{_adj_row}{_tan_row}| **合計** | **¥{e['adjusted_amount']:,}** |
 
 紙幣: {format_denomination(e['denomination'].bills)}
 """)
@@ -254,6 +273,8 @@ if not _print_mode_pre:
 
     csv_data = []
     for e in envelope_data:
+        # A-5/A-6: 個別手当・臨時調整・端数調整も列に出し、内訳の和＝合計を CSV でも成立させる。
+        _tanchosei = int(e["adjusted_amount"]) - int(e.get("total_amount") or 0)
         csv_data.append({
             "NO": e["no"],
             "名前_JP": e["name_jp"],
@@ -265,6 +286,9 @@ if not _print_mode_pre:
             "フロア手当": e["floor_bonus_total"],
             "MIX手当": e["mix_bonus_total"],
             "精勤手当": e["attendance_bonus"],
+            "個別手当": int(e.get("individual_allowance_total") or 0),
+            "臨時調整": int(e.get("adjustment") or 0),
+            "端数調整": _tanchosei,
             "合計": e["adjusted_amount"],
             "支払状態": e["status"],
             "領収書": "受領済" if e["receipt_received"] else "未受領",
