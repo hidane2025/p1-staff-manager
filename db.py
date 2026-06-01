@@ -656,22 +656,56 @@ def get_yearly_totals(year, staff_id=None):
 
 
 def approve_payment(payment_id, approved_by, event_id=None):
-    get_client().table("p1_payments").update({
+    """pending → approved のみ許可（状態遷移ガード）。
+
+    A-3/A-9 (2026-06-01): `.eq("status","pending")` を付与し、
+    承認スキップ（pending以外をいきなり承認）・並走競合・逆行を防ぐ。
+    Returns: True=承認できた / False=pending以外（既に承認/支払済 or 競合）で変化なし。
+    """
+    res = get_client().table("p1_payments").update({
         "status": "approved", "approved_by": approved_by, "approved_at": _now()
-    }).eq("id", payment_id).execute()
-    log_action("approve_payment", "payments", payment_id, f"承認者: {approved_by}", event_id)
+    }).eq("id", payment_id).eq("status", "pending").execute()
+    changed = bool(res.data)
+    if changed:
+        log_action("approve_payment", "payments", payment_id,
+                   f"承認者: {approved_by}", event_id, performed_by=approved_by)
+    else:
+        log_action("approve_payment_noop", "payments", payment_id,
+                   "pending以外のため承認スキップ（状態不一致/競合）",
+                   event_id, performed_by=approved_by)
+    return changed
 
 
-def mark_paid(payment_id, event_id=None):
-    get_client().table("p1_payments").update({
-        "status": "paid", "paid_at": _now()
-    }).eq("id", payment_id).execute()
-    log_action("mark_paid", "payments", payment_id, "", event_id)
+def mark_paid(payment_id, event_id=None, performed_by="system"):
+    """approved → paid のみ許可（状態遷移ガード）＋支払実行者を記録。
+
+    A-2 (2026-06-01): performed_by を監査ログと paid_by 列（has_column 後方互換）に記録。
+        現金確定という最も不可逆な操作の実行者を追跡可能にする。
+    A-3/A-9: `.eq("status","approved")` を付与し、承認スキップ・paid二重化・
+        並走競合（TOCTOU）を DB 条件側でブロックする。
+    Returns: True=支払済にできた / False=approved以外（既に支払済 or 競合）で変化なし。
+    """
+    from utils import db_schema
+    payload = {"status": "paid", "paid_at": _now()}
+    if performed_by and db_schema.has_column("p1_payments", "paid_by"):
+        payload["paid_by"] = str(performed_by)
+    res = get_client().table("p1_payments").update(payload).eq(
+        "id", payment_id).eq("status", "approved").execute()
+    changed = bool(res.data)
+    if changed:
+        log_action("mark_paid", "payments", payment_id,
+                   f"支払実行: {performed_by}", event_id, performed_by=performed_by)
+    else:
+        log_action("mark_paid_noop", "payments", payment_id,
+                   "approved以外のため支払スキップ（状態不一致/競合）",
+                   event_id, performed_by=performed_by)
+    return changed
 
 
-def mark_receipt_received(payment_id, event_id=None):
+def mark_receipt_received(payment_id, event_id=None, performed_by="system"):
+    """領収書受領フラグを立てる。A-2: 実行者を監査ログに記録。"""
     get_client().table("p1_payments").update({"receipt_received": 1}).eq("id", payment_id).execute()
-    log_action("receipt_received", "payments", payment_id, "", event_id)
+    log_action("receipt_received", "payments", payment_id, "", event_id, performed_by=performed_by)
 
 
 # === Individual Allowances (Phase 3-I, 2026-05-08) ===

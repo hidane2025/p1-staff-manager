@@ -15,7 +15,7 @@ from utils.event_selector import select_event
 st.set_page_config(page_title="支払い計算", page_icon="💰", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header, flow_bar
-from utils.admin_guard import require_admin, admin_logout_button, operator_name
+from utils.admin_guard import require_admin, admin_logout_button, operator_name, is_auth_enabled
 apply_global_style()
 hide_staff_only_pages()
 require_admin(page_name="支払い計算")
@@ -27,6 +27,19 @@ flow_bar(active="calc", done=["setup", "input"])
 # PII閲覧監査ログ
 db.log_action("view_payment_calc", "payments",
               detail="page=支払い計算", performed_by=operator_name())
+
+
+def _is_same_operator(approved_by, operator) -> bool:
+    """承認者文字列（"pit:xxx" 形式も含む）と現在の支払操作者が同一人物かを緩く判定。
+
+    A-4 の職務分掌（SoD）牽制表示に使う。anonymous 同士は比較対象にしない。
+    """
+    if not approved_by or not operator or operator == "anonymous":
+        return False
+    a = str(approved_by)
+    if a.startswith("pit:"):
+        a = a[4:]
+    return a.strip() == str(operator).strip()
 
 # --- イベント選択（全ページ共通・session_state共有） ---
 event_id = select_event(db.get_all_events(), "イベント選択")
@@ -251,21 +264,51 @@ st.markdown("""
 **フロー:** 計算（⏳未承認）→ 承認（✅承認済）→ 領収書受領 → 支払い（💴支払済）
 """)
 
-# 承認者入力
-approver = st.text_input("承認者名", placeholder="例: 半谷", key="approver_name")
+# 承認者 = ログイン中の認証オペレーター（A-4: 自由入力を廃し本人性を担保）
+# 旧版は自由入力テキストで他人名を詐称でき、承認ログが実操作者を担保しなかった。
+approver = operator_name()
+# 監査証跡に残らない（実操作者を特定できない）セッションの判定。
+# admin_guard はログイン時にオペレーター名未入力だと "anonymous_admin"、
+# 未認証なら "anonymous" を返すため、両方を「実操作者なし」として扱う。
+_NON_ATTRIBUTABLE_OPERATORS = {"", "anonymous", "anonymous_admin"}
+# パスワードレス運用（ADMIN_PASSWORD 未設定の dev/fallback）ではログインフォーム
+# 自体が無くオペレーター名を入力できない。その環境で gate すると承認・支払が
+# 一切できなくなるため、認証が有効なときだけ実操作者を必須化する。
+_auth_enabled = is_auth_enabled()
+# 空白のみ等も非帰属として扱う（admin_guard 側でも strip 済みだが二重防御）。
+operator_ok = (not _auth_enabled) or (
+    (approver or "").strip() not in _NON_ATTRIBUTABLE_OPERATORS
+)
+if not operator_ok:
+    st.warning(
+        "⚠️ ログイン時に**オペレーター名**が未入力のため、承認者・支払実行者を"
+        "監査ログに記録できません。内部統制のため、承認・支払ボタンは無効化しています。"
+        "一度ログアウトし、**オペレーター名を入力して再ログイン**してください。"
+    )
+elif _auth_enabled:
+    st.caption(f"承認者・支払実行者として記録される操作者: **{approver}**（ログインセッション）")
+else:
+    st.caption("（パスワードレス運用のため、操作者は記録されません。本番では ADMIN_PASSWORD を設定してください）")
 
 col_approve, col_pay = st.columns(2)
 
 with col_approve:
     pending_payments = [p for p in payments if p["status"] == "pending"]
-    if pending_payments and approver:
+    if pending_payments and operator_ok:
         if st.button(f"✅ 未承認{len(pending_payments)}名を一括承認", type="primary"):
-            for p in pending_payments:
-                db.approve_payment(p["id"], approver, event_id)
-            st.success(f"{len(pending_payments)}名を承認しました（承認者: {approver}）")
+            approved_n = sum(
+                1 for p in pending_payments
+                if db.approve_payment(p["id"], approver, event_id)
+            )
+            st.success(f"{approved_n}名を承認しました（承認者: {approver}）")
+            if approved_n < len(pending_payments):
+                st.warning(
+                    f"{len(pending_payments) - approved_n}名は状態が変わりませんでした"
+                    "（既に承認済み、または他の端末と競合した可能性）。"
+                )
             st.rerun()
-    elif pending_payments:
-        st.info("承認者名を入力してから承認ボタンを押してください")
+    elif pending_payments and not operator_ok:
+        st.info("未承認の支払いがあります。オペレーター名を設定して再ログインすると承認できます。")
 
 with col_pay:
     approved_payments = [p for p in payments if p["status"] == "approved"]
@@ -273,18 +316,43 @@ with col_pay:
     not_payable = [p for p in approved_payments if not p["receipt_received"]]
     if payable:
         bulk_pay_key = "__confirm_bulk_paid"
+        # A-4 SoD牽制: 承認者と支払実行者(=今の操作者)が同一になる件数を事前表示
+        _self_pay = sum(
+            1 for p in payable
+            if _is_same_operator(p.get("approved_by"), approver)
+        )
+        if st.session_state.get(bulk_pay_key) and not operator_ok:
+            # 確認フラグ設定後にオペレーター名なしへ変わった場合（ログアウト→再ログイン等）、
+            # gate を迂回して支払確定しないよう、残留フラグを破棄する。
+            st.session_state[bulk_pay_key] = False
         if st.session_state.get(bulk_pay_key):
+            _sod_note = (
+                f"\n\n⚠️ うち **{_self_pay}名** は承認者と支払実行者が同一（自己承認→自己支払）です。"
+                "可能なら承認者と別の担当者が支払を実行してください（牽制）。"
+                if _self_pay else ""
+            )
             st.warning(
                 f"⚠️ {len(payable)}名を **支払済み** に変更します。"
-                f"支払済みにすると後から元に戻せません（DB直操作が必要）。本当によろしいですか？"
+                f"支払済みにすると後から元に戻せません（DB直操作が必要）。"
+                f"支払実行者として **{approver}** が記録されます。本当によろしいですか？"
+                f"{_sod_note}"
             )
             cy, cn = st.columns(2)
             if cy.button("✅ 確定して支払済みにする", type="primary",
                           key="confirm_bulk_paid_yes"):
+                paid_n, noop_n = 0, 0
                 try:
                     for p in payable:
-                        db.mark_paid(p["id"], event_id)
-                    st.success(f"✅ {len(payable)}名を支払済みにしました")
+                        if db.mark_paid(p["id"], event_id, performed_by=approver):
+                            paid_n += 1
+                        else:
+                            noop_n += 1
+                    st.success(f"✅ {paid_n}名を支払済みにしました（支払実行者: {approver}）")
+                    if noop_n:
+                        st.warning(
+                            f"{noop_n}名は状態が変わりませんでした"
+                            "（既に支払済み、または他の端末と競合した可能性）。"
+                        )
                 except Exception as e:
                     st.error("💥 一部の更新に失敗しました。該当スタッフを手動で確認してください。")
                     with st.expander("🔧 技術詳細"):
@@ -295,9 +363,15 @@ with col_pay:
                 st.session_state[bulk_pay_key] = False
                 st.rerun()
         else:
-            if st.button(f"💴 承認済み＋領収書受領済みの{len(payable)}名を支払済みに"):
-                st.session_state[bulk_pay_key] = True
-                st.rerun()
+            if operator_ok:
+                if st.button(f"💴 承認済み＋領収書受領済みの{len(payable)}名を支払済みに"):
+                    st.session_state[bulk_pay_key] = True
+                    st.rerun()
+            else:
+                st.info(
+                    f"支払い可能な{len(payable)}名がいます。"
+                    "オペレーター名を設定して再ログインすると支払実行できます。"
+                )
     if not_payable:
         st.warning(f"⚠️ {len(not_payable)}名が承認済みだが領収書未受領のため支払い不可")
 
@@ -388,20 +462,22 @@ if staff_opts:
 """)
 
     with col_d2:
-        # 承認
+        # 承認（承認者はログイン中の operator に束縛済み）
         if p["status"] == "pending":
-            if approver:
+            if operator_ok:
                 if st.button("✅ この人を承認", key=f"approve_{p['id']}"):
-                    db.approve_payment(p["id"], approver, event_id)
-                    st.success(f"{p['name_jp']} を承認しました")
+                    if db.approve_payment(p["id"], approver, event_id):
+                        st.success(f"{p['name_jp']} を承認しました（承認者: {approver}）")
+                    else:
+                        st.warning(f"{p['name_jp']} は状態が変わりませんでした（既に承認済み/競合）")
                     st.rerun()
             else:
-                st.info("承認者名を入力してください")
+                st.caption("⚠️ 承認にはオペレーター名の設定（再ログイン）が必要です")
 
         # 領収書
         if not p["receipt_received"]:
             if st.button("🧾 領収書受領済み", key=f"receipt_{p['id']}"):
-                db.mark_receipt_received(p["id"], event_id)
+                db.mark_receipt_received(p["id"], event_id, performed_by=approver)
                 st.success(f"{p['name_jp']} の領収書を受領しました")
                 st.rerun()
         else:
@@ -411,13 +487,24 @@ if staff_opts:
         if p["status"] == "approved":
             if p["receipt_received"]:
                 pay_conf_key = f"__confirm_pay_{p['id']}"
+                if st.session_state.get(pay_conf_key) and not operator_ok:
+                    # 残留した確認フラグで gate を迂回しないよう破棄（bulk と同様）。
+                    st.session_state[pay_conf_key] = False
                 if st.session_state.get(pay_conf_key):
-                    st.warning(f"⚠️ {p['name_jp']} を支払済みにします。元に戻せません。")
+                    _self = _is_same_operator(p.get("approved_by"), approver)
+                    st.warning(
+                        f"⚠️ {p['name_jp']} を支払済みにします。元に戻せません。"
+                        f"支払実行者として **{approver}** が記録されます。"
+                        + ("\n\n⚠️ 承認者と支払実行者が同一です（自己承認→自己支払）。"
+                           if _self else "")
+                    )
                     cy2, cn2 = st.columns(2)
                     if cy2.button("✅ 確定", key=f"y_{p['id']}", type="primary"):
                         try:
-                            db.mark_paid(p["id"], event_id)
-                            st.success(f"{p['name_jp']} を支払済みにしました")
+                            if db.mark_paid(p["id"], event_id, performed_by=approver):
+                                st.success(f"{p['name_jp']} を支払済みにしました（支払実行者: {approver}）")
+                            else:
+                                st.warning(f"{p['name_jp']} は状態が変わりませんでした（既に支払済み/競合）")
                         except Exception as e:
                             st.error("更新失敗。もう一度お試しください。")
                         st.session_state[pay_conf_key] = False
@@ -426,10 +513,12 @@ if staff_opts:
                         st.session_state[pay_conf_key] = False
                         st.rerun()
                 else:
-                    if st.button("💴 支払済みにする", key=f"pay_{p['id']}"):
-                        st.session_state[pay_conf_key] = True
-                        st.rerun()
-                    st.rerun()
+                    if operator_ok:
+                        if st.button("💴 支払済みにする", key=f"pay_{p['id']}"):
+                            st.session_state[pay_conf_key] = True
+                            st.rerun()
+                    else:
+                        st.caption("⚠️ 支払にはオペレーター名の設定（再ログイン）が必要です")
             else:
                 st.error("❌ 領収書が未受領のため支払いできません")
         elif p["status"] == "paid":

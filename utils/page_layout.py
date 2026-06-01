@@ -25,14 +25,17 @@ from utils.design_system import COLORS, build_global_css
 # ============================================================
 # Global CSS injection
 # ============================================================
-_CSS_KEY = "__p1_global_css_injected__"
-
-
 def apply_global_style() -> None:
-    """ページ冒頭で呼ぶ。同一スクリプト内で複数回呼んでも1回だけ注入する。"""
-    if not st.session_state.get(_CSS_KEY):
-        st.markdown(build_global_css(), unsafe_allow_html=True)
-        st.session_state[_CSS_KEY] = True
+    """ページ冒頭で呼ぶ。グローバルCSSを注入する。
+
+    A-10 (2026-06-01): 旧版は st.session_state ガードで「1回だけ注入」していたが、
+    Streamlit はリラン毎にスクリプトを再実行し、その run で再生成されない要素を
+    DOM から除去する。session_state はページ遷移を跨いで永続するため、最初に
+    CSS を emit したページ以外ではガードが効いて <style> が剥がれ、封筒印刷カード・
+    KPIカード・iPad用大ボタン等のスタイルが崩れていた（マルチページのアンチパターン）。
+    冪等かつ低コスト（約13KB）なので、毎回無条件に注入する（ui_helpers と同方式）。
+    """
+    st.markdown(build_global_css(), unsafe_allow_html=True)
 
 
 # ============================================================

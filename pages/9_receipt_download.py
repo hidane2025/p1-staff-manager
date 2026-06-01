@@ -64,6 +64,30 @@ if not pdf_bytes:
 receipt_no = record.get("receipt_no") or "receipt"
 amount = record.get("total_amount", 0)
 
+# C-1: 証憑アクセスの監査ログ。トークン保持者が本名・住所入りPDFを取得した記録を残す。
+# （発行側は記録するのに DL 側が無記録だった非対称を解消）。
+# Streamlit のリラン多発を避けるため、同一トークンはセッション内で1回だけ記録する。
+# PII（本名・住所・金額）はログ detail に含めない（receipt_no のみ）。
+_access_logged_key = f"_receipt_access_logged_{token[:12]}"
+if not st.session_state.get(_access_logged_key):
+    try:
+        import db as _db
+        _ua = ""
+        try:
+            _hdrs = getattr(st.context, "headers", {}) or {}
+            _ua = (_hdrs.get("User-Agent") or "")[:80]
+        except Exception:
+            _ua = ""
+        _db.log_action(
+            "access_receipt", "payments", record["id"],
+            detail=f"receipt_no={receipt_no} / トークン経由閲覧 / UA={_ua}",
+            event_id=record.get("event_id"),
+            performed_by="receipt_link",
+        )
+    except Exception:
+        pass
+    st.session_state[_access_logged_key] = True
+
 st.success("✅ 領収書の準備ができました")
 st.metric("領収金額", f"¥{amount:,}")
 st.caption(f"領収書No: {receipt_no}")

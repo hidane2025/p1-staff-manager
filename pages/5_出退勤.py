@@ -89,28 +89,53 @@ with col_bulk1:
         if eligible_count == 0:
             st.info("対象のスタッフがいません（全員出勤済みまたは欠勤）")
         else:
+            # A-7: 1件ずつ try/except。会場wifi断などでループ途中に切れても
+            # 成功分は確定し、失敗分だけ再ボタンで再実行できる（成功者は対象外になる）。
             client = db.get_client()
+            ok_n, fails = 0, []
             for s in eligible_shifts:
-                client.table("p1_shifts").update({
-                    "actual_start": s["planned_start"],
-                    "status": "checked_in",
-                }).eq("id", s["id"]).execute()
-            st.success(f"{eligible_count}名を出勤にしました（予定開始が {now_str} 以前）")
-            st.rerun()
+                try:
+                    client.table("p1_shifts").update({
+                        "actual_start": s["planned_start"],
+                        "status": "checked_in",
+                    }).eq("id", s["id"]).execute()
+                    ok_n += 1
+                except Exception:
+                    fails.append(str(s.get("no") or s.get("staff_id") or s["id"]))
+            if not fails:
+                st.success(f"{ok_n}名を出勤にしました（予定開始が {now_str} 以前）")
+                st.rerun()  # 全件成功時のみ再描画（失敗時は警告を残すため rerun しない）
+            else:
+                st.warning(
+                    f"⚠️ {ok_n}名は出勤確定、{len(fails)}名は失敗（NO./ID: {', '.join(fails)}）。"
+                    "通信状況を確認し、もう一度このボタンを押すと**失敗分だけ**再実行されます。"
+                )
 
 with col_bulk2:
     if st.button("🔴 全員退勤（予定時刻で確定）", use_container_width=True):
+        # A-7: 1件ずつ try/except。退勤は冪等なので失敗分は再ボタンで安全に再実行可能。
         client = db.get_client()
-        for s in shifts:
-            if s["status"] in ("checked_in", "scheduled"):
+        targets = [s for s in shifts if s["status"] in ("checked_in", "scheduled")]
+        ok_n, fails = 0, []
+        for s in targets:
+            try:
                 actual_end = s.get("actual_end") or s["planned_end"]
                 client.table("p1_shifts").update({
                     "actual_end": actual_end,
                     "actual_start": s.get("actual_start") or s["planned_start"],
                     "status": "checked_out",
                 }).eq("id", s["id"]).execute()
-        st.success("全員を予定時刻で退勤確定しました")
-        st.rerun()
+                ok_n += 1
+            except Exception:
+                fails.append(str(s.get("no") or s["id"]))
+        if not fails:
+            st.success(f"{ok_n}名を予定時刻で退勤確定しました")
+            st.rerun()  # 全件成功時のみ再描画（失敗時は警告を残す）
+        else:
+            st.warning(
+                f"⚠️ {ok_n}名は退勤確定、{len(fails)}名は失敗（NO./ID: {', '.join(fails)}）。"
+                "もう一度このボタンを押すと失敗分だけ再実行されます。"
+            )
 
 with col_bulk3:
     # 全体リセット（このボタンは「全員」が対象。1人だけ取り消したいときは
@@ -126,16 +151,28 @@ with col_bulk3:
         st.error("⚠️ この日の全員の出退勤データが未確定に戻ります")
         col_yes, col_no = st.columns(2)
         if col_yes.button("はい、全員リセットする", type="primary"):
+            # A-7: 1件ずつ try/except。リセットは冪等なので失敗分は再実行で収束。
             client = db.get_client()
+            ok_n, fails = 0, []
             for s in shifts:
-                client.table("p1_shifts").update({
-                    "actual_start": None,
-                    "actual_end": None,
-                    "status": "scheduled",
-                }).eq("id", s["id"]).execute()
+                try:
+                    client.table("p1_shifts").update({
+                        "actual_start": None,
+                        "actual_end": None,
+                        "status": "scheduled",
+                    }).eq("id", s["id"]).execute()
+                    ok_n += 1
+                except Exception:
+                    fails.append(str(s.get("no") or s["id"]))
             st.session_state["confirm_reset"] = False
-            st.success("全員のステータスをリセットしました")
-            st.rerun()
+            if not fails:
+                st.success(f"全員（{ok_n}名）のステータスをリセットしました")
+                st.rerun()  # 全件成功時のみ再描画（失敗時は警告を残す）
+            else:
+                st.warning(
+                    f"⚠️ {ok_n}名はリセット、{len(fails)}名は失敗（NO./ID: {', '.join(fails)}）。"
+                    "もう一度実行すると失敗分だけ再処理されます。"
+                )
         if col_no.button("キャンセル"):
             st.session_state["confirm_reset"] = False
             st.rerun()
@@ -166,11 +203,23 @@ with tab_absent:
     )
     if st.button("❌ 選択した人を欠勤にする", key="mark_absent"):
         if absent_staff:
+            # A-7: 1件ずつ try/except。失敗分だけ再実行できる（冪等）。
+            ok_n, fails = 0, []
             for name in absent_staff:
                 s = staff_options[name]
-                db.mark_absent(s["id"])
-            st.success(f"{len(absent_staff)}名を欠勤にしました")
-            st.rerun()
+                try:
+                    db.mark_absent(s["id"])
+                    ok_n += 1
+                except Exception:
+                    fails.append(str(s.get("no") or s["id"]))
+            if not fails:
+                st.success(f"{ok_n}名を欠勤にしました")
+                st.rerun()  # 全件成功時のみ再描画（失敗時は警告を残す）
+            else:
+                st.warning(
+                    f"⚠️ {ok_n}名を欠勤に、{len(fails)}名は失敗（NO./ID: {', '.join(fails)}）。"
+                    "もう一度実行すると失敗分だけ再処理されます。"
+                )
 
 with tab_late:
     st.markdown("遅刻した人の実際の到着時刻を記録")

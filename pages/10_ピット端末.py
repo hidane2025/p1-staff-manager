@@ -34,7 +34,21 @@ from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import (
     apply_global_style, page_header, flow_bar, section_header, kpi_row,
 )
-from utils.admin_guard import require_admin, admin_logout_button, operator_name
+from utils.admin_guard import (
+    require_admin, admin_logout_button, operator_name, is_auth_enabled,
+)
+
+
+def _operator_attributable() -> bool:
+    """承認を実オペレーターに帰属できるか。
+
+    パスワードレス運用（ADMIN_PASSWORD 未設定）ではログイン導線が無いため常に True。
+    認証有効時はオペレーター名が匿名/空白でないことを要求する（pages/3 と同基準）。
+    自動承認は支払いを「承認済み」に確定させる内部統制操作なので、ここでも帰属を必須化。
+    """
+    if not is_auth_enabled():
+        return True
+    return (operator_name() or "").strip() not in {"", "anonymous", "anonymous_admin"}
 
 
 _JST = timezone(timedelta(hours=9))
@@ -70,6 +84,25 @@ if st.session_state.get(_LAST_CONFIRMED_KEY):
     )
     if st.button("✅ 確認した（次のスタッフへ）", use_container_width=True):
         st.session_state.pop(_LAST_CONFIRMED_KEY, None)
+        st.rerun()
+
+# A-11: 退勤は確定したが支払い計算が失敗したケースを、リラン後も画面上部に
+# 残して次のスタッフを呼ぶ前に必ず気づけるようにする（st.rerun は描画を破棄する
+# ため、警告は session_state に退避してここで再表示する）。
+_PIT_ERROR_KEY = "_pit_payment_error"
+if st.session_state.get(_PIT_ERROR_KEY):
+    _err = st.session_state[_PIT_ERROR_KEY]
+    st.warning(
+        f"⚠️ **{_err.get('name', '対象スタッフ')}** の**シフトは退勤確定済み**ですが、"
+        "支払い計算/保存でエラーが発生しました。"
+        "「💰 支払い計算」ページで該当スタッフを再計算してください。"
+        "（退勤打刻は失われていません）"
+    )
+    if _err.get("detail"):
+        with st.expander("🔧 技術詳細（管理者向け）"):
+            st.code(_err["detail"], language=None)
+    if st.button("了解（この警告を閉じる）", key="dismiss_pit_error"):
+        st.session_state.pop(_PIT_ERROR_KEY, None)
         st.rerun()
 
 
@@ -465,13 +498,20 @@ else:
             )
             # Phase 3-C (2026-05-08): 承認まで進めるオプション
             # 計算と同時に承認まで進めれば、給与窓口は「支払いボタン押すだけ」に
+            _pit_operator_ok = _operator_attributable()
             auto_approve = st.checkbox(
                 "🟡 計算と同時に承認まで進める（給与窓口は支払いだけで済む）",
                 value=False,
+                disabled=not _pit_operator_ok,
                 help="ピット側で確認できているなら ON 推奨。"
                 "金額が大きい・疑わしいケースは OFF にして給与窓口での承認を残す。"
                 "事後的に承認取消も可能（精算レポートから）。",
             )
+            if not _pit_operator_ok:
+                st.caption(
+                    "⚠️ 自動承認にはオペレーター名の設定（再ログイン）が必要です。"
+                    "このまま実行すると打刻と支払い計算のみ行います。"
+                )
             submitted = st.form_submit_button("🔴 退勤＋支払い確定", type="primary")
 
             if submitted:
@@ -482,153 +522,187 @@ else:
                     or today_shift.get("planned_start")
                 )
                 client = db.get_client()
-                client.table("p1_shifts").update({
-                    "actual_start": actual_start,
-                    "actual_end": checkout_time,
-                    "status": "checked_out",
-                }).eq("id", today_shift["id"]).execute()
-                db.log_action(
-                    "pit_checkout", "shifts", today_shift["id"],
-                    detail=f"{target['name_jp']} (NO.{target.get('no')}) {today} 退勤={checkout_time}",
-                    event_id=event_id,
-                    performed_by=operator_name(),
-                )
-                st.success(f"✅ {target['name_jp']} を {checkout_time} で退勤確定しました")
-
-                # 支払い計算も実行
-                if confirm_pay:
-                    rates_rows = db.get_event_rates(event_id) or []
-                    rates_by_date = {
-                        r["date"]: {
-                            "hourly": r.get("hourly_rate", 1500),
-                            "night": r.get("night_rate", 1875),
-                            "transport": r.get("transport_allowance", 1000),
-                            "floor_bonus": r.get("floor_bonus", 3000),
-                            "mix_bonus": r.get("mix_bonus", 1500),
-                        }
-                        for r in rates_rows
-                    }
-                    # 最新シフトを再取得（退勤時刻が反映された状態）
-                    latest_shifts = db.get_shifts_for_event(event_id, staff_id=target["id"])
-                    shifts_for_calc = []
-                    for s in latest_shifts:
-                        if s.get("status") == "absent":
-                            continue
-                        start = s.get("actual_start") or s.get("planned_start")
-                        end = s.get("actual_end") or s.get("planned_end")
-                        if not start or not end:
-                            continue
-                        shifts_for_calc.append({
-                            "date": s["date"],
-                            "start": start,
-                            "end": end,
-                            "is_mix": bool(s.get("is_mix", 0)),
-                        })
-                    # Codex P1 fix (2026-05-09): イベント全体の日数を使う
-                    # （staff のシフト日数を使うと部分参加でも全勤扱いになり、
-                    # 精勤手当 ¥10,000 が誤付与される）
-                    total_event_days = len(rates_rows) if rates_rows else len(
-                        {s["date"] for s in latest_shifts}
-                    )
-                    # Phase 3-I: 個別手当を計算に含める（オフレコ含む）
-                    individual_allowances = db.get_individual_allowances(
-                        event_id, target["id"]
-                    )
-                    # 交通費が領収書ベースで保存されていれば、それを transport_override に
-                    transport_override = None
-                    claim = next(
-                        (c for c in (db.get_transport_claims(event_id) or [])
-                         if c.get("staff_id") == target["id"]),
-                        None,
-                    )
-                    if claim is not None:
-                        transport_override = int(claim.get("approved_amount") or 0)
-                    payment = calculate_staff_payment(
-                        staff_id=target["id"],
-                        name=target["name_jp"],
-                        role=target.get("role", "Dealer"),
-                        shifts=shifts_for_calc,
-                        rates_by_date=rates_by_date,
-                        total_event_days=total_event_days,
-                        break_6h=int(event.get("break_minutes_6h") or 0),
-                        break_8h=int(event.get("break_minutes_8h") or 0),
-                        employment_type=target.get("employment_type") or "contractor",
-                        custom_hourly_rate=target.get("custom_hourly_rate"),
-                        transport_override=transport_override,
-                        individual_allowances=individual_allowances,
-                    )
-                    db.save_payment(
-                        event_id=event_id,
-                        staff_id=target["id"],
-                        base_pay=payment.base_pay,
-                        night_pay=payment.night_pay,
-                        transport_total=payment.transport_total,
-                        floor_bonus_total=payment.floor_bonus_total,
-                        mix_bonus_total=payment.mix_bonus_total,
-                        attendance_bonus=payment.attendance_bonus,
-                        total_amount=payment.total_amount,
-                        break_deduction=payment.break_deduction,
-                        # Codex P2 fix #3: 個別手当合計を保存
-                        individual_allowance_total=getattr(
-                            payment, "individual_allowance_total", 0
-                        ),
-                    )
+                # A-11: 退勤打刻自体を try で囲む。失敗時はここで止め、誤った成功表示を出さない。
+                try:
+                    client.table("p1_shifts").update({
+                        "actual_start": actual_start,
+                        "actual_end": checkout_time,
+                        "status": "checked_out",
+                    }).eq("id", today_shift["id"]).execute()
                     db.log_action(
-                        "pit_payment_calc", "payments", target["id"],
-                        detail=f"{target['name_jp']} ¥{payment.total_amount:,}",
+                        "pit_checkout", "shifts", today_shift["id"],
+                        detail=f"{target['name_jp']} (NO.{target.get('no')}) {today} 退勤={checkout_time}",
                         event_id=event_id,
                         performed_by=operator_name(),
                     )
-                    st.success(
-                        f"💰 支払い計算も実行しました。"
-                        f"合計 **¥{payment.total_amount:,}**（{payment.days_worked}日勤務）"
+                except Exception as e:
+                    st.error(
+                        "💥 退勤打刻に失敗しました。通信状況を確認してもう一度お試しください。"
+                        "（このスタッフのシフトは未確定のままです）"
                     )
-                    # UX B: 直前確定カード用の情報を保存
-                    st.session_state[_LAST_CONFIRMED_KEY] = {
-                        "no": target.get("no", "?"),
-                        "name": target["name_jp"],
-                        "amount": int(payment.total_amount),
-                        "checkout": checkout_time,
-                        "approved": False,
-                    }
+                    with st.expander("🔧 技術詳細"):
+                        st.code(str(e))
+                    st.stop()
 
-                    # Phase 3-C: 承認まで進める
-                    if auto_approve:
-                        # 直近の payment レコードを取得して承認
-                        client_q = db.get_client().table("p1_payments").select(
-                            "id, status").eq("event_id", event_id).eq(
-                            "staff_id", target["id"]).execute().data
-                        if client_q:
-                            payment_row = client_q[0]
-                            payment_id = payment_row["id"]
-                            current_status = payment_row.get("status")
-                            # Codex P2 fix #4 (2026-05-09): paid を approved に
-                            # 退行させないようガード（save_payment は paid 保護するが
-                            # approve_payment は別経路なので独立してチェックする）
-                            if current_status == "paid":
-                                st.warning(
-                                    "⚠️ この支払いは既に **支払済み** です。"
-                                    "ピット側からの自動承認はスキップしました。"
-                                    "金額の不一致があれば「📊 精算レポート」で確認してください。"
-                                )
-                            elif current_status == "approved":
-                                st.info(
-                                    "ℹ️ この支払いは既に承認済みでした。"
-                                    "再承認の必要はありません。"
-                                )
-                            else:
-                                db.approve_payment(
-                                    payment_id,
-                                    approved_by=f"pit:{operator_name()}",
-                                    event_id=event_id,
-                                )
-                                st.success(
-                                    "🟡 ピット側で承認まで完了しました。"
-                                    "給与窓口は「支払いボタンを押すだけ」で OK です。"
-                                )
-                                # UX B: 確定カードに承認済みフラグを反映
-                                if _LAST_CONFIRMED_KEY in st.session_state:
-                                    st.session_state[_LAST_CONFIRMED_KEY]["approved"] = True
+                _checkout_msg = f"✅ {target['name_jp']} を {checkout_time} で退勤確定しました"
+
+                # 支払い計算も実行
+                if not confirm_pay:
+                    st.success(_checkout_msg)
+                else:
+                    # A-11: 退勤は確定済み。以降の計算/保存/承認が失敗しても
+                    # 「退勤は確定したが支払いは未作成」と明示し、次の人を呼ぶ前に気づけるようにする。
+                    try:
+                        rates_rows = db.get_event_rates(event_id) or []
+                        rates_by_date = {
+                            r["date"]: {
+                                "hourly": r.get("hourly_rate", 1500),
+                                "night": r.get("night_rate", 1875),
+                                "transport": r.get("transport_allowance", 1000),
+                                "floor_bonus": r.get("floor_bonus", 3000),
+                                "mix_bonus": r.get("mix_bonus", 1500),
+                            }
+                            for r in rates_rows
+                        }
+                        # 最新シフトを再取得（退勤時刻が反映された状態）
+                        latest_shifts = db.get_shifts_for_event(event_id, staff_id=target["id"])
+                        shifts_for_calc = []
+                        for s in latest_shifts:
+                            if s.get("status") == "absent":
+                                continue
+                            start = s.get("actual_start") or s.get("planned_start")
+                            end = s.get("actual_end") or s.get("planned_end")
+                            if not start or not end:
+                                continue
+                            shifts_for_calc.append({
+                                "date": s["date"],
+                                "start": start,
+                                "end": end,
+                                "is_mix": bool(s.get("is_mix", 0)),
+                            })
+                        # Codex P1 fix (2026-05-09): イベント全体の日数を使う
+                        # （staff のシフト日数を使うと部分参加でも全勤扱いになり、
+                        # 精勤手当 ¥10,000 が誤付与される）
+                        total_event_days = len(rates_rows) if rates_rows else len(
+                            {s["date"] for s in latest_shifts}
+                        )
+                        # Phase 3-I: 個別手当を計算に含める（オフレコ含む）
+                        individual_allowances = db.get_individual_allowances(
+                            event_id, target["id"]
+                        )
+                        # 交通費が領収書ベースで保存されていれば、それを transport_override に
+                        transport_override = None
+                        claim = next(
+                            (c for c in (db.get_transport_claims(event_id) or [])
+                             if c.get("staff_id") == target["id"]),
+                            None,
+                        )
+                        if claim is not None:
+                            transport_override = int(claim.get("approved_amount") or 0)
+                        payment = calculate_staff_payment(
+                            staff_id=target["id"],
+                            name=target["name_jp"],
+                            role=target.get("role", "Dealer"),
+                            shifts=shifts_for_calc,
+                            rates_by_date=rates_by_date,
+                            total_event_days=total_event_days,
+                            break_6h=int(event.get("break_minutes_6h") or 0),
+                            break_8h=int(event.get("break_minutes_8h") or 0),
+                            employment_type=target.get("employment_type") or "contractor",
+                            custom_hourly_rate=target.get("custom_hourly_rate"),
+                            transport_override=transport_override,
+                            individual_allowances=individual_allowances,
+                        )
+                        db.save_payment(
+                            event_id=event_id,
+                            staff_id=target["id"],
+                            base_pay=payment.base_pay,
+                            night_pay=payment.night_pay,
+                            transport_total=payment.transport_total,
+                            floor_bonus_total=payment.floor_bonus_total,
+                            mix_bonus_total=payment.mix_bonus_total,
+                            attendance_bonus=payment.attendance_bonus,
+                            total_amount=payment.total_amount,
+                            break_deduction=payment.break_deduction,
+                            # Codex P2 fix #3: 個別手当合計を保存
+                            individual_allowance_total=getattr(
+                                payment, "individual_allowance_total", 0
+                            ),
+                        )
+                        db.log_action(
+                            "pit_payment_calc", "payments", target["id"],
+                            detail=f"{target['name_jp']} ¥{payment.total_amount:,}",
+                            event_id=event_id,
+                            performed_by=operator_name(),
+                        )
+                        st.success(
+                            _checkout_msg + "\n\n"
+                            f"💰 支払い計算も実行しました。"
+                            f"合計 **¥{payment.total_amount:,}**（{payment.days_worked}日勤務）"
+                        )
+                        # UX B: 直前確定カード用の情報を保存
+                        st.session_state[_LAST_CONFIRMED_KEY] = {
+                            "no": target.get("no", "?"),
+                            "name": target["name_jp"],
+                            "amount": int(payment.total_amount),
+                            "checkout": checkout_time,
+                            "approved": False,
+                        }
+
+                        # Phase 3-C: 承認まで進める（実オペレーター帰属を再確認・防御）
+                        if auto_approve and _operator_attributable():
+                            # 直近の payment レコードを取得して承認
+                            client_q = db.get_client().table("p1_payments").select(
+                                "id, status").eq("event_id", event_id).eq(
+                                "staff_id", target["id"]).execute().data
+                            if client_q:
+                                payment_row = client_q[0]
+                                payment_id = payment_row["id"]
+                                current_status = payment_row.get("status")
+                                # Codex P2 fix #4 (2026-05-09): paid を approved に
+                                # 退行させないようガード（save_payment は paid 保護するが
+                                # approve_payment は別経路なので独立してチェックする）
+                                if current_status == "paid":
+                                    st.warning(
+                                        "⚠️ この支払いは既に **支払済み** です。"
+                                        "ピット側からの自動承認はスキップしました。"
+                                        "金額の不一致があれば「📊 精算レポート」で確認してください。"
+                                    )
+                                elif current_status == "approved":
+                                    st.info(
+                                        "ℹ️ この支払いは既に承認済みでした。"
+                                        "再承認の必要はありません。"
+                                    )
+                                else:
+                                    # approve_payment は pending→approved のみ成立し、
+                                    # 成否を bool で返す。並走再計算で行が pending でなく
+                                    # なっていた場合は False になるため、成功表示はその時だけ。
+                                    _approved_ok = db.approve_payment(
+                                        payment_id,
+                                        approved_by=f"pit:{operator_name()}",
+                                        event_id=event_id,
+                                    )
+                                    if _approved_ok:
+                                        st.success(
+                                            "🟡 ピット側で承認まで完了しました。"
+                                            "給与窓口は「支払いボタンを押すだけ」で OK です。"
+                                        )
+                                        # UX B: 確定カードに承認済みフラグを反映
+                                        if _LAST_CONFIRMED_KEY in st.session_state:
+                                            st.session_state[_LAST_CONFIRMED_KEY]["approved"] = True
+                                    else:
+                                        st.warning(
+                                            "⚠️ 自動承認が適用されませんでした"
+                                            "（支払いレコードの状態が変化した可能性）。"
+                                            "「💰 支払い計算」ページで承認状態を確認してください。"
+                                        )
+                    except Exception as e:
+                        # A-11: 警告は st.rerun() で破棄されるため session_state に退避し、
+                        # リラン後にページ上部で再表示する（上の _PIT_ERROR_KEY ブロック）。
+                        st.session_state[_PIT_ERROR_KEY] = {
+                            "name": target["name_jp"],
+                            "detail": str(e),
+                        }
                 st.rerun()
 
 

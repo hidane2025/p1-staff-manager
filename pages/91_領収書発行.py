@@ -220,6 +220,40 @@ else:
         use_container_width=True,
     )
 
+    # --- C-1: DLリンクの即時失効（誤送信・転送・流出時の遮断） ---
+    with st.expander("🚫 DLリンクを失効させる（誤送信・流出時）", expanded=False):
+        st.caption(
+            "リンクを誤って別人に送った・転送された恐れがある場合、ここで即時失効できます。"
+            "失効するとそのURLは「期限切れ」になりPDFを返しません。"
+            "再度渡す場合は『強制再生成』で新しいリンクを発行してください。"
+        )
+        revoke_choices = {
+            f"{r.get('no', 0)} {r.get('name_jp', '')}"
+            f"（{r.get('real_name', '') or '本名未登録'}）": r["id"]
+            for r in issued
+        }
+        if revoke_choices:
+            picked_revoke = st.selectbox(
+                "失効するスタッフのリンク", list(revoke_choices.keys()),
+                key="revoke_receipt_pick",
+            )
+            if st.button("🚫 このリンクを失効させる", key="revoke_receipt_btn"):
+                try:
+                    receipt_db.revoke_receipt_token(
+                        revoke_choices[picked_revoke],
+                        performed_by=operator_name(),
+                        event_id=event_id,
+                    )
+                    st.success(
+                        f"✅ {picked_revoke} のDLリンクを失効しました。"
+                        "このURLは今後「期限切れ」表示になります。"
+                    )
+                    st.rerun()
+                except Exception as e:
+                    st.error("💥 失効処理に失敗しました。もう一度お試しください。")
+                    with st.expander("🔧 技術詳細"):
+                        st.code(str(e), language=None)
+
     # --- 個別URLコピー（1クリックでクリップボード） ---
     st.markdown("#### 📋 URLをコピー（LINE等に貼り付け用）")
     st.caption("下記コードブロック右上のコピーアイコンを押すと、URLがクリップボードに入ります。")

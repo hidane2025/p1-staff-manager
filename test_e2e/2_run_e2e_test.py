@@ -470,6 +470,9 @@ def step_freeze_recalc(event_id: int) -> None:
     # paid保護: 別の支払いを paid にして reset を呼ぶ
     if len(payments) >= 2:
         protect_target = payments[1]
+        # A-3/A-9 (2026-06-01): mark_paid は approved→paid のみ許可する状態ガードを
+        # 持つため、先に承認してから支払済みにする（pending のままだと no-op になる）。
+        db.approve_payment(protect_target["id"], "E2Eテスト")
         db.mark_paid(protect_target["id"])
         reset2 = db.reset_payment_to_pending(event_id, protect_target["staff_id"], reason="E2E保護テスト")
         row2 = client.table("p1_payments").select("status").eq("id", protect_target["id"]).execute().data

@@ -47,6 +47,17 @@ def _get_admin_password() -> str:
     return os.environ.get("ADMIN_PASSWORD", "")
 
 
+def is_auth_enabled() -> bool:
+    """管理者認証が実際に機能しているか（ADMIN_PASSWORD が設定済みか）。
+
+    False の場合はパスワードレス運用（ローカル開発 / ADMIN_PASSWORD 未設定の
+    フォールバック）で、require_admin() はログインフォームを出さずページを通す。
+    この環境ではオペレーター名を入力する導線が無いため、操作者必須ゲートを
+    かけてはいけない（かけると承認・支払が一切できなくなる）。
+    """
+    return bool(_get_admin_password())
+
+
 def is_admin() -> bool:
     """現在のセッションが管理者として認証済みか"""
     return bool(st.session_state.get(_SESSION_KEY))
@@ -110,7 +121,10 @@ def require_admin(*, page_name: str = "") -> None:
             st.session_state[_LOGIN_AT_KEY] = datetime.now(_JST).strftime(
                 "%Y-%m-%d %H:%M:%S"
             )
-            st.session_state[_LOGIN_AS_KEY] = (operator or "anonymous_admin")[:30]
+            # 空白のみのオペレーター名は実質匿名として扱う（監査ゲート回避防止）。
+            st.session_state[_LOGIN_AS_KEY] = (
+                (operator or "").strip() or "anonymous_admin"
+            )[:30]
             _log_safe(
                 "admin_login", "auth",
                 detail=f"page={page_name}, by={operator[:30] if operator else 'anon'}",

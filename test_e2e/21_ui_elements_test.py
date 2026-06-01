@@ -156,15 +156,8 @@ _check("タイトル '封筒リスト'", _has(at, "封筒リスト"))
 # 7. 5_出退勤
 # ============================================================
 print("\n[7] 5_出退勤")
-at = AppTest.from_file(str(ROOT / "pages/5_出退勤.py"), default_timeout=30).run()
-_check("例外なし起動", not at.exception)
-_check("タイトル '出退勤'", _has(at, "出退勤"))
-# Phase 1-2 (2026-05-08): 個別リセットタブが追加されていること
-tab_count_5 = _count_tabs(at)
-_check(f"タブが6個に増えた（旧5: 凍結/欠勤/遅刻/延長/早退 + 新1: 個別リセット）tabs={tab_count_5}",
-       tab_count_5 >= 6, f"got {tab_count_5}")
-_check("『個別リセット』タブの中身が描画されている",
-       _has(at, "入力ミスや誤操作の取り消し") or _has(at, "1名だけ"))
+
+
 def _button_labels(at) -> str:
     """全ボタンの label を1つの文字列に連結（検索用）"""
     parts = []
@@ -178,8 +171,46 @@ def _button_labels(at) -> str:
     return " | ".join(parts)
 
 
-_check("『全員リセット』ボタンが個別と分離（リネーム済）",
-       "全員リセット" in _button_labels(at))
+# pages/5 はシフトが無い日は空状態で正しく早期 stop する設計のため、タブ検証には
+# 「初日にシフトがあるイベント」へ誘導する（可変な本番データへの依存を排した頑健化）。
+# 旧テストは最新イベント既定が偶然シフトを持つ前提で、データが入れ替わると誤って赤くなった。
+import db as _db_att  # noqa: E402
+_att_event = None
+try:
+    for _ev in (_db_att.get_all_events() or []):
+        _dates = [r["date"] for r in (_db_att.get_event_rates(_ev["id"]) or [])]
+        if _dates and _db_att.get_shifts_for_event(_ev["id"], date=_dates[0]):
+            _att_event = _ev["id"]
+            break
+except Exception:
+    _att_event = None
+
+at = AppTest.from_file(str(ROOT / "pages/5_出退勤.py"), default_timeout=30)
+if _att_event is not None:
+    # select_event は session_state["selected_event_id"] を読む（utils/event_selector.py）
+    at.session_state["selected_event_id"] = _att_event
+at.run()
+_check("例外なし起動", not at.exception)
+_check("タイトル '出退勤'", _has(at, "出退勤"))
+
+# Phase 1-2 (2026-05-08): 個別リセットタブが追加されていること
+tab_count_5 = _count_tabs(at)
+if tab_count_5 == 0:
+    # どのイベントの初日にもシフトが無い（テストデータ枯渇）場合は、
+    # 空状態を例外なく表示しているかだけ検証する（タブ検証はデータ有時のみ）。
+    _check(
+        "シフト無しでも空状態を例外なく表示（タブ検証はデータ有時のみ実施）",
+        _has(at, "シフトはありません") or _has(at, "レートが設定されていません"),
+    )
+else:
+    _check(
+        f"タブが6個に増えた（旧5: 凍結/欠勤/遅刻/延長/早退 + 新1: 個別リセット）tabs={tab_count_5}",
+        tab_count_5 >= 6, f"got {tab_count_5}",
+    )
+    _check("『個別リセット』タブの中身が描画されている",
+           _has(at, "入力ミスや誤操作の取り消し") or _has(at, "1名だけ"))
+    _check("『全員リセット』ボタンが個別と分離（リネーム済）",
+           "全員リセット" in _button_labels(at))
 
 
 # ============================================================

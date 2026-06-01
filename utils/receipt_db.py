@@ -168,6 +168,34 @@ def mark_receipt_downloaded(payment_id: int) -> None:
     }).eq("id", payment_id).execute()
 
 
+def revoke_receipt_token(payment_id: int, performed_by: str = "system",
+                          event_id: Optional[int] = None) -> None:
+    """領収書DLトークンを即時失効させる（C-1）。
+
+    有効期限(receipt_token_expires_at)を過去日時に上書きするだけ。
+    これにより receipt_token.is_expired() が True を返し、DLページは
+    「期限切れ」表示になってPDFを返さなくなる。トークン値自体は残すので、
+    監査上「どのトークンが失効されたか」を find_payment_by_token で追える。
+    再発行（強制再生成）すれば新しい期限で復活できる（破壊的でない）。
+
+    用途: トークン付きURLの誤送信・転送・流出時に、有効期限切れを待たず
+    第三者アクセスを止める。契約側の contract_db.revoke_contract と対をなす。
+
+    Args:
+        performed_by: 失効を実行した操作者（監査証跡。呼び出し側で operator_name() を渡す）。
+        event_id: 対象イベント（監査ログをイベントで絞り込めるようにする）。
+    """
+    past_iso = (datetime.now(JST) - timedelta(days=1)).isoformat()
+    db.get_client().table("p1_payments").update({
+        "receipt_token_expires_at": past_iso,
+    }).eq("id", payment_id).execute()
+    db.log_action(
+        "revoke_receipt_token", "payments", payment_id,
+        detail="領収書DLトークンを失効（有効期限を過去に設定）",
+        event_id=event_id, performed_by=performed_by,
+    )
+
+
 def find_payment_by_token(token: str) -> Optional[dict]:
     """トークンから支払レコードを検索（検証用）
 
