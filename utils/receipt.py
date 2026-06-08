@@ -26,9 +26,12 @@ FONT_JP = "HeiseiKakuGo-W5"
 
 
 def _ensure_font() -> None:
-    global _FONT_REGISTERED
+    """日本語フォントを登録（IPAex埋め込み・無ければCIDにフォールバック）。"""
+    global _FONT_REGISTERED, FONT_JP
     if not _FONT_REGISTERED:
-        pdfmetrics.registerFont(UnicodeCIDFont(FONT_JP))
+        from utils.jp_fonts import ensure_jp_fonts
+        gothic, _mincho = ensure_jp_fonts()
+        FONT_JP = gothic
         _FONT_REGISTERED = True
 
 

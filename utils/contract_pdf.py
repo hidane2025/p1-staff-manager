@@ -33,10 +33,16 @@ _FONT_REGISTERED = False
 
 
 def _ensure_font() -> None:
-    global _FONT_REGISTERED
+    """日本語フォントを登録（IPAex埋め込み・無ければCIDにフォールバック）。
+
+    実際に登録された名前を FONT_JP_REG/FONT_JP_MIN に反映する（描画はこの名前を使う）。
+    """
+    global _FONT_REGISTERED, FONT_JP_REG, FONT_JP_MIN
     if not _FONT_REGISTERED:
-        pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
-        pdfmetrics.registerFont(UnicodeCIDFont("HeiseiMin-W3"))
+        from utils.jp_fonts import ensure_jp_fonts
+        gothic, mincho = ensure_jp_fonts()
+        FONT_JP_REG = gothic
+        FONT_JP_MIN = mincho
         _FONT_REGISTERED = True
 
 
