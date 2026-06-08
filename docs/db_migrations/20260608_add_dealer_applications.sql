@@ -179,6 +179,17 @@ BEGIN
      LIMIT 1;
   END IF;
 
+  -- 既存スタッフを再利用する場合、region/prefecture が未設定なら補完する
+  -- （出戻り応募者で region が null のままだと交通費0の過少支払になるため）。
+  -- 既存の非null値は尊重して上書きしない。
+  IF v_staff_id IS NOT NULL THEN
+    -- 空文字('')も未設定とみなして補完する（アプリは blank を「地域なし」扱いするため）。
+    UPDATE p1_staff
+       SET region     = COALESCE(NULLIF(region, ''), p_region),
+           prefecture = COALESCE(NULLIF(prefecture, ''), p_prefecture)
+     WHERE id = v_staff_id;
+  END IF;
+
   IF v_staff_id IS NULL THEN
     SELECT COALESCE(MAX(no), 0) + 1 INTO v_next_no FROM p1_staff;
     INSERT INTO p1_staff (

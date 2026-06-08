@@ -1034,3 +1034,195 @@ def get_petty_cash_for_event(event_id):
 # === 互換性のためのinit_db（何もしない） ===
 def init_db():
     pass
+
+
+# =====================================================================
+# ディーラー応募GSS連動（案A）— service_role 経路 + 応募テーブル/対応表
+#   応募テーブルは PII を含み RLS で anon 全拒否のため、anon キーでは読めない。
+#   サーバ側 service_role（SUPABASE_SERVICE_KEY）でのみアクセスする。
+#   未設定時は applications_enabled()=False を返し、画面側はグレースフルに案内する。
+# =====================================================================
+DEALER_APP_TABLE = "p1_dealer_applications"
+APP_SOURCES_TABLE = "p1_application_sources"
+
+
+def _get_service_supabase_config():
+    """service_role 用 URL/Key。SERVICE_KEY が無ければ None。
+
+    SERVICE_KEY だけ独立に読み、URL は通常設定（_get_supabase_config: secrets>env>
+    デフォルトURL）を再利用する。これにより URL を二重に設定しなくても、
+    SERVICE_KEY を足すだけで応募連動を有効化できる。
+    """
+    # SERVICE_KEY / SERVICE_ROLE_KEY（標準名・Edge側と統一）のどちらでも受理する。
+    key = None
+    for _name in ("SUPABASE_SERVICE_KEY", "SUPABASE_SERVICE_ROLE_KEY"):
+        try:
+            v = st.secrets.get(_name)
+        except Exception:
+            v = None
+        if not v:
+            v = os.environ.get(_name)
+        if v:
+            key = str(v)
+            break
+    if not key:
+        return None
+    try:
+        url, _anon = _get_supabase_config()
+    except Exception:
+        url = None
+    if not url:
+        return None
+    return str(url), str(key)
+
+
+def get_service_client():
+    """service_role クライアント（応募PIIテーブル等・RLSバイパス）。未設定なら None。"""
+    cfg = _get_service_supabase_config()
+    if not cfg:
+        return None
+    return create_client(cfg[0], cfg[1])
+
+
+def _supabase_key_role(token: str):
+    """Supabaseキー(JWT)の role クレームを返す。JWTでない/解析不可なら None。
+
+    旧形式キーは JWT で role=anon / service_role を持つ。新形式の不透明キー
+    （sb_secret_ 等）は JWT でないため None を返す（その場合は role 判定をスキップ）。
+    """
+    try:
+        import base64
+        import json
+        parts = (token or "").split(".")
+        if len(parts) != 3:
+            return None
+        pad = "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(parts[1] + pad))
+        return payload.get("role")
+    except Exception:
+        return None
+
+
+def applications_enabled() -> bool:
+    """応募連動が使える状態か（service_role キーが設定され、応募テーブルが存在する）。"""
+    cfg = _get_service_supabase_config()
+    if cfg is None:
+        return False
+    _url, key = cfg
+    role = _supabase_key_role(key)
+    if role is not None:
+        # 旧形式JWT: service_role 以外（anon等）の誤設定は有効化しない。
+        if role != "service_role":
+            return False
+    elif str(key).startswith("sb_publishable_"):
+        # 新形式の publishable キー（anon相当）の誤設定 → 有効化しない。
+        # （RLS で空読みになり「有効に見えるが読めない/書けない」誤動作を防ぐ）
+        return False
+    # それ以外（sb_secret_ や不明な不透明キー）は下の probe で確認する。
+    try:
+        get_service_client().table(DEALER_APP_TABLE).select("id").limit(1).execute()
+        return True
+    except Exception:
+        return False
+
+
+def get_application_sources():
+    """大会↔GSS 対応表（全件・新しい順）。未設定/失敗時は空リスト。"""
+    c = get_service_client()
+    if c is None:
+        return []
+    try:
+        return c.table(APP_SOURCES_TABLE).select("*").order("id", desc=True).execute().data or []
+    except Exception:
+        return []
+
+
+def add_application_source(event_id: int, label: str, spreadsheet_id: str,
+                           sheet_name: str = "フォームの回答 1"):
+    """大会↔GSS 対応を登録。"""
+    c = get_service_client()
+    if c is None:
+        raise RuntimeError("SUPABASE_SERVICE_KEY が未設定です")
+    return c.table(APP_SOURCES_TABLE).insert({
+        "event_id": event_id,
+        "label": (label or "").strip() or None,
+        "spreadsheet_id": spreadsheet_id.strip(),
+        "sheet_name": (sheet_name or "").strip() or "フォームの回答 1",
+        "is_active": True,
+    }).execute().data
+
+
+def set_source_active(source_id: int, active: bool):
+    """対応の有効/無効を切り替え。"""
+    c = get_service_client()
+    if c is None:
+        raise RuntimeError("SUPABASE_SERVICE_KEY が未設定です")
+    now = datetime.now(timezone(timedelta(hours=9))).isoformat()
+    c.table(APP_SOURCES_TABLE).update(
+        {"is_active": bool(active), "updated_at": now}
+    ).eq("id", source_id).execute()
+
+
+def get_dealer_applications(event_id=None, statuses=None):
+    """応募一覧（任意で大会・ステータス絞り込み）。未設定/失敗時は空リスト。"""
+    c = get_service_client()
+    if c is None:
+        return []
+    try:
+        q = c.table(DEALER_APP_TABLE).select("*")
+        if event_id is not None:
+            q = q.eq("event_id", event_id)
+        if statuses:
+            q = q.in_("status", list(statuses))
+        return q.order("applied_at", desc=True).execute().data or []
+    except Exception:
+        return []
+
+
+def promote_dealer_application(app_id: int, operator: str,
+                               prefecture=None, region=None):
+    """応募を採用＝p1_staff へ昇格（RPC・トランザクション）。staff_id を返す。"""
+    c = get_service_client()
+    if c is None:
+        raise RuntimeError("SUPABASE_SERVICE_KEY が未設定です")
+    res = c.rpc("promote_dealer_application", {
+        "p_app_id": app_id,
+        "p_operator": operator,
+        "p_prefecture": prefecture,
+        "p_region": region,
+    }).execute()
+    return res.data
+
+
+def reject_dealer_application(app_id: int, operator: str):
+    """応募を不採用に（人手判定済みのものは触らない＝new/reviewed/source_changedのみ）。"""
+    c = get_service_client()
+    if c is None:
+        raise RuntimeError("SUPABASE_SERVICE_KEY が未設定です")
+    now = datetime.now(timezone(timedelta(hours=9))).isoformat()
+    c.table(DEALER_APP_TABLE).update(
+        {"status": "rejected", "reviewed_by": operator, "updated_at": now}
+    ).eq("id", app_id).in_("status", ["new", "reviewed", "source_changed"]).execute()
+
+
+def log_action_service(action, target_type, target_id=None, detail="",
+                       event_id=None, performed_by="system") -> bool:
+    """監査ログを service_role で記録（応募PIIページ等）。
+
+    anon が p1_audit_log に書けない構成でも確実に残すため service client を使う。
+    成功なら True を返す（呼び出し側は成功時のみ「記録済み」フラグを立て、
+    失敗時は次回再試行できる）。service client が無ければ anon の log_action に委譲。
+    """
+    c = get_service_client()
+    if c is None:
+        log_action(action, target_type, target_id=target_id, detail=detail,
+                   event_id=event_id, performed_by=performed_by)
+        return True
+    try:
+        c.table("p1_audit_log").insert({
+            "event_id": event_id, "action": action, "target_type": target_type,
+            "target_id": target_id, "detail": detail, "performed_by": performed_by,
+        }).execute()
+        return True
+    except Exception:
+        return False
