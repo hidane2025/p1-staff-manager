@@ -26,16 +26,27 @@ _DEFAULT_SUPABASE_KEY = (
 
 
 def _get_supabase_config():
-    """Supabase URL/Keyを取得（優先度: st.secrets > 環境変数 > デフォルト）"""
-    try:
-        url = st.secrets["SUPABASE_URL"]
-        key = st.secrets["SUPABASE_KEY"]
-        return url, key
-    except Exception:
-        pass
-    url = os.environ.get("SUPABASE_URL", _DEFAULT_SUPABASE_URL)
-    key = os.environ.get("SUPABASE_KEY", _DEFAULT_SUPABASE_KEY)
-    return url, key
+    """Supabase URL/Keyを取得。
+
+    Key優先度: SUPABASE_SERVICE_KEY > SUPABASE_KEY(anon) > 環境変数 > デフォルトanon。
+    Streamlitはサーバ側で動くため service_role キーを使ってもブラウザに露出しない。
+    SUPABASE_SERVICE_KEY を設定すればアプリ全体が service_role で動くので、PIIテーブルの
+    anon権限を締めても壊れない（A-1是正の前提）。未設定時は従来どおり anon にフォールバック。
+    """
+    def _secret(name):
+        try:
+            return st.secrets.get(name)
+        except Exception:
+            return None
+
+    url = _secret("SUPABASE_URL") or os.environ.get("SUPABASE_URL", _DEFAULT_SUPABASE_URL)
+    key = (
+        _secret("SUPABASE_SERVICE_KEY")
+        or _secret("SUPABASE_KEY")
+        or os.environ.get("SUPABASE_SERVICE_KEY")
+        or os.environ.get("SUPABASE_KEY", _DEFAULT_SUPABASE_KEY)
+    )
+    return str(url), str(key)
 
 
 @st.cache_resource
