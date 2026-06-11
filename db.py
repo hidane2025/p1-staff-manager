@@ -1,6 +1,8 @@
 """P1 Staff Manager — データベース層 v3 (Supabase REST API)"""
 
 import os
+import re
+import unicodedata
 import streamlit as st
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -141,21 +143,115 @@ def update_staff(staff_id, **kwargs):
     get_client().table("p1_staff").update(kwargs).eq("id", staff_id).execute()
 
 
+# ============================================================
+# スタッフ名寄せ（同一人物判定）— 源泉徴収/法定調書を人単位で正確にする土台
+# ============================================================
+def _norm_key(s) -> str:
+    """名寄せ用の正規化キー。
+
+    全角/半角・大文字小文字・空白の揺れを吸収する（NFKC正規化＋空白除去＋casefold）。
+    例: "Eve Kat" / "ＥＶＥ　ＫＡＴ" / "evekat" → すべて "evekat"
+    """
+    if not s:
+        return ""
+    t = unicodedata.normalize("NFKC", str(s))
+    t = re.sub(r"\s+", "", t)
+    return t.casefold()
+
+
+def _build_staff_index(all_staff: list[dict]) -> dict:
+    """既存スタッフから名寄せ用インデックスを構築。
+
+    照合優先度: NO. > メール(正規化) > ディーラーネーム(正規化)。
+    name_jp は別人が同名のこともあるため list で保持し、複数該当を検知できるようにする。
+    """
+    by_no: dict = {}
+    by_email: dict = {}
+    by_nname: dict = {}
+    for s in all_staff:
+        no = s.get("no")
+        if no not in (None, ""):
+            try:
+                by_no.setdefault(int(no), s)
+            except (ValueError, TypeError):
+                pass
+        ek = _norm_key(s.get("email"))
+        if ek:
+            by_email.setdefault(ek, s)
+        nk = _norm_key(s.get("name_jp"))
+        if nk:
+            by_nname.setdefault(nk, []).append(s)
+    return {"by_no": by_no, "by_email": by_email, "by_nname": by_nname}
+
+
+def _match_staff(no, name_jp, email, index: dict):
+    """インデックスから既存スタッフを探す（名寄せ）。
+
+    Returns: (existing dict or None, matched_by)
+      matched_by: "no" / "email" / "name_jp" / "name_jp_multi" / ""
+      同名が複数該当する場合は "name_jp_multi"（呼び出し側で要確認警告を出せる）。
+    """
+    by_no = index["by_no"]
+    if no not in (None, ""):
+        try:
+            ni = int(no)
+        except (ValueError, TypeError):
+            ni = None
+        if ni is not None and ni in by_no:
+            return by_no[ni], "no"
+    ek = _norm_key(email)
+    if ek and ek in index["by_email"]:
+        return index["by_email"][ek], "email"
+    nk = _norm_key(name_jp)
+    if nk and nk in index["by_nname"]:
+        cand = index["by_nname"][nk]
+        return cand[0], ("name_jp_multi" if len(cand) > 1 else "name_jp")
+    return None, ""
+
+
+def _index_add(index: dict, staff: dict) -> None:
+    """新規/更新したスタッフをインデックスに反映（同一バッチ内の二重取込を吸収）。"""
+    no = staff.get("no")
+    if no not in (None, ""):
+        try:
+            index["by_no"].setdefault(int(no), staff)
+        except (ValueError, TypeError):
+            pass
+    ek = _norm_key(staff.get("email"))
+    if ek:
+        index["by_email"].setdefault(ek, staff)
+    nk = _norm_key(staff.get("name_jp"))
+    if nk:
+        index["by_nname"].setdefault(nk, []).append(staff)
+
+
 def bulk_import_staff(rows: list[dict]) -> dict:
-    """スタッフ情報を一括登録/更新
+    """スタッフ情報を一括登録/更新（名寄せ付き）
+
+    同一人物判定（名寄せ）の優先度: NO. > メール(正規化) > ディーラーネーム(正規化)。
+    全角/半角・大文字小文字・空白の揺れを吸収して二重登録を防ぎ、同一バッチ内の
+    重複も吸収する。表記揺れでの統合・同名衝突は warnings に記録（自動統合の透明化）。
 
     Args:
         rows: [{"no": 18, "name_jp": "EveKat", "real_name": "...",
                 "address": "...", "email": "...", "nearest_station": "...",
                 "employment_type": "contractor", ...}]
     Returns:
-        {"created": N, "updated": M, "errors": [str, ...]}
+        {"created": N, "updated": M, "errors": [str, ...], "warnings": [str, ...]}
     """
     from utils.region import address_to_region
     client = get_client()
     created = 0
     updated = 0
     errors = []
+    warnings = []
+
+    # 名寄せ用に既存スタッフを1回だけ取得してインデックス化（行ごとSELECTのN+1回避）
+    try:
+        existing_all = client.table("p1_staff").select("*").execute().data or []
+    except Exception:
+        existing_all = []
+    index = _build_staff_index(existing_all)
 
     for i, row in enumerate(rows, 1):
         name_jp = (row.get("name_jp") or "").strip()
@@ -167,18 +263,27 @@ def bulk_import_staff(rows: list[dict]) -> dict:
             no = int(no) if no not in (None, "") else None
         except (ValueError, TypeError):
             no = None
+        email_val = (row.get("email") or "").strip()
 
-        # NO.があれば、NO.でマッチした既存を更新
-        existing = None
-        if no:
-            res = client.table("p1_staff").select("*").eq("no", no).execute()
-            if res.data:
-                existing = res.data[0]
-        if not existing:
-            # ディーラーネームでも検索
-            res = client.table("p1_staff").select("*").eq("name_jp", name_jp).execute()
-            if res.data:
-                existing = res.data[0]
+        # 名寄せ: NO. > メール(正規化) > ディーラーネーム(正規化)
+        existing, matched_by = _match_staff(no, name_jp, email_val, index)
+
+        # 自動統合の透明化（人が後で確認できるよう warnings に残す）
+        if existing:
+            exist_name = (existing.get("name_jp") or "").strip()
+            if matched_by == "email" and _norm_key(exist_name) != _norm_key(name_jp):
+                warnings.append(
+                    f"行{i}: メール一致で「{exist_name}」(NO.{existing.get('no')}) に統合"
+                    f"（入力名「{name_jp}」と相違・要確認）"
+                )
+            elif matched_by == "name_jp" and exist_name != name_jp:
+                warnings.append(
+                    f"行{i}: 表記揺れを吸収し「{exist_name}」(NO.{existing.get('no')}) に統合"
+                )
+            elif matched_by == "name_jp_multi":
+                warnings.append(
+                    f"行{i}: 同名「{name_jp}」が複数登録あり。NO.{existing.get('no')} に更新（要確認）"
+                )
 
         # 住所→都道府県・地域を自動判定
         address = row.get("address", "") or ""
@@ -233,21 +338,39 @@ def bulk_import_staff(rows: list[dict]) -> dict:
                 payload["updated_at"] = _now()
                 client.table("p1_staff").update(payload).eq("id", existing["id"]).execute()
                 updated += 1
+                # 同一バッチ内の後続行が同じ人物を重複作成しないようインデックス反映
+                _index_add(index, {**existing, **payload})
             else:
                 if no:
                     payload["no"] = no
-                client.table("p1_staff").insert(payload).execute()
+                res = client.table("p1_staff").insert(payload).execute()
                 created += 1
+                new_row = (res.data[0] if getattr(res, "data", None) else dict(payload))
+                _index_add(index, new_row)
         except Exception as e:
             errors.append(f"行{i} ({name_jp}): {str(e)[:100]}")
 
-    return {"created": created, "updated": updated, "errors": errors}
+    return {"created": created, "updated": updated, "errors": errors, "warnings": warnings}
 
 
 def find_or_create_staff(no, name_jp, name_en="", role="Dealer"):
-    r = get_client().table("p1_staff").select("id").eq("no", no).eq("name_jp", name_jp).execute()
-    if r.data:
-        return r.data[0]["id"]
+    """NO.（最優先）→ ディーラーネーム(正規化) の順で既存を探し、無ければ作成。
+
+    シフト取込・出退勤から呼ばれる。NO.は一意キーなので NO.一致だけで同一人物と
+    みなす（旧実装は NO.＋name_jp の完全一致で、表記揺れ時に NO.重複を生んでいた）。
+    NO.未指定/未一致のときだけ、表記揺れを吸収したディーラーネームで照合する。
+    """
+    client = get_client()
+    if no not in (None, ""):
+        r = client.table("p1_staff").select("id").eq("no", no).execute()
+        if r.data:
+            return r.data[0]["id"]
+    nk = _norm_key(name_jp)
+    if nk:
+        r = client.table("p1_staff").select("id, name_jp").execute()
+        for s in (r.data or []):
+            if _norm_key(s.get("name_jp")) == nk:
+                return s["id"]
     return create_staff(no, name_jp, name_en, role)
 
 

@@ -240,6 +240,16 @@ def _run_bulk_import(rows):
         with st.expander(f"⚠️ エラー {len(result['errors'])}件"):
             for err in result["errors"]:
                 st.error(err)
+    if result.get("warnings"):
+        with st.expander(
+            f"🔎 名寄せの確認事項 {len(result['warnings'])}件（同名・表記揺れの統合／要確認）",
+            expanded=True,
+        ):
+            st.caption(
+                "同一人物として既存に統合した行です。別人の取り違えがないかご確認ください。"
+            )
+            for w in result["warnings"]:
+                st.warning(w)
     if result["created"] + result["updated"] > 0:
         st.success(f"合計 {result['created'] + result['updated']}名を処理しました")
         st.balloons()
