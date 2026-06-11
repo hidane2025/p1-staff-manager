@@ -12,8 +12,11 @@ from utils.event_selector import select_event
 st.set_page_config(page_title="交通費", page_icon="🚃", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header, flow_bar
+from utils.admin_guard import require_admin, admin_logout_button
 apply_global_style()
 hide_staff_only_pages()
+require_admin(page_name="交通費")
+admin_logout_button()
 
 page_header("🚃 交通費ルール・事前見積", "イベントごとに地域別の交通費上限を設定し、領収書金額から精算額を算出します。")
 flow_bar(active="setup")

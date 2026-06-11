@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
+from html import escape as _esc
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
 from utils.denomination import (
@@ -210,8 +211,8 @@ if _print_mode_pre:
         st.markdown(
             f'<div class="p1-envelope-print">'
             f'<h2>P1 支払明細</h2>'
-            f'<div>NO. {e["no"]}　／　{e["role"]}</div>'
-            f'<div class="name-large">{e["name_jp"]} 様</div>'
+            f'<div>NO. {e["no"]}　／　{_esc(str(e["role"]))}</div>'
+            f'<div class="name-large">{_esc(str(e["name_jp"]))} 様</div>'
             f'<div class="amount-huge">¥{e["adjusted_amount"]:,}</div>'
             f'<table>'
             f'<tr><td>基本給</td><td>¥{e["base_pay"]:,}</td></tr>'
