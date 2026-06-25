@@ -123,6 +123,107 @@ st.markdown(
 )
 
 # ============================================================
+# 1.5 弁当配布チェック（2026-06-18 追加 / オペレーター属性必須）
+# ============================================================
+# シフトある人を一覧で出し、配布／辞退／未受領を1タップで切替。
+# 全員受領／全員リセット の一括操作もある。
+# マイグレ未実行のDBでは「マイグレ案内」を出して機能を無効化。
+_rates_for_lunch = db.get_event_rates(event_id) or []
+_lunch_dates = [r["date"] for r in _rates_for_lunch] or [event.get("start_date")]
+
+with st.expander("📦 弁当配布チェック（当日の出勤予定者）", expanded=False):
+    _lunch_date = st.selectbox(
+        "対象日", _lunch_dates,
+        key="lunch_date_select",
+        help="出勤予定者の一覧を表示します。欠勤者は対象外。",
+    )
+
+    _summary = db.get_lunch_summary(event_id, _lunch_date)
+    _total = _summary["total_active"]
+    _received = _summary["received"]
+    _cancelled = _summary["cancelled"]
+    _pending = _summary["pending"]
+
+    if _total == 0:
+        st.info("この日の出勤予定者がいません（シフト未取込か全員欠勤）。")
+    else:
+        _bar = (_received + _cancelled) / _total if _total else 0
+        st.progress(_bar, text=f"配布対応: {_received + _cancelled}/{_total}人（受領 {_received} / 辞退 {_cancelled} / 未受領 {_pending}）")
+
+        c_all1, c_all2, _ = st.columns([1, 1, 2])
+        with c_all1:
+            if st.button("✅ 全員受領にする", use_container_width=True, key="lunch_bulk_received"):
+                if not _operator_attributable():
+                    st.warning("オペレーター名を上で入力してから操作してください。")
+                else:
+                    n = db.bulk_set_lunch_status(event_id, _lunch_date, "received",
+                                                  performed_by=operator_name())
+                    st.success(f"{n}名を受領済みにしました。")
+                    st.rerun()
+        with c_all2:
+            if st.button("🔄 全員 未受領に戻す", use_container_width=True, key="lunch_bulk_pending"):
+                if not _operator_attributable():
+                    st.warning("オペレーター名を上で入力してから操作してください。")
+                else:
+                    n = db.bulk_set_lunch_status(event_id, _lunch_date, "pending",
+                                                  performed_by=operator_name())
+                    st.success(f"{n}名を未受領に戻しました。")
+                    st.rerun()
+
+        st.divider()
+
+        # 個別行（出勤予定者を NO. 順で）
+        _shifts_today = [
+            s for s in (db.get_shifts_for_event(event_id, date=_lunch_date) or [])
+            if (s.get("status") or "") != "absent"
+        ]
+        _shifts_today.sort(key=lambda s: (s.get("no") or 9999))
+
+        for s in _shifts_today:
+            _ls = (s.get("lunch_status") or "pending").lower()
+            _icon = {"received": "✅", "cancelled": "🚫", "pending": "⬜"}.get(_ls, "⬜")
+            cols = st.columns([2, 1, 1, 1])
+            with cols[0]:
+                st.markdown(
+                    f"**{_icon} NO.{s.get('no', '—')} {s.get('name_jp', '—')}**"
+                    f"<span style='color:#94A3B8;font-size:11px;margin-left:8px;'>{s.get('role', '')}</span>",
+                    unsafe_allow_html=True,
+                )
+            with cols[1]:
+                if st.button("✅ 受領", key=f"lunch_recv_{s['id']}",
+                              use_container_width=True,
+                              disabled=(_ls == "received")):
+                    if not _operator_attributable():
+                        st.warning("オペレーター名を上で入力してから操作してください。")
+                    else:
+                        db.update_lunch_status(s["id"], "received",
+                                                performed_by=operator_name())
+                        st.rerun()
+            with cols[2]:
+                if st.button("🚫 辞退", key=f"lunch_cncl_{s['id']}",
+                              use_container_width=True,
+                              disabled=(_ls == "cancelled")):
+                    if not _operator_attributable():
+                        st.warning("オペレーター名を上で入力してから操作してください。")
+                    else:
+                        db.update_lunch_status(s["id"], "cancelled",
+                                                performed_by=operator_name())
+                        st.rerun()
+            with cols[3]:
+                if st.button("🔄 戻す", key=f"lunch_rst_{s['id']}",
+                              use_container_width=True,
+                              disabled=(_ls == "pending")):
+                    if not _operator_attributable():
+                        st.warning("オペレーター名を上で入力してから操作してください。")
+                    else:
+                        db.update_lunch_status(s["id"], "pending",
+                                                performed_by=operator_name())
+                        st.rerun()
+
+        st.caption("⚠️ 列 `lunch_status` が未追加の旧DBではボタンが反応しません。"
+                   "その場合は管理者に `docs/db_migrations/20260618_add_lunch_status.sql` の適用を依頼してください。")
+
+# ============================================================
 # 2. スタッフ検索（NO. または ディーラーネーム）
 # ============================================================
 section_header(

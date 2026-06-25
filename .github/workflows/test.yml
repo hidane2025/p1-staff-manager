@@ -74,8 +74,14 @@ jobs:
       - name: セキュリティ動作テスト
         run: python test_e2e/22_security_behavior_test.py
 
+      - name: ユニットテスト - スタッフ名寄せ（NO.>email>name_jp / NFKC正規化）
+        run: python test_e2e/23_staff_dedup_test.py
+
+      - name: ユニットテスト - 弁当配布チェック（lunch_status）
+        run: python test_e2e/24_lunch_status_test.py
+
       # 6) AppTest 系（Streamlit ページの実行 - DBに参照クエリを発行）
-      - name: ページ起動スモーク（8ページ）
+      - name: ページ起動スモーク（10ページ）
         run: python test_e2e/18_pages_smoke_test.py
         env:
           # CI 実行時の audit_log への performed_by を区別できるようにする
@@ -94,4 +100,4 @@ jobs:
           echo "ブランチ: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "トリガー: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "実行されたテストスイート: 11本（合計 215+ 件）" >> $GITHUB_STEP_SUMMARY
+          echo "実行されたテストスイート: 13本（合計 215+ 件）" >> $GITHUB_STEP_SUMMARY

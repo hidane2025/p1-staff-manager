@@ -651,6 +651,93 @@ def bulk_checkout(shift_ids, actual_end, event_id=None):
     return list({s for s in affected_staff_ids if s is not None})
 
 
+# ============================================================
+# 弁当配布チェック（2026-06-18 追加）
+# ============================================================
+# 大会期間中の弁当配布を「シフト1人1日」単位で管理する。
+# マイグレ docs/db_migrations/20260618_add_lunch_status.sql 必須。
+# 列が無い古いDBでも壊れないよう、UPDATE は失敗時に静かに無視する。
+LUNCH_STATUSES = ("pending", "received", "cancelled")
+
+
+def _validate_lunch_status(status: str) -> str:
+    """状態文字列のバリデーション（不正値は例外）。
+
+    'received'：配布済 ／ 'cancelled'：辞退 ／ 'pending'：未受領（既定）
+    """
+    s = (status or "").strip().lower()
+    if s not in LUNCH_STATUSES:
+        raise ValueError(f"lunch_status は {LUNCH_STATUSES} のいずれか（指定: {status!r}）")
+    return s
+
+
+def update_lunch_status(shift_id, status: str, performed_by: str = "") -> bool:
+    """1つのシフトの弁当配布状態を更新。
+
+    Returns: True=更新成功（or 既に同状態）、False=列未追加・対象なし等で失敗
+    """
+    s = _validate_lunch_status(status)
+    try:
+        get_client().table("p1_shifts").update({
+            "lunch_status": s,
+            "lunch_status_at": _now(),
+            "lunch_status_by": (performed_by or "")[:40],
+        }).eq("id", shift_id).execute()
+        return True
+    except Exception:
+        # 列が無い古いDB等：マイグレ未実行を呼び出し側で検知できるよう False を返す
+        return False
+
+
+def bulk_set_lunch_status(event_id, date, status: str, performed_by: str = "") -> int:
+    """指定イベント×日付の出勤予定者全員に同じ状態を設定。
+
+    欠勤者（status='absent'）は対象外。
+    Returns: 更新対象だったシフト数（実反映件数。失敗時は 0）。
+    """
+    s = _validate_lunch_status(status)
+    client = get_client()
+    try:
+        rows = client.table("p1_shifts").select("id").eq(
+            "event_id", event_id).eq("date", date).neq("status", "absent").execute().data or []
+        for r in rows:
+            client.table("p1_shifts").update({
+                "lunch_status": s,
+                "lunch_status_at": _now(),
+                "lunch_status_by": (performed_by or "")[:40],
+            }).eq("id", r["id"]).execute()
+        log_action("bulk_set_lunch_status", "shifts",
+                   detail=f"{date} の {len(rows)}名を {s} に設定",
+                   event_id=event_id, performed_by=(performed_by or "system"))
+        return len(rows)
+    except Exception:
+        return 0
+
+
+def get_lunch_summary(event_id, date) -> dict:
+    """指定イベント×日付の弁当配布サマリ。
+
+    Returns: {"received": N, "pending": N, "cancelled": N, "total_active": N}
+       total_active = 出勤予定者数（欠勤除外）。
+    """
+    client = get_client()
+    try:
+        rows = client.table("p1_shifts").select(
+            "lunch_status, status"
+        ).eq("event_id", event_id).eq("date", date).execute().data or []
+    except Exception:
+        return {"received": 0, "pending": 0, "cancelled": 0, "total_active": 0}
+    out = {"received": 0, "pending": 0, "cancelled": 0, "total_active": 0}
+    for r in rows:
+        if (r.get("status") or "") == "absent":
+            continue
+        out["total_active"] += 1
+        ls = (r.get("lunch_status") or "pending").lower()
+        if ls in out:
+            out[ls] += 1
+    return out
+
+
 def reset_payment_to_pending(event_id, staff_id, reason="凍結再計算"):
     """支払いを未承認に戻す（凍結発生時の再計算準備）。
 

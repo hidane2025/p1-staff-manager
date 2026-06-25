@@ -42,6 +42,7 @@ test-fast:
 	@$(PY) test_e2e/22_security_behavior_test.py
 	@$(PY) test_e2e/16_gform_importer_test.py
 	@$(PY) test_e2e/23_staff_dedup_test.py
+	@$(PY) test_e2e/24_lunch_status_test.py
 	@$(PY) test_e2e/4_receipt_unit_test.py
 	@$(PY) test_e2e/8_contract_unit_test.py
 	@$(PY) test_e2e/14_receipt_copy_original_test.py
