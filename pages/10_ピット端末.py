@@ -123,36 +123,70 @@ st.markdown(
 )
 
 # ============================================================
-# 1.5 弁当配布チェック（2026-06-18 追加 / オペレーター属性必須）
+# 1.5 配布チェック：弁当①・弁当②（12h+）・ドリンク券（2026-06-18 / 2026-07-02 拡張）
 # ============================================================
 # シフトある人を一覧で出し、配布／辞退／未受領を1タップで切替。
-# 全員受領／全員リセット の一括操作もある。
+# 弁当は基本1個、予定シフト12時間以上の人だけ「2個目」ボタンが出る。
+# ドリンクチケットは一律2枚＝「配布」トグル1つ。
 # マイグレ未実行のDBでは「マイグレ案内」を出して機能を無効化。
 _rates_for_lunch = db.get_event_rates(event_id) or []
 _lunch_dates = [r["date"] for r in _rates_for_lunch] or [event.get("start_date")]
 
-with st.expander("📦 弁当配布チェック（当日の出勤予定者）", expanded=False):
+with st.expander("📦 配布チェック：弁当・ドリンク券（当日の出勤予定者）", expanded=False):
     _lunch_date = st.selectbox(
         "対象日", _lunch_dates,
         key="lunch_date_select",
         help="出勤予定者の一覧を表示します。欠勤者は対象外。",
     )
 
-    _summary = db.get_lunch_summary(event_id, _lunch_date)
+    _summary = db.get_handout_summary(event_id, _lunch_date)
     _total = _summary["total_active"]
-    _received = _summary["received"]
-    _cancelled = _summary["cancelled"]
-    _pending = _summary["pending"]
+    _lu = _summary["lunch"]
+    _migrated = _summary["migrated"]
 
     if _total == 0:
         st.info("この日の出勤予定者がいません（シフト未取込か全員欠勤）。")
     else:
-        _bar = (_received + _cancelled) / _total if _total else 0
-        st.progress(_bar, text=f"配布対応: {_received + _cancelled}/{_total}人（受領 {_received} / 辞退 {_cancelled} / 未受領 {_pending}）")
+        # 個別行データを先に取得（弁当2個目の対象者数を数えるため）
+        _shifts_today = [
+            s for s in (db.get_shifts_for_event(event_id, date=_lunch_date) or [])
+            if (s.get("status") or "") != "absent"
+        ]
+        _shifts_today.sort(key=lambda s: (s.get("no") or 9999))
+        _lunch2_targets = [
+            s for s in _shifts_today
+            if db.planned_shift_minutes(s.get("planned_start"), s.get("planned_end"))
+            >= db.LUNCH2_THRESHOLD_MINUTES
+        ]
+        _lunch2_ids = {s["id"] for s in _lunch2_targets}
 
-        c_all1, c_all2, _ = st.columns([1, 1, 2])
+        _bar = (_lu["received"] + _lu["cancelled"]) / _total if _total else 0
+        st.progress(_bar, text=(
+            f"🍱 弁当: {_lu['received'] + _lu['cancelled']}/{_total}人"
+            f"（受領 {_lu['received']} / 辞退 {_lu['cancelled']} / 未受領 {_lu['pending']}）"
+        ))
+        if _migrated:
+            _l2 = _summary["lunch2"]
+            _dr = _summary["drink"]
+            # 2個目サマリは「対象者のうち何人に渡したか」で表示
+            _l2_recv_in_targets = sum(
+                1 for s in _lunch2_targets
+                if (s.get("lunch2_status") or "pending").lower() == "received"
+            )
+            _dr_done = _dr["received"] + _dr["cancelled"]
+            st.progress(
+                (_l2_recv_in_targets / len(_lunch2_targets)) if _lunch2_targets else 0.0,
+                text=f"🍱🍱 弁当2個目（12h以上 {len(_lunch2_targets)}名対象）: 配布済 {_l2_recv_in_targets}/{len(_lunch2_targets)}人",
+            )
+            st.progress(
+                (_dr_done / _total) if _total else 0.0,
+                text=f"🎫 ドリンク券（一律2枚）: {_dr_done}/{_total}人（配布済 {_dr['received']} / 辞退 {_dr['cancelled']}）",
+            )
+            st.caption(f"📊 本日の必要数目安 — 弁当 {_total - _lu['cancelled'] + len(_lunch2_targets)}個 / ドリンク券 {(_total - _dr['cancelled']) * 2}枚")
+
+        c_all1, c_all2, c_all3, c_all4 = st.columns(4)
         with c_all1:
-            if st.button("✅ 全員受領にする", use_container_width=True, key="lunch_bulk_received"):
+            if st.button("✅ 弁当 全員受領", use_container_width=True, key="lunch_bulk_received"):
                 if not _operator_attributable():
                     st.warning("オペレーター名を上で入力してから操作してください。")
                 else:
@@ -161,7 +195,7 @@ with st.expander("📦 弁当配布チェック（当日の出勤予定者）", 
                     st.success(f"{n}名を受領済みにしました。")
                     st.rerun()
         with c_all2:
-            if st.button("🔄 全員 未受領に戻す", use_container_width=True, key="lunch_bulk_pending"):
+            if st.button("🔄 弁当 全員戻す", use_container_width=True, key="lunch_bulk_pending"):
                 if not _operator_attributable():
                     st.warning("オペレーター名を上で入力してから操作してください。")
                 else:
@@ -169,24 +203,49 @@ with st.expander("📦 弁当配布チェック（当日の出勤予定者）", 
                                                   performed_by=operator_name())
                     st.success(f"{n}名を未受領に戻しました。")
                     st.rerun()
+        with c_all3:
+            if st.button("🎫 ドリンク 全員配布", use_container_width=True, key="drink_bulk_received",
+                          disabled=not _migrated):
+                if not _operator_attributable():
+                    st.warning("オペレーター名を上で入力してから操作してください。")
+                else:
+                    n = db.bulk_set_distribution_status(event_id, _lunch_date, "drink", "received",
+                                                         performed_by=operator_name())
+                    st.success(f"{n}名をドリンク配布済みにしました。")
+                    st.rerun()
+        with c_all4:
+            if st.button("🔄 ドリンク 全員戻す", use_container_width=True, key="drink_bulk_pending",
+                          disabled=not _migrated):
+                if not _operator_attributable():
+                    st.warning("オペレーター名を上で入力してから操作してください。")
+                else:
+                    n = db.bulk_set_distribution_status(event_id, _lunch_date, "drink", "pending",
+                                                         performed_by=operator_name())
+                    st.success(f"{n}名を未配布に戻しました。")
+                    st.rerun()
 
         st.divider()
 
         # 個別行（出勤予定者を NO. 順で）
-        _shifts_today = [
-            s for s in (db.get_shifts_for_event(event_id, date=_lunch_date) or [])
-            if (s.get("status") or "") != "absent"
-        ]
-        _shifts_today.sort(key=lambda s: (s.get("no") or 9999))
-
+        # 列: 名前 | 弁当:受領/辞退/戻す | 弁当2個目(対象者のみ) | ドリンク券
         for s in _shifts_today:
             _ls = (s.get("lunch_status") or "pending").lower()
+            _l2s = (s.get("lunch2_status") or "pending").lower()
+            _drs = (s.get("drink_status") or "pending").lower()
             _icon = {"received": "✅", "cancelled": "🚫", "pending": "⬜"}.get(_ls, "⬜")
-            cols = st.columns([2, 1, 1, 1])
+            _is_l2 = s["id"] in _lunch2_ids
+            cols = st.columns([2.4, 0.9, 0.9, 0.9, 1.2, 1.2])
             with cols[0]:
+                _mins = db.planned_shift_minutes(s.get("planned_start"), s.get("planned_end"))
+                _l2_badge = (
+                    f"<span style='background:#FEF3C7;color:#92400E;font-size:10px;"
+                    f"padding:1px 6px;border-radius:8px;margin-left:6px;'>12h+（{_mins // 60}h）</span>"
+                    if _is_l2 else ""
+                )
                 st.markdown(
                     f"**{_icon} NO.{s.get('no', '—')} {s.get('name_jp', '—')}**"
-                    f"<span style='color:#94A3B8;font-size:11px;margin-left:8px;'>{s.get('role', '')}</span>",
+                    f"<span style='color:#94A3B8;font-size:11px;margin-left:8px;'>{s.get('role', '')}</span>"
+                    f"{_l2_badge}",
                     unsafe_allow_html=True,
                 )
             with cols[1]:
@@ -219,9 +278,44 @@ with st.expander("📦 弁当配布チェック（当日の出勤予定者）", 
                         db.update_lunch_status(s["id"], "pending",
                                                 performed_by=operator_name())
                         st.rerun()
+            with cols[4]:
+                if _is_l2:
+                    _l2_label = "🍱② 済（戻す）" if _l2s == "received" else "🍱② 2個目"
+                    if st.button(_l2_label, key=f"lunch2_{s['id']}",
+                                  use_container_width=True,
+                                  type=("secondary" if _l2s == "received" else "primary"),
+                                  disabled=not _migrated):
+                        if not _operator_attributable():
+                            st.warning("オペレーター名を上で入力してから操作してください。")
+                        else:
+                            _new = "pending" if _l2s == "received" else "received"
+                            if not db.update_distribution_status(
+                                    s["id"], "lunch2", _new, performed_by=operator_name()):
+                                st.warning("保存できません。DBマイグレ未適用の可能性があります。")
+                            st.rerun()
+                else:
+                    st.caption("")  # 12h未満は2個目対象外
+            with cols[5]:
+                _dr_label = "🎫 済（戻す）" if _drs == "received" else "🎫 2枚配布"
+                if st.button(_dr_label, key=f"drink_{s['id']}",
+                              use_container_width=True,
+                              type=("secondary" if _drs == "received" else "primary"),
+                              disabled=not _migrated):
+                    if not _operator_attributable():
+                        st.warning("オペレーター名を上で入力してから操作してください。")
+                    else:
+                        _new = "pending" if _drs == "received" else "received"
+                        if not db.update_distribution_status(
+                                s["id"], "drink", _new, performed_by=operator_name()):
+                            st.warning("保存できません。DBマイグレ未適用の可能性があります。")
+                        st.rerun()
 
-        st.caption("⚠️ 列 `lunch_status` が未追加の旧DBではボタンが反応しません。"
-                   "その場合は管理者に `docs/db_migrations/20260618_add_lunch_status.sql` の適用を依頼してください。")
+        if not _migrated:
+            st.warning("⚠️ 弁当2個目・ドリンク券の列が未追加です。管理者に "
+                       "`docs/db_migrations/20260702_add_lunch2_drink_status.sql` の適用を依頼してください"
+                       "（適用まで🍱②・🎫ボタンは無効）。")
+        st.caption("⚠️ 列 `lunch_status` が未追加の旧DBでは弁当ボタンが反応しません。"
+                   "その場合は `docs/db_migrations/20260618_add_lunch_status.sql` の適用が必要です。")
 
 # ============================================================
 # 2. スタッフ検索（NO. または ディーラーネーム）

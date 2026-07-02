@@ -505,6 +505,7 @@ for s in shifts:
         "名前": s["name_jp"],
         "役職": s["role"],
         "予定": planned,
+        "出勤": s["status"] in ("checked_in", "checked_out"),
         "実到着": actual_start,
         "実退勤": actual_end,
         "状態": STATUS_DISPLAY.get(s["status"], s["status"]),
@@ -516,7 +517,7 @@ for s in shifts:
 
 df = pd.DataFrame(display)
 
-# MIX・備考を編集可能にしたテーブル
+# 出勤・MIX・備考を編集可能にしたテーブル
 edited_df = st.data_editor(
     df,
     use_container_width=True,
@@ -524,6 +525,11 @@ edited_df = st.data_editor(
     height=600,
     disabled=["NO.", "名前", "役職", "予定", "実到着", "実退勤", "状態", "例外", "_shift_id"],
     column_config={
+        "出勤": st.column_config.CheckboxColumn(
+            "✅出勤", default=False,
+            help="チェック＝予定時刻どおり出勤として確定。外す＝未確定に戻す。"
+                 "遅刻など時間が違う人は「②例外を記録」で。退勤済・欠勤はここでは変更できません。",
+        ),
         "MIX": st.column_config.CheckboxColumn("MIX", default=False),
         "備考": st.column_config.TextColumn("備考", help="イレギュラー対応等を自由入力"),
         "_shift_id": None,
@@ -531,10 +537,27 @@ edited_df = st.data_editor(
     key="shift_table",
 )
 
-# 変更検出・保存（MIXと備考）
+# 変更検出・保存（出勤・MIX・備考）
+_shift_by_id = {s["id"]: s for s in shifts}
 if not df.empty and not edited_df.empty:
     for idx in range(len(df)):
         shift_id = int(df.iloc[idx]["_shift_id"])
+        # 出勤チェック変更（✅=予定時刻で出勤確定 / 解除=未確定に戻す）
+        old_att = bool(df.iloc[idx]["出勤"])
+        new_att = bool(edited_df.iloc[idx]["出勤"])
+        if old_att != new_att:
+            srow = _shift_by_id.get(shift_id, {})
+            status = srow.get("status")
+            if new_att and status == "scheduled":
+                db.checkin_staff(shift_id, srow.get("planned_start"))
+            elif (not new_att) and status == "checked_in" and not srow.get("actual_end"):
+                db.get_client().table("p1_shifts").update({
+                    "actual_start": None, "status": "scheduled",
+                }).eq("id", shift_id).execute()
+            else:
+                # 退勤済・欠勤などはここでは変更させない（再描画で表示が元に戻る）
+                st.warning("退勤済・欠勤の変更は「②例外を記録」の個別リセットから行ってください。")
+            st.rerun()
         # MIX変更
         old_mix = df.iloc[idx]["MIX"]
         new_mix = edited_df.iloc[idx]["MIX"]

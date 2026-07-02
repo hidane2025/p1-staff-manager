@@ -738,6 +738,119 @@ def get_lunch_summary(event_id, date) -> dict:
     return out
 
 
+# ============================================================
+# 配布チェック汎用（弁当2個目・ドリンクチケット 2026-07-02 追加）
+# ============================================================
+# lunch  : 弁当1個目（20260618 既存列 lunch_status）
+# lunch2 : 弁当2個目。12時間以上の予定シフト者のみUIに表示
+# drink  : ドリンクチケット（一律2枚＝配布済みかの1チェック）
+# マイグレ docs/db_migrations/20260702_add_lunch2_drink_status.sql 必須。
+# 列が無い古いDBでも壊れないよう、失敗は False / 0 で返す（lunch関数と同じ流儀）。
+DISTRIBUTION_KINDS = {
+    "lunch": "lunch_status",
+    "lunch2": "lunch2_status",
+    "drink": "drink_status",
+}
+
+# 弁当2個目の対象となる予定シフト時間（分）
+LUNCH2_THRESHOLD_MINUTES = 12 * 60
+
+
+def planned_shift_minutes(planned_start, planned_end) -> int:
+    """予定シフトの拘束時間（分）。'26:00' 等の24時超え表記に対応。不正値は0。"""
+    try:
+        h1, m1 = map(int, str(planned_start).strip().split(":"))
+        h2, m2 = map(int, str(planned_end).strip().split(":"))
+        return max(0, (h2 * 60 + m2) - (h1 * 60 + m1))
+    except (ValueError, AttributeError):
+        return 0
+
+
+def _distribution_column(kind: str) -> str:
+    col = DISTRIBUTION_KINDS.get((kind or "").strip().lower())
+    if not col:
+        raise ValueError(f"kind は {tuple(DISTRIBUTION_KINDS)} のいずれか（指定: {kind!r}）")
+    return col
+
+
+def update_distribution_status(shift_id, kind: str, status: str, performed_by: str = "") -> bool:
+    """1つのシフトの配布状態（弁当2個目/ドリンク等）を更新。
+
+    Returns: True=更新成功、False=列未追加（マイグレ未実行）等で失敗
+    """
+    col = _distribution_column(kind)
+    s = _validate_lunch_status(status)
+    try:
+        get_client().table("p1_shifts").update({
+            col: s,
+            f"{col}_at": _now(),
+            f"{col}_by": (performed_by or "")[:40],
+        }).eq("id", shift_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def bulk_set_distribution_status(event_id, date, kind: str, status: str,
+                                 performed_by: str = "") -> int:
+    """指定イベント×日付の出勤予定者全員に同じ配布状態を設定（欠勤者除外）。
+
+    Returns: 実反映件数（失敗時は 0）。
+    """
+    col = _distribution_column(kind)
+    s = _validate_lunch_status(status)
+    client = get_client()
+    try:
+        rows = client.table("p1_shifts").select("id").eq(
+            "event_id", event_id).eq("date", date).neq("status", "absent").execute().data or []
+        for r in rows:
+            client.table("p1_shifts").update({
+                col: s,
+                f"{col}_at": _now(),
+                f"{col}_by": (performed_by or "")[:40],
+            }).eq("id", r["id"]).execute()
+        log_action(f"bulk_set_{kind}_status", "shifts",
+                   detail=f"{date} の {len(rows)}名を {s} に設定",
+                   event_id=event_id, performed_by=(performed_by or "system"))
+        return len(rows)
+    except Exception:
+        return 0
+
+
+def get_handout_summary(event_id, date) -> dict:
+    """指定イベント×日付の配布サマリ（弁当1・弁当2・ドリンクをまとめて1クエリで）。
+
+    Returns:
+        {"lunch": {...}, "lunch2": {...}, "drink": {...},
+         "total_active": N, "migrated": bool}
+        migrated=False は lunch2/drink 列が未追加（マイグレ未実行）。
+        その場合 lunch2/drink はゼロ埋め・lunch のみ有効。
+    """
+    client = get_client()
+    empty = {"received": 0, "pending": 0, "cancelled": 0}
+    out = {"lunch": dict(empty), "lunch2": dict(empty), "drink": dict(empty),
+           "total_active": 0, "migrated": True}
+    try:
+        rows = client.table("p1_shifts").select(
+            "status, lunch_status, lunch2_status, drink_status"
+        ).eq("event_id", event_id).eq("date", date).execute().data or []
+    except Exception:
+        out["migrated"] = False
+        lunch_only = get_lunch_summary(event_id, date)
+        out["total_active"] = lunch_only.pop("total_active", 0)
+        out["lunch"] = lunch_only
+        return out
+    for r in rows:
+        if (r.get("status") or "") == "absent":
+            continue
+        out["total_active"] += 1
+        for kind, col in DISTRIBUTION_KINDS.items():
+            v = (r.get(col) or "pending").lower()
+            if v in out[kind]:
+                out[kind][v] += 1
+    return out
+
+
 def reset_payment_to_pending(event_id, staff_id, reason="凍結再計算"):
     """支払いを未承認に戻す（凍結発生時の再計算準備）。
 
