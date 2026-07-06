@@ -91,7 +91,7 @@ def main() -> int:
     # 発行者情報（インボイスなし運用）
     receipt_db.save_issuer_settings(
         event_id,
-        issuer_name="株式会社パシフィック",
+        issuer_name="株式会社PACIFIC RACING TEAM",
         issuer_address="東京都港区テスト1-2-3",
         issuer_tel="03-0000-0000",
         invoice_number="",  # 空欄運用

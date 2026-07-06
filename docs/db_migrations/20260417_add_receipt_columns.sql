@@ -17,7 +17,7 @@ ALTER TABLE p1_payments
 
 -- 2. p1_events に発行者情報カラム追加（インボイス後日追加OK設計）
 ALTER TABLE p1_events
-    ADD COLUMN IF NOT EXISTS issuer_name TEXT DEFAULT '株式会社パシフィック',
+    ADD COLUMN IF NOT EXISTS issuer_name TEXT DEFAULT '株式会社PACIFIC RACING TEAM',
     ADD COLUMN IF NOT EXISTS issuer_address TEXT,
     ADD COLUMN IF NOT EXISTS issuer_tel TEXT,
     ADD COLUMN IF NOT EXISTS invoice_number TEXT,

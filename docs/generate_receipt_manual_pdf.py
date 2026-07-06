@@ -337,7 +337,7 @@ def cover_page(b: DocBuilder) -> None:
     c.setFillColor(COLOR_MUTED)
     c.setFont(FONT_JP_REG, 9)
     c.drawCentredString(PAGE_W / 2, 20 * mm,
-                         "制作: 株式会社ヒダネ AI部  ／  運用: 株式会社パシフィック")
+                         "制作: 株式会社ヒダネ AI部  ／  運用: 株式会社PACIFIC RACING TEAM")
 
     c.showPage()
     b.page_no += 1
@@ -516,7 +516,7 @@ def section_screens(b: DocBuilder) -> None:
     b.table(
         ["項目", "必須", "説明"],
         [
-            ["発行者名", "必須", "例：株式会社パシフィック"],
+            ["発行者名", "必須", "例：株式会社PACIFIC RACING TEAM"],
             ["発行者住所", "任意", "本社住所"],
             ["電話番号", "任意", "問い合わせ先"],
             ["但し書き", "必須", "例：ポーカー大会運営業務委託費として"],

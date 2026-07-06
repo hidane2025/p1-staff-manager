@@ -48,7 +48,7 @@ def generate_receipt_pdf(
     amount: int,
     event_name: str,
     issue_date: str,
-    payer_name: str = "株式会社 PACIFIC RACING TEAM",
+    payer_name: str = "株式会社PACIFIC RACING TEAM",
     payer_address: str = "",
     purpose: str = "ポーカー大会運営業務委託費として",
 ) -> bytes:

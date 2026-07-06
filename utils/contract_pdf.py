@@ -66,7 +66,7 @@ class ContractVariables:
     staff_email: str = ""
     role: str = ""
     event_name: str = ""
-    issuer_name: str = "株式会社パシフィック"
+    issuer_name: str = "株式会社PACIFIC RACING TEAM"
     issuer_address: str = ""
     issue_date: str = ""
     confidentiality_years: str = "3"

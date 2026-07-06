@@ -92,7 +92,7 @@ def cover_page(b: DocBuilder) -> None:
     c.setFillColor(COLOR_MUTED)
     c.setFont(FONT_JP_REG, 9)
     c.drawCentredString(PAGE_W / 2, 20 * mm,
-                         "開発: 株式会社ヒダネ AI部  ／  運用: 株式会社パシフィック")
+                         "開発: 株式会社ヒダネ AI部  ／  運用: 株式会社PACIFIC RACING TEAM")
 
     c.showPage()
     b.page_no += 1

@@ -70,7 +70,7 @@ with st.form("issuer_form"):
         issuer_name = st.text_input(
             "宛名（支払者の会社名）*",
             value=cur["issuer_name"],
-            help="例: 株式会社 PACIFIC RACING TEAM。"
+            help="例: 株式会社PACIFIC RACING TEAM。"
             "領収書には「{この名前}  御中」として印字されます。",
         )
         issuer_address = st.text_area(

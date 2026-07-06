@@ -32,7 +32,7 @@ def test_pdf_basic() -> None:
     pdf = generate_receipt_pdf_v2(
         receipt=ReceiptInput(
             receipt_no=build_receipt_no(99, 12345, today_jst_ymd()),
-            payer_name="株式会社 PACIFIC RACING TEAM",
+            payer_name="株式会社PACIFIC RACING TEAM",
             receiver_name="山田 太郎",
             receiver_address="東京都渋谷区神南1-2-3",
             receiver_email="yamada@example.com",
@@ -53,7 +53,7 @@ def test_pdf_long_payer_name() -> None:
     pdf = generate_receipt_pdf_v2(
         receipt=ReceiptInput(
             receipt_no=build_receipt_no(99, 67890, today_jst_ymd()),
-            payer_name="株式会社 PACIFIC RACING TEAM（イベント主催）",
+            payer_name="株式会社PACIFIC RACING TEAM（イベント主催）",
             receiver_name="佐藤 花子",
             receiver_address="大阪府大阪市北区梅田1-1-1",
             receiver_email="sato@example.com",
@@ -91,7 +91,7 @@ def test_pdf_minimal_receiver_info() -> None:
     pdf = generate_receipt_pdf_v2(
         receipt=ReceiptInput(
             receipt_no="R-TEST-001",
-            payer_name="株式会社 PACIFIC RACING TEAM",
+            payer_name="株式会社PACIFIC RACING TEAM",
             receiver_name="匿名 太郎",
             receiver_address="",
             receiver_email="",
@@ -112,7 +112,7 @@ def test_invoice_number_is_ignored() -> None:
     """
     common = dict(
         receipt_no="R-TEST-002",
-        payer_name="株式会社 PACIFIC RACING TEAM",
+        payer_name="株式会社PACIFIC RACING TEAM",
         receiver_name="検証 太郎",
         receiver_address="",
         receiver_email="",
