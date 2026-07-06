@@ -307,8 +307,10 @@ def generate_contract_pdf(
         elif line == "":
             y -= 3 * mm
         else:
-            # 通常本文
-            y = _draw_text_block(c, line, MARGIN_X, y, max_w,
+            # 通常本文（行中の **強調** はPDFでは記号を落として描画する。
+            # 例: 「**甲（発注者）**: 株式会社…」→「甲（発注者）: 株式会社…」）
+            plain = re.sub(r"\*\*(.+?)\*\*", r"\1", line)
+            y = _draw_text_block(c, plain, MARGIN_X, y, max_w,
                                    FONT_JP_REG, 10, leading=1.6,
                                    is_provisional=is_provisional)
 
