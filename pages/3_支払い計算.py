@@ -400,6 +400,51 @@ with col_pay:
     if not_payable:
         st.warning(f"⚠️ {len(not_payable)}名が承認済みだが領収書未受領のため支払い不可")
 
+# --- 承認の取り消し（承認済み → 未承認） 2026-07-06 追加 ---
+# 誤承認・出退勤の実績変更後の再計算前などに、承認を取り消して未承認に戻す。
+# 支払済み(paid)は reset_payment_to_pending 側で保護される（取り消し不可）。
+_approved_for_revert = [p for p in payments if p["status"] == "approved"]
+if _approved_for_revert:
+    with st.expander(f"↩️ 承認の取り消し（承認済み {len(_approved_for_revert)}名を未承認に戻す）"):
+        st.caption(
+            "誤って承認した場合や、出退勤の記録を直して再計算したい場合に使います。"
+            "**支払済みの人は保護され、取り消せません。**取り消し後は再計算→再承認の流れです。"
+        )
+        _revert_opts = {
+            f"NO.{p.get('no', '—')} {p.get('name_jp', '—')}（¥{int(p.get('payable_amount') or p.get('total_amount') or 0):,}）": p
+            for p in _approved_for_revert
+        }
+        _revert_sel = st.multiselect(
+            "取り消す人を選択（複数可）", list(_revert_opts.keys()), key="revert_approval_select",
+        )
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            if st.button(f"↩️ 選択した{len(_revert_sel)}名を未承認に戻す",
+                          disabled=(not _revert_sel or not operator_ok),
+                          key="revert_selected"):
+                _ok_n = 0
+                for label in _revert_sel:
+                    p = _revert_opts[label]
+                    if db.reset_payment_to_pending(
+                            event_id, p["staff_id"],
+                            reason=f"承認取り消し（操作者: {approver}）"):
+                        _ok_n += 1
+                st.success(f"{_ok_n}名を未承認に戻しました。")
+                st.rerun()
+        with col_r2:
+            _confirm_all = st.checkbox("全員分を取り消すことを確認しました", key="revert_all_confirm")
+            if st.button(f"↩️ 承認済み全員（{len(_approved_for_revert)}名）を未承認に戻す",
+                          disabled=(not _confirm_all or not operator_ok),
+                          key="revert_all"):
+                _ok_n = sum(
+                    1 for p in _approved_for_revert
+                    if db.reset_payment_to_pending(
+                        event_id, p["staff_id"],
+                        reason=f"承認一括取り消し（操作者: {approver}）")
+                )
+                st.success(f"{_ok_n}名を未承認に戻しました。")
+                st.rerun()
+
 st.divider()
 
 # --- フィルタ ---

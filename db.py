@@ -612,21 +612,49 @@ def get_shifts_for_event(event_id, date=None, staff_id=None):
     return _flatten_staff_join(data)
 
 
+def _revert_payment_if_amount_affected(shift_row, reason: str) -> None:
+    """出退勤の実績変更が支払い額に影響し得るとき、計算済みの支払いを未承認に戻す。
+
+    凍結退勤と同じ内部統制（reset_payment_to_pending。支払済みは保護）を
+    欠勤・遅刻・早退・延長にも適用する（2026-07-06 追加）。
+    支払い未計算・列欠損などの失敗は握りつぶし、本処理（打刻）は壊さない。
+    """
+    try:
+        ev = shift_row.get("event_id")
+        sid = shift_row.get("staff_id")
+        if ev and sid:
+            reset_payment_to_pending(ev, sid, reason=reason)
+    except Exception:
+        pass
+
+
 def checkin_staff(shift_id, actual_start):
     client = get_client()
-    row = client.table("p1_shifts").select("status, actual_end").eq("id", shift_id).execute().data
+    row = client.table("p1_shifts").select(
+        "status, actual_end, planned_start, event_id, staff_id"
+    ).eq("id", shift_id).execute().data
     if row and row[0].get("actual_end"):
         client.table("p1_shifts").update({"actual_start": actual_start}).eq("id", shift_id).execute()
     else:
         client.table("p1_shifts").update({
             "actual_start": actual_start, "status": "checked_in"
         }).eq("id", shift_id).execute()
+    # 予定と違う到着時刻（遅刻等）は支払い額が変わるため、承認済みを差し戻す
+    if row and str(actual_start) != str(row[0].get("planned_start")):
+        _revert_payment_if_amount_affected(row[0], reason=f"到着実績 {actual_start} 記録（要再計算）")
 
 
 def checkout_staff(shift_id, actual_end):
-    get_client().table("p1_shifts").update({
+    client = get_client()
+    row = client.table("p1_shifts").select(
+        "planned_end, event_id, staff_id"
+    ).eq("id", shift_id).execute().data
+    client.table("p1_shifts").update({
         "actual_end": actual_end, "status": "checked_out"
     }).eq("id", shift_id).execute()
+    # 予定と違う退勤時刻（早退・延長）は支払い額が変わるため、承認済みを差し戻す
+    if row and str(actual_end) != str(row[0].get("planned_end")):
+        _revert_payment_if_amount_affected(row[0], reason=f"退勤実績 {actual_end} 記録（要再計算）")
 
 
 def bulk_checkout(shift_ids, actual_end, event_id=None):
@@ -876,9 +904,14 @@ def reset_payment_to_pending(event_id, staff_id, reason="凍結再計算"):
 
 
 def mark_absent(shift_id):
-    get_client().table("p1_shifts").update({
+    client = get_client()
+    row = client.table("p1_shifts").select("event_id, staff_id").eq("id", shift_id).execute().data
+    client.table("p1_shifts").update({
         "status": "absent", "actual_start": None, "actual_end": None
     }).eq("id", shift_id).execute()
+    # 欠勤はその日の支払いが丸ごと変わるため、計算済みの支払いを未承認に差し戻す
+    if row:
+        _revert_payment_if_amount_affected(row[0], reason="欠勤記録（要再計算）")
 
 
 def set_shift_mix(shift_id, is_mix):
