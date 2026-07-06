@@ -8,6 +8,7 @@ supabase==2.29.*
 reportlab==4.5.*
 requests==2.32.*
 Pillow==11.3.*
+qrcode==8.*
 streamlit-drawable-canvas==0.9.3
 python-docx==1.2.*
 PyPDF2==3.0.*

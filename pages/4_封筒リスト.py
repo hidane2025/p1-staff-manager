@@ -191,6 +191,10 @@ print_mode = st.checkbox(
 if _print_mode_pre:
     # UX D2: 印刷専用レイアウト（1人=1ページ縦長）
     # サーバ側で通常UIを描画していないため、Cmd+Pで純粋に印刷カードのみ印字される
+    # 2026-07-06: 領収書発行済みの人はDL用QRを明細に印刷（現金手渡し時に本人がスキャン→即受領）
+    from utils.receipt_qr import qr_data_uri
+    from utils.url_helper import get_base_host
+    _qr_base_host = get_base_host()
     for e in envelope_data:
         _allow_total = int(e.get("individual_allowance_total") or 0)
         _allow_row = (
@@ -208,6 +212,20 @@ if _print_mode_pre:
             f'<tr><td>端数調整</td><td>+¥{_tanchosei:,}</td></tr>'
             if _tanchosei else ""
         )
+        # 領収書発行済みならDL用QRを載せる（トークンURLの印刷＝手渡し前提の運用）
+        _qr_block = ""
+        if e.get("receipt_token") and e.get("receipt_pdf_path"):
+            _dl_url = f"{_qr_base_host}/receipt_download?token={e['receipt_token']}"
+            _qr_block = (
+                f'<div style="margin-top: 12pt; display: flex; align-items: center; gap: 10pt;">'
+                f'<img src="{qr_data_uri(_dl_url, box_size=4)}" '
+                f'style="width: 72pt; height: 72pt;" alt="領収書DL QR">'
+                f'<div style="font-size: 9pt; line-height: 1.5;">'
+                f'<strong>領収書ダウンロード</strong><br>'
+                f'スマホでQRを読み取り→PDF保存<br>'
+                f'（ダウンロード＝受領確認になります）'
+                f'</div></div>'
+            )
         st.markdown(
             f'<div class="p1-envelope-print">'
             f'<h2>P1 支払明細</h2>'
@@ -230,6 +248,7 @@ if _print_mode_pre:
             f'<div style="margin-top: 16pt; font-size: 10pt;">'
             f'紙幣内訳: {format_denomination(e["denomination"].bills)}'
             f'</div>'
+            f'{_qr_block}'
             f'</div>',
             unsafe_allow_html=True,
         )

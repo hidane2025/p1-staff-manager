@@ -318,6 +318,46 @@ with st.expander("📦 配布チェック：弁当・ドリンク券（当日の
                    "その場合は `docs/db_migrations/20260618_add_lunch_status.sql` の適用が必要です。")
 
 # ============================================================
+# 1.6 領収書QR表示（2026-07-06 追加）
+# ============================================================
+# 退勤・封筒渡しのタイミングで、この画面にQRを大きく出してスタッフ本人の
+# スマホでスキャンしてもらう → その場で領収書DL（DL＝受領確認）。
+# QRの中身は既存のトークン付きDL URLそのもの（有効期限・失効ボタンも同じ）。
+with st.expander("🧾 領収書QR（スタッフのスマホでスキャン→その場でDL）", expanded=False):
+    _qr_pays = [
+        p for p in (db.get_payments_for_event(event_id) or [])
+        if p.get("receipt_token") and p.get("receipt_pdf_path")
+    ]
+    if not _qr_pays:
+        st.info("発行済みの領収書がまだありません。「📄 領収書発行」ページでPDF一括生成すると、ここにQRが出せます。")
+    else:
+        from utils.receipt_qr import qr_png_bytes
+        from utils.url_helper import get_base_host
+        _qr_pays.sort(key=lambda p: (p.get("no") or 9999))
+        _qr_opts = {
+            f"NO.{p.get('no', '—')} {p.get('name_jp', '—')}（¥{db.get_payable(p):,}）"
+            + ("　✅DL済" if (p.get("receipt_download_count") or 0) > 0 else ""): p
+            for p in _qr_pays
+        }
+        _qr_sel = st.selectbox("スタッフを選択", list(_qr_opts.keys()), key="receipt_qr_select")
+        if _qr_sel:
+            _qp = _qr_opts[_qr_sel]
+            _qr_url = f"{get_base_host()}/receipt_download?token={_qp['receipt_token']}"
+            _c1, _c2 = st.columns([1, 1])
+            with _c1:
+                st.image(qr_png_bytes(_qr_url, box_size=10))
+            with _c2:
+                st.markdown(
+                    f"### NO.{_qp.get('no', '—')} {_qp.get('name_jp', '—')}\n"
+                    f"**金額: ¥{db.get_payable(_qp):,}**\n\n"
+                    f"1. スタッフ本人のスマホでこのQRを読み取り\n"
+                    f"2. 開いたページで領収書PDFをダウンロード\n"
+                    f"3. ダウンロードが記録され「受領済み」になります\n\n"
+                    f"DL回数: {_qp.get('receipt_download_count') or 0}回 / "
+                    f"有効期限: {str(_qp.get('receipt_token_expires_at') or '—')[:10]}"
+                )
+
+# ============================================================
 # 2. スタッフ検索（NO. または ディーラーネーム）
 # ============================================================
 section_header(
