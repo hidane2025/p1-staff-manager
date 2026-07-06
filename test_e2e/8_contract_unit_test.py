@@ -100,7 +100,7 @@ def test_unsigned_pdf() -> None:
         staff_address="大阪府大阪市北区梅田1-1",
         role="Floor",
         event_name="P1 Kyoto 2026 夏大会",
-        issuer_name="株式会社PACIFIC RACING TEAM",
+        issuer_name="株式会社P1 Entertainment",
         issuer_address="東京都港区XX 1-2-3",
     )
     rendered = render_template(SAMPLE_BODY, vars)

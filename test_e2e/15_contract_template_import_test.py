@@ -74,7 +74,7 @@ def _build_docx_bytes() -> bytes:
     doc = Document()
     doc.add_heading("業務委託契約書（経理承認版）", level=1)
     doc.add_paragraph(
-        "株式会社PACIFIC RACING TEAM（以下「甲」という）と、{{staff_name}}（以下「乙」という）は、"
+        "株式会社P1 Entertainment（以下「甲」という）と、{{staff_name}}（以下「乙」という）は、"
         "以下の通り業務委託契約を締結する。"
     )
     doc.add_heading("第1条（業務内容）", level=2)
@@ -204,7 +204,7 @@ def _build_sample_pdf(is_provisional: bool, out_name: str) -> bytes:
         staff_address="東京都新宿区1-2-3",
         role="Dealer",
         event_name="P1 Kyoto 2026",
-        issuer_name="株式会社PACIFIC RACING TEAM",
+        issuer_name="株式会社P1 Entertainment",
         issuer_address="東京都港区XX 1-2-3",
     )
     rendered = render_template(SAMPLE_MARKDOWN, vars)
@@ -325,7 +325,7 @@ def test_docx_to_pdf_flow() -> None:
     pdf = generate_contract_pdf(
         rendered_body=rendered,
         contract_no=build_contract_no(99, 99, today_jst_ymd()),
-        issuer_name="株式会社PACIFIC RACING TEAM",
+        issuer_name="株式会社P1 Entertainment",
         is_provisional=False,
     )
     (OUT / "test_contract_official_from_docx.pdf").write_bytes(pdf)

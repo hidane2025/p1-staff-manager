@@ -130,7 +130,7 @@ class ReceiptInput:
     """領収書の内容
 
     Args:
-        payer_name: 領収書の宛名（お金を支払った会社）。例: "株式会社PACIFIC RACING TEAM"
+        payer_name: 領収書の宛名（お金を支払った会社）。例: "株式会社P1 Entertainment"
                     PDFでは「{payer_name}  御中」として描画される。
         receiver_name: 発行者名（お金を受け取った個人＝ディーラー本名）。
                        PDF右下の発行者ブロックに描画される。

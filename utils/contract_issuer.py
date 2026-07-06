@@ -68,7 +68,7 @@ def issue_contract(
 
     event = _load_event(event_id)
     # 発行者情報（大会に紐づく場合は大会から、それ以外はデフォルト）
-    issuer_name = event.get("issuer_name") or "株式会社PACIFIC RACING TEAM"
+    issuer_name = event.get("issuer_name") or "株式会社P1 Entertainment"
     issuer_address = event.get("issuer_address") or ""
 
     issue_date = today_jst_ymd()

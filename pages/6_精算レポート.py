@@ -194,7 +194,7 @@ with st.expander("➕ 小口経費を追加"):
             pc_amount = st.number_input("金額 (円)", min_value=0, step=100)
             pc_payee = st.text_input(
                 "領収書宛名",
-                placeholder="例: 株式会社PACIFIC RACING TEAM",
+                placeholder="例: 株式会社P1 Entertainment",
                 help="任意。法律上は不要、税務上は記載があると望ましい。",
             )
         pc_desc = st.text_input("内容", placeholder="例: タクシー代（会場→ホテル）")

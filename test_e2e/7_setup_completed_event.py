@@ -92,7 +92,7 @@ def main() -> int:
     # 4. 発行者情報
     receipt_db.save_issuer_settings(
         event_id,
-        issuer_name="株式会社PACIFIC RACING TEAM",
+        issuer_name="株式会社P1 Entertainment",
         issuer_address="東京都港区XX X-X-X",
         issuer_tel="03-0000-0000",
         invoice_number="",

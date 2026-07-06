@@ -39,7 +39,7 @@ def _sample_receipt() -> ReceiptInput:
     """
     return ReceiptInput(
         receipt_no=build_receipt_no(99, 12345, today_jst_ymd()),
-        payer_name="株式会社PACIFIC RACING TEAM",
+        payer_name="株式会社P1 Entertainment",
         receiver_name="山田 太郎",
         receiver_address="東京都渋谷区神南1-2-3",
         receiver_email="yamada@example.com",

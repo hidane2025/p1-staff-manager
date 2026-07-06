@@ -72,9 +72,11 @@ def get_issuer_settings(event_id: int) -> dict:
 _LEGACY_ISSUER_NAMES_FOR_RECEIPT: frozenset[str] = frozenset({
     "株式会社パシフィック",
     "株式会社 パシフィック",
+    "株式会社PACIFIC RACING TEAM",
+    "株式会社 PACIFIC RACING TEAM",
 })
 
-_DEFAULT_PAYER_NAME = "株式会社PACIFIC RACING TEAM"
+_DEFAULT_PAYER_NAME = "株式会社P1 Entertainment"
 
 
 def resolve_payer_name(stored_issuer_name: str) -> str:
