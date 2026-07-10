@@ -247,6 +247,96 @@ else:
             )
             copyable_url(bulk_text2, label="全員分まとめて")
 
+    # --- 📧 締結URLをメールで送信（2026-07-10 追加） ---
+    st.markdown("#### 📧 締結URLをメールで送信")
+    from utils import mailer as _mailer
+    if not pending_contracts:
+        st.caption("未締結の契約がないため、送信対象はありません。")
+    elif not _mailer.mail_enabled():
+        st.info(_mailer.mail_setup_hint())
+    else:
+        _ev = db.get_event_by_id(event_id) if event_id else {}
+        _ev_name = (_ev or {}).get("name") or "P1大会"
+
+        def _contract_mail_body(c, url):
+            _name = c.get("staff_real_name") or c.get("staff_name_jp") or ""
+            _exp = str(c.get("signing_token_expires_at") or "")[:10]
+            _exp_line = f"※URLの有効期限: {_exp}\n" if _exp else ""
+            return (
+                f"{_name} 様\n\n"
+                f"株式会社P1 Entertainmentです。\n"
+                f"「{_ev_name}」の業務委託契約書をお送りします。\n\n"
+                f"下記URLから内容をご確認のうえ、ページ下部の\n"
+                f"「✅ 同意して契約を締結する」ボタンを押してください。\n"
+                f"（署名の記入は不要です。ボタン押下で締結が完了します）\n\n"
+                f"{url}\n\n"
+                f"{_exp_line}"
+                f"※本メールに心当たりがない場合は、破棄をお願いいたします。\n\n"
+                f"株式会社P1 Entertainment\n"
+            )
+
+        _mailable = [c for c in pending_contracts if (c.get("staff_email") or "").strip()]
+        _no_email = [c for c in pending_contracts if not (c.get("staff_email") or "").strip()]
+        if _no_email:
+            st.caption(
+                f"⚠️ メールアドレス未登録のため送信できない契約が {len(_no_email)}件あります"
+                "（👥 スタッフ管理で email を登録すると対象になります）。"
+            )
+        if _mailable:
+            _mail_mode = st.radio(
+                "送信方法", ["個別に送信", "未締結の全員に一括送信"],
+                horizontal=True, key="contract_mail_mode",
+            )
+            _subject = f"【{_ev_name}】業務委託契約書のご確認・締結のお願い"
+            if _mail_mode == "個別に送信":
+                _opts = {
+                    f"{c['contract_no']} — {c.get('staff_name_jp')}（{c.get('staff_email')}）": c
+                    for c in _mailable
+                }
+                _picked = st.selectbox("送信先", list(_opts.keys()), key="contract_mail_pick")
+                _c = _opts[_picked]
+                _url = f"{base_host}/contract_sign?token={_c['signing_token']}"
+                with st.expander("📄 送信内容プレビュー"):
+                    st.text(f"件名: {_subject}\n\n{_contract_mail_body(_c, _url)}")
+                if st.button("📧 この1名に送信", type="primary", key="contract_mail_send_one"):
+                    ok, err = _mailer.send_mail(
+                        _c["staff_email"], _subject, _contract_mail_body(_c, _url))
+                    if ok:
+                        contract_db.mark_sent(_c["id"])
+                        db.log_action("mail_contract_url", "contracts", _c["id"],
+                                      detail=f"{_c['contract_no']} 締結URLをメール送信",
+                                      event_id=event_id)
+                        st.success(f"{_c.get('staff_name_jp')} さんに送信しました。")
+                        st.rerun()
+                    else:
+                        st.error(f"送信失敗: {err}")
+            else:
+                st.caption(f"送信対象: {len(_mailable)}名（未締結・メール登録済み）")
+                _confirm_bulk = st.checkbox(
+                    f"{len(_mailable)}名への一括送信を確認しました",
+                    key="contract_mail_bulk_confirm",
+                )
+                if st.button(f"📧 {len(_mailable)}名に一括送信", type="primary",
+                              disabled=not _confirm_bulk, key="contract_mail_send_bulk"):
+                    _ok_n, _fails = 0, []
+                    _bar = st.progress(0.0)
+                    for _i, _c in enumerate(_mailable, 1):
+                        _url = f"{base_host}/contract_sign?token={_c['signing_token']}"
+                        ok, err = _mailer.send_mail(
+                            _c["staff_email"], _subject, _contract_mail_body(_c, _url))
+                        if ok:
+                            _ok_n += 1
+                            contract_db.mark_sent(_c["id"])
+                        else:
+                            _fails.append(f"{_c.get('staff_name_jp')}: {err}")
+                        _bar.progress(_i / len(_mailable))
+                    db.log_action("mail_contract_url_bulk", "contracts",
+                                  detail=f"締結URL一括送信 成功{_ok_n}/失敗{len(_fails)}",
+                                  event_id=event_id)
+                    st.success(f"{_ok_n}名に送信しました。")
+                    if _fails:
+                        st.error("送信失敗:\n" + "\n".join(_fails[:10]))
+
     st.markdown("---")
     # CSV出力
     csv = df_contracts.to_csv(index=False).encode("utf-8-sig")

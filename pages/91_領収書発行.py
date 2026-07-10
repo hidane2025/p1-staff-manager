@@ -280,6 +280,90 @@ else:
         )
         copyable_url(bulk_text, label="全員分まとめて（LINE等にコピー&ペースト）")
 
+    # --- 📧 領収書DLリンクをメールで送信（2026-07-10 追加） ---
+    st.markdown("#### 📧 DLリンクをメールで送信")
+    from utils import mailer as _mailer
+    if not _mailer.mail_enabled():
+        st.info(_mailer.mail_setup_hint())
+    else:
+        _ev_for_mail = db.get_event_by_id(event_id) or {}
+        _ev_name = _ev_for_mail.get("name") or "P1大会"
+
+        def _receipt_mail_body(r, url):
+            _name = r.get("real_name") or r.get("name_jp") or ""
+            _exp = str(r.get("receipt_token_expires_at") or "")[:10]
+            _exp_line = f"※URLの有効期限: {_exp}\n" if _exp else ""
+            return (
+                f"{_name} 様\n\n"
+                f"株式会社P1 Entertainmentです。\n"
+                f"「{_ev_name}」の報酬に関する領収書をご用意しました。\n\n"
+                f"下記URLからPDFをダウンロードしてください。\n"
+                f"（ダウンロードの完了が受領確認として記録されます）\n\n"
+                f"{url}\n\n"
+                f"{_exp_line}"
+                f"※本メールに心当たりがない場合は、破棄をお願いいたします。\n\n"
+                f"株式会社P1 Entertainment\n"
+            )
+
+        _mailable_r = [r for r in issued if (r.get("email") or "").strip()]
+        _no_email_r = [r for r in issued if not (r.get("email") or "").strip()]
+        if _no_email_r:
+            st.caption(
+                f"⚠️ メールアドレス未登録のため送信できない領収書が {len(_no_email_r)}件あります"
+                "（👥 スタッフ管理で email を登録すると対象になります）。"
+            )
+        if _mailable_r:
+            _rmail_mode = st.radio(
+                "送信方法", ["個別に送信", "発行済みの全員に一括送信"],
+                horizontal=True, key="receipt_mail_mode",
+            )
+            _rsubject = f"【{_ev_name}】領収書のダウンロードのご案内"
+            if _rmail_mode == "個別に送信":
+                _ropts = {
+                    f"NO.{r.get('no', 0)} {r.get('name_jp', '')}（{r.get('email')}）": r
+                    for r in _mailable_r
+                }
+                _rpicked = st.selectbox("送信先", list(_ropts.keys()), key="receipt_mail_pick")
+                _r = _ropts[_rpicked]
+                _rurl = f"{base_host}/receipt_download?token={_r['receipt_token']}"
+                with st.expander("📄 送信内容プレビュー"):
+                    st.text(f"件名: {_rsubject}\n\n{_receipt_mail_body(_r, _rurl)}")
+                if st.button("📧 この1名に送信", type="primary", key="receipt_mail_send_one"):
+                    ok, err = _mailer.send_mail(
+                        _r["email"], _rsubject, _receipt_mail_body(_r, _rurl))
+                    if ok:
+                        db.log_action("mail_receipt_url", "payments", _r.get("id"),
+                                      detail=f"NO.{_r.get('no')} 領収書DLリンクをメール送信",
+                                      event_id=event_id, performed_by=operator_name())
+                        st.success(f"{_r.get('name_jp')} さんに送信しました。")
+                    else:
+                        st.error(f"送信失敗: {err}")
+            else:
+                st.caption(f"送信対象: {len(_mailable_r)}名（発行済み・メール登録済み）")
+                _rconfirm = st.checkbox(
+                    f"{len(_mailable_r)}名への一括送信を確認しました",
+                    key="receipt_mail_bulk_confirm",
+                )
+                if st.button(f"📧 {len(_mailable_r)}名に一括送信", type="primary",
+                              disabled=not _rconfirm, key="receipt_mail_send_bulk"):
+                    _rok, _rfails = 0, []
+                    _rbar = st.progress(0.0)
+                    for _ri, _r in enumerate(_mailable_r, 1):
+                        _rurl = f"{base_host}/receipt_download?token={_r['receipt_token']}"
+                        ok, err = _mailer.send_mail(
+                            _r["email"], _rsubject, _receipt_mail_body(_r, _rurl))
+                        if ok:
+                            _rok += 1
+                        else:
+                            _rfails.append(f"{_r.get('name_jp')}: {err}")
+                        _rbar.progress(_ri / len(_mailable_r))
+                    db.log_action("mail_receipt_url_bulk", "payments",
+                                  detail=f"領収書DLリンク一括送信 成功{_rok}/失敗{len(_rfails)}",
+                                  event_id=event_id, performed_by=operator_name())
+                    st.success(f"{_rok}名に送信しました。")
+                    if _rfails:
+                        st.error("送信失敗:\n" + "\n".join(_rfails[:10]))
+
     # CSV出力
     st.markdown("---")
     csv = df_links.to_csv(index=False).encode("utf-8-sig")

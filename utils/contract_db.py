@@ -180,6 +180,14 @@ def save_signed(contract_id: int, signed_pdf_path: str,
     }).eq("id", contract_id).execute()
 
 
+def mark_sent(contract_id: int) -> None:
+    """締結URLをメール送信した日時を記録（2026-07-10 追加）。"""
+    db.get_client().table("p1_contracts").update({
+        "sent_at": _now_iso(),
+        "updated_at": _now_iso(),
+    }).eq("id", contract_id).execute()
+
+
 def revoke_contract(contract_id: int, reason: str) -> None:
     db.get_client().table("p1_contracts").update({
         "status": "revoked",

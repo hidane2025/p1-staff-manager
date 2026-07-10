@@ -369,6 +369,43 @@ def generate_contract_pdf(
                      f"Contract No: {contract_no}")
         c.setFillColor(black)
 
+    elif signed_at_iso:
+        # ========== 電子的同意の記録（クリック同意方式・2026-07-10 追加） ==========
+        # 署名画像なしで「同意する」ボタン押下により締結した場合の記録欄。
+        if y < MARGIN_BOTTOM + 45 * mm:
+            c.showPage()
+            _draw_page_header(c, is_provisional=is_provisional)
+            y = PAGE_H - MARGIN_TOP
+
+        y -= 10 * mm
+        c.setStrokeColor(HexColor("#1F3A5F"))
+        c.setLineWidth(1)
+        c.line(MARGIN_X, y, PAGE_W - MARGIN_X, y)
+        y -= 8 * mm
+
+        c.setFont(FONT_JP_MIN, 12)
+        c.setFillColor(HexColor("#1F3A5F"))
+        c.drawString(MARGIN_X, y, "電子的同意の記録")
+        c.setFillColor(black)
+        y -= 6 * mm
+
+        c.setFont(FONT_JP_REG, 9)
+        c.drawString(MARGIN_X, y, f"同意日時: {signed_at_iso}")
+        y -= 5 * mm
+        c.drawString(MARGIN_X, y,
+                     "乙は、専用URLにて本契約内容を確認のうえ「同意して契約を締結する」を"
+                     "押下し、契約締結に同意した。")
+        y -= 7 * mm
+
+        content_hash = hashlib.sha256(
+            (rendered_body + (signed_at_iso or "")).encode("utf-8")
+        ).hexdigest()[:16]
+        c.setFont(FONT_JP_REG, 7)
+        c.setFillColor(HexColor("#888888"))
+        c.drawString(MARGIN_X, y, f"Content-Hash (SHA-256 first 16): {content_hash}")
+        c.drawString(MARGIN_X, y - 4 * mm, f"Contract No: {contract_no}")
+        c.setFillColor(black)
+
     # フッター
     c.setFont(FONT_JP_REG, 8)
     c.setFillColor(HexColor("#888888"))

@@ -159,9 +159,22 @@ def issue_contracts_bulk(template_id: int, staff_ids: list[int],
     }
 
 
-def apply_signature(contract_id: int, signature_png: bytes,
+def apply_click_agreement(contract_id: int,
+                          signer_ip: str = "", signer_ua: str = "") -> dict:
+    """クリック同意（署名画像なし）で契約を締結する（2026-07-10 追加）。
+
+    「同意して契約を締結する」ボタン押下＝締結。署名画像の代わりに
+    PDFへ「電子的同意の記録」（同意日時・Content-Hash）を印字する。
+    記録される監査情報（signed_at / signer_ua / content_hash / スナップショット本文）は
+    署名方式と同一。
+    """
+    return apply_signature(contract_id, None,
+                           signer_ip=signer_ip, signer_ua=signer_ua)
+
+
+def apply_signature(contract_id: int, signature_png: Optional[bytes],
                       signer_ip: str = "", signer_ua: str = "") -> dict:
-    """署名画像を受け取り、署名済PDFを生成してStorageに保存
+    """署名済PDF（署名画像あり）またはクリック同意PDF（signature_png=None）を生成し保存。
 
     ※ Ultra Review CR-1対策:
     発行時にスナップショット保存したrendered_body_mdを優先使用する。
@@ -205,14 +218,16 @@ def apply_signature(contract_id: int, signature_png: bytes,
     signed_at_iso = datetime.now(JST).isoformat()
     content_hash = compute_content_hash(rendered, signed_at_iso, c["contract_no"])
 
-    # 署名画像をStorageに保存
-    try:
-        sig_path = contract_storage.upload_bytes(
-            contract_storage.signature_image_path(c["contract_no"]),
-            signature_png, content_type="image/png",
-        )
-    except Exception as e:
-        return {"ok": False, "error": f"署名画像保存失敗: {e}"}
+    # 署名画像をStorageに保存（クリック同意方式では画像なし）
+    sig_path = None
+    if signature_png:
+        try:
+            sig_path = contract_storage.upload_bytes(
+                contract_storage.signature_image_path(c["contract_no"]),
+                signature_png, content_type="image/png",
+            )
+        except Exception as e:
+            return {"ok": False, "error": f"署名画像保存失敗: {e}"}
 
     # 署名済PDF生成
     try:
@@ -236,9 +251,10 @@ def apply_signature(contract_id: int, signature_png: bytes,
     )
 
     try:
+        _method = "署名完了" if signature_png else "クリック同意で締結"
         db.log_action(
             "sign_contract", "contracts", contract_id,
-            detail=f"{c['contract_no']} 署名完了 hash={content_hash[:16]}",
+            detail=f"{c['contract_no']} {_method} hash={content_hash[:16]}",
             event_id=c.get("event_id"),
         )
     except Exception:
