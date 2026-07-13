@@ -43,7 +43,12 @@ def mail_enabled() -> bool:
 
 
 def send_mail(to_addr: str, subject: str, body: str) -> tuple[bool, str]:
-    """テキストメールを1通送信。Returns: (成功?, エラーメッセージ)"""
+    """テキストメールを1通送信。Returns: (成功?, エラーメッセージ)
+
+    Secrets に MAIL_BCC が設定されていれば、全メールをそのアドレスへ
+    エンベロープBCC（受信者には見えない控え送信）する。SMTP直送は
+    「送信済み」フォルダに残らないため、控えはBCCで受信箱に残す方式。
+    """
     if not mail_enabled():
         return False, "SMTP未設定（Secretsに SMTP_HOST/SMTP_USER/SMTP_PASSWORD を追加してください）"
     to_addr = (to_addr or "").strip()
@@ -65,17 +70,23 @@ def send_mail(to_addr: str, subject: str, body: str) -> tuple[bool, str]:
     msg["From"] = formataddr((str(Header(from_name, "utf-8")), from_addr))
     msg["To"] = to_addr
 
+    # 控え用BCC（ヘッダには載せず、SMTPの宛先にだけ追加する）
+    recipients = [to_addr]
+    bcc = _conf("MAIL_BCC")
+    if bcc and "@" in bcc and bcc.lower() != to_addr.lower():
+        recipients.append(bcc)
+
     try:
         if port == 465:
             with smtplib.SMTP_SSL(host, port, timeout=20,
                                   context=ssl.create_default_context()) as s:
                 s.login(user, password)
-                s.sendmail(from_addr, [to_addr], msg.as_string())
+                s.sendmail(from_addr, recipients, msg.as_string())
         else:
             with smtplib.SMTP(host, port, timeout=20) as s:
                 s.starttls(context=ssl.create_default_context())
                 s.login(user, password)
-                s.sendmail(from_addr, [to_addr], msg.as_string())
+                s.sendmail(from_addr, recipients, msg.as_string())
         return True, ""
     except Exception as e:  # 認証失敗・接続失敗等はUI側で表示
         return False, str(e)[:300]
