@@ -43,6 +43,10 @@ _SESSION_KEY = "p1_admin_authenticated"
 _LOGIN_AT_KEY = "p1_admin_login_at"
 _LOGIN_AS_KEY = "p1_admin_login_as"
 _ROLE_KEY = "p1_admin_role"
+_DAY_EXPIRES_KEY = "p1_day_code_expires"
+_DAY_CODE_ID_KEY = "p1_day_code_id"
+_DAY_FAILS_KEY = "p1_day_code_fails"
+_TOTP_PENDING_KEY = "p1_totp_pending"   # {"user":..., "role":...} パスワード通過後のTOTP待ち
 
 _PBKDF2_ALGO = "sha256"
 _PBKDF2_ITER = 200_000
@@ -216,16 +220,50 @@ def _role_allowed(role: str, roles) -> bool:
     return (role or "") in set(roles)
 
 
-def require_admin(*, page_name: str = "", roles=("admin",)) -> None:
+def require_admin(*, page_name: str = "", roles=("admin",),
+                  allow_day_code: bool = False) -> None:
     """管理者専用ページの**先頭**で呼ぶ。未認証/権限不足なら認証画面を出して st.stop()。
 
     Args:
         page_name: ログ用のページ識別子（例 "領収書発行"）
         roles: 入室を許可するロールの集合（既定 admin のみ）。
                閲覧者にも開くページは roles=("admin","viewer") を渡す。
+        allow_day_code: True の場合「当日運用コード」でも入室可（ピット端末・出退勤用。
+               2026-07-28 追加。コードは管理者が発行・翌朝5時JSTに自動失効）。
     """
     # 既に認証済み → ロールを確認
     if is_admin():
+        # 当日運用コードセッション: 有効期限と対象ページを毎回確認
+        if current_role() == "day":
+            from datetime import datetime as _dt
+            _exp = str(st.session_state.get(_DAY_EXPIRES_KEY) or "")
+            try:
+                _expired = _dt.now(_JST) >= _dt.fromisoformat(_exp)
+            except Exception:
+                _expired = True
+            # 管理者が「失効」した場合は既存セッションも即切断（レビュー指摘対応）
+            if not _expired:
+                try:
+                    import db as _db
+                    _expired = not _db.is_day_code_active(
+                        st.session_state.get(_DAY_CODE_ID_KEY))
+                except Exception:
+                    _expired = True
+            if _expired:
+                for _k in (_SESSION_KEY, _LOGIN_AT_KEY, _LOGIN_AS_KEY, _ROLE_KEY,
+                           _DAY_EXPIRES_KEY, _DAY_CODE_ID_KEY):
+                    st.session_state.pop(_k, None)
+                st.warning("⏰ 当日運用コードの有効期限が切れました。再ログインしてください。")
+                st.rerun()
+            if allow_day_code:
+                return
+            st.markdown("## ⛔ このページは当日運用コードでは入れません")
+            st.error(
+                f"「{page_name or 'このページ'}」は管理者専用です。"
+                "当日運用コードで入れるのはピット端末・出退勤のみです。"
+            )
+            admin_logout_button()
+            st.stop()
         if _role_allowed(current_role(), roles):
             return
         st.markdown("## ⛔ アクセス権限が足りません")
@@ -235,6 +273,11 @@ def require_admin(*, page_name: str = "", roles=("admin",)) -> None:
             "別の権限のユーザーでログインし直すか、管理者にロール変更を依頼してください。"
         )
         admin_logout_button()
+        st.stop()
+
+    # --- TOTPコード入力待ち（パスワードは通過済み・2段階目） ---
+    if st.session_state.get(_TOTP_PENDING_KEY):
+        _render_totp_form(page_name)
         st.stop()
 
     users = _load_app_users()
@@ -255,19 +298,16 @@ def require_admin(*, page_name: str = "", roles=("admin",)) -> None:
             role = _authenticate(username, pw)
             time.sleep(0.15)  # タイミング攻撃の弱体化
             if role:
-                st.session_state[_SESSION_KEY] = True
-                st.session_state[_LOGIN_AT_KEY] = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
-                st.session_state[_LOGIN_AS_KEY] = (username or "").strip()[:40]
-                st.session_state[_ROLE_KEY] = role
-                _log_safe("admin_login", "auth",
-                          detail=f"page={page_name}, user={(username or '').strip()[:40]}, role={role}",
-                          performed_by=(username or "").strip()[:40] or "unknown")
-                st.rerun()
+                _u = (username or "").strip()[:40]
+                _finish_or_totp(username=_u, role=role, account=_u or "admin",
+                                page_name=page_name)
             else:
                 _log_safe("admin_login_failed", "auth",
                           detail=f"page={page_name}, user={(username or '').strip()[:40]}",
                           performed_by=(username or "").strip()[:40] or "unknown")
                 st.error("❌ ユーザーIDまたはパスワードが違います")
+        if allow_day_code:
+            _render_day_code_form(page_name)
         st.stop()
 
     # --- fail closed: [auth.users] はあるが有効ユーザーが0件 ---
@@ -315,20 +355,140 @@ def require_admin(*, page_name: str = "", roles=("admin",)) -> None:
         import time
         time.sleep(0.15)
         if ok:
-            st.session_state[_SESSION_KEY] = True
-            st.session_state[_LOGIN_AT_KEY] = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
-            st.session_state[_LOGIN_AS_KEY] = ((operator or "").strip() or "anonymous_admin")[:30]
-            st.session_state[_ROLE_KEY] = "admin"   # 単一パスワードは admin 扱い
-            _log_safe("admin_login", "auth",
-                      detail=f"page={page_name}, by={operator[:30] if operator else 'anon'}",
-                      performed_by=operator[:30] or "admin")
-            st.rerun()
+            _op = ((operator or "").strip() or "anonymous_admin")[:30]
+            _finish_or_totp(username=_op, role="admin", account="admin",
+                            page_name=page_name)
         else:
             _log_safe("admin_login_failed", "auth",
                       detail=f"page={page_name}, pw_len={len(pw or '')}, by={operator[:30] if operator else 'anon'}",
                       performed_by=operator[:30] or "anonymous")
             st.error("❌ パスワードが違います")
+    if allow_day_code:
+        _render_day_code_form(page_name)
     st.stop()
+
+
+
+# ============================================================
+# 2段階認証（TOTP）と当日運用コード（2026-07-28 追加）
+# ============================================================
+def _finish_login(user: str, role: str, page_name: str, note: str = "") -> None:
+    """認証確定（セッション設定→ログ→再描画）。"""
+    st.session_state[_SESSION_KEY] = True
+    st.session_state[_LOGIN_AT_KEY] = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state[_LOGIN_AS_KEY] = (user or "anonymous_admin")[:40]
+    st.session_state[_ROLE_KEY] = role
+    _log_safe("admin_login", "auth",
+              detail=f"page={page_name}, user={(user or '')[:40]}, role={role}{note}",
+              performed_by=(user or "admin")[:40])
+    st.rerun()
+
+
+def _finish_or_totp(*, username: str, role: str, account: str, page_name: str) -> None:
+    """パスワード通過後、TOTPが有効なら2段階目へ。無効なら即ログイン確定。"""
+    totp_cfg = None
+    try:
+        import db as _db
+        totp_cfg = _db.get_totp(account)
+    except Exception:
+        totp_cfg = None  # DB障害時はTOTPなし扱い（可用性優先・ログイン自体はPW済み）
+    if totp_cfg and totp_cfg.get("secret"):
+        st.session_state[_TOTP_PENDING_KEY] = {
+            "user": username, "role": role, "account": account,
+        }
+        st.rerun()
+    _finish_login(username, role, page_name)
+
+
+def _render_totp_form(page_name: str) -> None:
+    """2段階目: 認証アプリの6桁コード入力。"""
+    pend = st.session_state.get(_TOTP_PENDING_KEY) or {}
+    st.markdown("## 🔐 2段階認証")
+    st.caption("認証アプリ（Google Authenticator等）に表示されている6桁コードを入力してください。")
+    st.caption(
+        "🆘 認証アプリが使えない場合（スマホ紛失等）: Supabaseダッシュボード → "
+        "`p1_admin_totp` テーブルの該当行を削除すると2段階認証が解除され、"
+        "パスワードのみでログインできます。"
+    )
+    with st.form("__totp_form__"):
+        code = st.text_input("6桁コード", max_chars=6)
+        col_a, col_b = st.columns(2)
+        with col_a:
+            ok = st.form_submit_button("🔓 認証", type="primary")
+        with col_b:
+            back = st.form_submit_button("← 戻る")
+    if back:
+        st.session_state.pop(_TOTP_PENDING_KEY, None)
+        st.rerun()
+    if ok:
+        import time
+        time.sleep(0.15)
+        valid = False
+        try:
+            import pyotp
+            import db as _db
+            cfg = _db.get_totp(pend.get("account") or "admin")
+            valid = bool(cfg and pyotp.TOTP(cfg["secret"]).verify(
+                (code or "").strip(), valid_window=1))
+        except Exception:
+            valid = False
+        if valid:
+            st.session_state.pop(_TOTP_PENDING_KEY, None)
+            _finish_login(pend.get("user") or "admin", pend.get("role") or "admin",
+                          page_name, note=", totp=ok")
+        else:
+            _log_safe("totp_failed", "auth",
+                      detail=f"page={page_name}, user={pend.get('user')}",
+                      performed_by=str(pend.get("user") or "unknown")[:40])
+            st.error("❌ コードが違います。時計のずれがある場合は次のコードでもう一度。")
+
+
+def _render_day_code_form(page_name: str) -> None:
+    """当日運用コードでの入室フォーム（ピット端末・出退勤のみ有効）。"""
+    with st.expander("🎫 当日運用コードで入る（TD・給与窓口用）", expanded=False):
+        st.caption(
+            "管理者から受け取った**本日のコード**で入室できます（翌朝5時に自動失効）。"
+            "操作できるのはピット端末・出退勤のみです。"
+        )
+        _fails = int(st.session_state.get(_DAY_FAILS_KEY) or 0)
+        if _fails >= 5:
+            st.error("試行回数の上限に達しました。ページを閉じて管理者にコードを確認してください。")
+            return
+        with st.form("__day_code_form__"):
+            op = st.text_input("名前（必須・操作記録に残ります）", placeholder="例: 山田")
+            code = st.text_input("当日運用コード（8桁）", max_chars=8)
+            sub = st.form_submit_button("🎫 入室", type="primary")
+        if sub:
+            import time
+            time.sleep(0.15 * (1 + _fails))  # 失敗ごとに待ち時間を増加
+            if not (op or "").strip():
+                st.error("名前を入力してください")
+                return
+            info = None
+            try:
+                import db as _db
+                info = _db.verify_day_code((code or "").strip())
+            except Exception:
+                info = None
+            if info:
+                st.session_state[_SESSION_KEY] = True
+                st.session_state[_LOGIN_AT_KEY] = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
+                st.session_state[_LOGIN_AS_KEY] = (op or "").strip()[:40]
+                st.session_state[_ROLE_KEY] = "day"
+                st.session_state[_DAY_EXPIRES_KEY] = str(info.get("expires_at") or "")
+                st.session_state[_DAY_CODE_ID_KEY] = info.get("id")
+                st.session_state.pop(_DAY_FAILS_KEY, None)
+                _log_safe("day_code_login", "auth",
+                          detail=f"page={page_name}, by={(op or '').strip()[:40]}, "
+                                 f"valid_date={info.get('valid_date')}",
+                          performed_by=(op or "").strip()[:40])
+                st.rerun()
+            else:
+                _log_safe("day_code_failed", "auth",
+                          detail=f"page={page_name}, by={(op or '').strip()[:40]}",
+                          performed_by=(op or "").strip()[:40] or "unknown")
+                st.session_state[_DAY_FAILS_KEY] = _fails + 1
+                st.error("❌ コードが無効か、期限切れです。管理者に本日のコードを確認してください。")
 
 
 def admin_logout_button() -> None:

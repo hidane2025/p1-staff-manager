@@ -19,7 +19,7 @@ from utils import event_selector
 st.set_page_config(page_title="発行者設定", page_icon="🏢", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header
-from utils.admin_guard import require_admin, admin_logout_button
+from utils.admin_guard import require_admin, admin_logout_button, operator_name
 apply_global_style()
 hide_staff_only_pages()
 require_admin(page_name="発行者設定")
@@ -137,3 +137,145 @@ st.markdown("""
 - **イベント単位**で設定できます。主催者が変わる場合はイベントごとに更新してください。
 - **過去に発行済みの領収書は再生成が必要**です（領収書発行ページの『強制再生成』を使ってください）。
 """)
+
+
+# ============================================================
+# 🎫 当日運用コード（日替わりワンタイムコード 2026-07-28 追加）
+# ============================================================
+st.divider()
+st.subheader("🎫 当日運用コード")
+st.caption(
+    "大会当日、TD・給与窓口が**ピット端末・出退勤**に入るための時限コードです。"
+    "有効日の**翌朝5時に自動失効**します。管理者パスワードを現場に配る必要がなくなります。"
+)
+
+from datetime import datetime as _dtn, timedelta as _tdn, timezone as _tzn
+_JST_92 = _tzn(_tdn(hours=9))
+_today_jst = _dtn.now(_JST_92).date()
+
+_col_dc1, _col_dc2 = st.columns([1, 1])
+with _col_dc1:
+    _dc_date = st.date_input("有効日", value=_today_jst, key="day_code_date")
+with _col_dc2:
+    _dc_label = st.text_input("メモ（任意）", placeholder="例: 大阪DAY1", key="day_code_label")
+
+if st.button("🎫 コードを発行", type="primary", key="issue_day_code"):
+    try:
+        _code = db.issue_day_code(str(_dc_date), _dc_label, created_by=operator_name())
+        st.success("発行しました。**この画面でしか表示されません。** 今すぐ現場責任者に伝えてください。")
+        st.markdown(
+            f'<div style="font-size:44px;font-weight:800;letter-spacing:12px;'
+            f'text-align:center;padding:16px;background:#F0FDF4;border:2px solid #16A34A;'
+            f'border-radius:12px;">{_code}</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(f"有効: {_dc_date} 0:00 〜 翌朝5:00（JST）／対象ページ: ピット端末・出退勤のみ")
+    except Exception as _e:
+        st.error("発行に失敗しました。DBマイグレーション（20260728_add_day_codes_and_totp.sql）"
+                 "が未適用の可能性があります。")
+        with st.expander("🔧 技術詳細"):
+            st.code(str(_e), language=None)
+
+_codes = db.list_day_codes(limit=10)
+if _codes:
+    st.markdown("**発行済みコード（直近10件・コード本体は表示されません）**")
+    for _c in _codes:
+        _cc1, _cc2 = st.columns([4, 1])
+        with _cc1:
+            _state = "🟢 有効" if _c.get("active") else "⚫ 失効済み"
+            st.write(
+                f"{_state}　有効日 {_c.get('valid_date')}　{_c.get('label') or '（メモなし）'}"
+                f"　発行者: {_c.get('created_by') or '—'}"
+            )
+        with _cc2:
+            if _c.get("active") and st.button("失効", key=f"revoke_dc_{_c['id']}"):
+                db.revoke_day_code(_c["id"], performed_by=operator_name())
+                st.rerun()
+
+# ============================================================
+# 🔐 2要素認証（TOTP 2026-07-28 追加）
+# ============================================================
+st.divider()
+st.subheader("🔐 2要素認証（管理者ログイン）")
+st.caption(
+    "有効にすると、管理者ログインは「パスワード → 認証アプリの6桁コード」の2段階になります。"
+    "Google Authenticator / 1Password / iPhone標準の「パスワード」アプリ等に対応。"
+)
+
+_totp_cfg = db.get_totp("admin")
+if _totp_cfg:
+    st.success("✅ 2要素認証は**有効**です。")
+    st.caption("無効化するには、現在の6桁コードを入力してください（本人確認）。")
+    with st.form("__totp_disable_form__"):
+        _dis_code = st.text_input("6桁コード", max_chars=6, key="totp_disable_code")
+        _dis = st.form_submit_button("🔓 2要素認証を無効化")
+    if _dis:
+        try:
+            import pyotp as _pyotp
+            if _pyotp.TOTP(_totp_cfg["secret"]).verify((_dis_code or "").strip(), valid_window=1):
+                db.set_totp("admin", _totp_cfg["secret"], enabled=False,
+                            performed_by=operator_name())
+                st.success("無効化しました。")
+                st.rerun()
+            else:
+                st.error("❌ コードが違います")
+        except Exception as _e:
+            st.error(f"エラー: {str(_e)[:100]}")
+    st.caption("📱 スマホを紛失した場合: Supabaseダッシュボード → p1_admin_totp テーブルの行を削除すると解除されます。")
+else:
+    if "totp_setup_secret" not in st.session_state:
+        if st.button("🔐 2要素認証を設定する", type="primary", key="totp_setup_start"):
+            import pyotp as _pyotp
+            st.session_state["totp_setup_secret"] = _pyotp.random_base32()
+            st.rerun()
+    else:
+        import pyotp as _pyotp
+        _secret = st.session_state["totp_setup_secret"]
+        _uri = _pyotp.totp.TOTP(_secret).provisioning_uri(
+            name="admin", issuer_name="P1 Staff Manager")
+        from utils.receipt_qr import qr_png_bytes as _qr_png
+        _sc1, _sc2 = st.columns([1, 2])
+        with _sc1:
+            st.image(_qr_png(_uri, box_size=6))
+        with _sc2:
+            st.markdown(
+                "1. 認証アプリでこのQRを読み取る\n"
+                "2. アプリに表示された**6桁コード**を下に入力して有効化\n\n"
+                f"（QRが読めない場合の手動入力キー: `{_secret}`）"
+            )
+        with st.form("__totp_enable_form__"):
+            _en_code = st.text_input("6桁コード", max_chars=6, key="totp_enable_code")
+            _en = st.form_submit_button("✅ 有効化", type="primary")
+        if _en:
+            if _pyotp.TOTP(_secret).verify((_en_code or "").strip(), valid_window=1):
+                if db.set_totp("admin", _secret, enabled=True, performed_by=operator_name()):
+                    st.session_state.pop("totp_setup_secret", None)
+                    st.success("✅ 2要素認証を有効化しました。次回ログインから6桁コードが必要です。")
+                    st.rerun()
+                else:
+                    st.error("保存に失敗しました（DBマイグレ未適用の可能性）。")
+            else:
+                st.error("❌ コードが違います。アプリの最新コードで再入力してください。")
+        if st.button("キャンセル", key="totp_setup_cancel"):
+            st.session_state.pop("totp_setup_secret", None)
+            st.rerun()
+
+# ============================================================
+# 🩺 DB接続診断（セキュリティ移行の確認用 2026-07-28 追加）
+# ============================================================
+st.divider()
+st.subheader("🩺 DB接続診断")
+_h = db.connection_health()
+_role_txt = str(_h.get("role"))
+if _h.get("using_default_key"):
+    st.warning(
+        "⚠️ **内蔵の共有キー（anon）で接続中です。** セキュリティ移行が未完了の状態。"
+        "Streamlit Secrets に `SUPABASE_SERVICE_KEY` を設定してください。"
+    )
+elif _role_txt == "service_role":
+    st.success("✅ service_role キー（Secrets設定）で接続中。移行完了状態です。")
+else:
+    st.info(f"接続キーのrole: {_role_txt}")
+st.caption(
+    f"接続テスト: {'✅ OK' if _h.get('select_ok') else '❌ 失敗 — ' + str(_h.get('error'))[:120]}"
+)

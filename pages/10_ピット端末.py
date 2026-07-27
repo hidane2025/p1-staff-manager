@@ -57,7 +57,7 @@ _JST = timezone(timedelta(hours=9))
 st.set_page_config(page_title="ピット端末", page_icon="🎰", layout="wide")
 apply_global_style()
 hide_staff_only_pages()
-require_admin(page_name="ピット端末")
+require_admin(page_name="ピット端末", allow_day_code=True)
 admin_logout_button()
 
 page_header(

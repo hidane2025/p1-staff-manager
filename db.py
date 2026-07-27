@@ -27,13 +27,47 @@ _DEFAULT_SUPABASE_KEY = (
 )
 
 
+def _sanitize_key(raw) -> str:
+    """Secretsに貼られたキーの貼り付け事故を吸収する（2026-07-28 追加）。
+
+    - 前後の空白・引用符を除去
+    - JWT（eyJ〜）や新形式キー（sb_〜）の内部に紛れた改行・空白を除去
+      （Secretsのテキストエリアで折り返し貼り付けした場合の破損対策）
+    """
+    s = str(raw or "").strip().strip('"').strip("'").strip()
+    if s.startswith("eyJ") or s.startswith("sb_"):
+        s = "".join(s.split())
+    return s
+
+
+def supabase_key_role(token: str):
+    """キー(JWT)の role クレームを返す。JWTでない/解析不可なら None。
+
+    旧形式キーは JWT で role=anon / service_role を持つ。新形式の不透明キー
+    （sb_secret_ 等）は JWT でないため None（role判定スキップ）。
+    """
+    try:
+        import base64
+        import json as _json
+        parts = (token or "").split(".")
+        if len(parts) != 3:
+            return None
+        pad = "=" * (-len(parts[1]) % 4)
+        payload = _json.loads(base64.urlsafe_b64decode(parts[1] + pad))
+        return payload.get("role")
+    except Exception:
+        return None
+
+
 def _get_supabase_config():
     """Supabase URL/Keyを取得。
 
-    Key優先度: SUPABASE_SERVICE_KEY > SUPABASE_KEY(anon) > 環境変数 > デフォルトanon。
+    Key優先度: SUPABASE_SERVICE_KEY > SUPABASE_SERVICE_ROLE_KEY > SUPABASE_KEY(anon)
+    > 環境変数 > デフォルトanon。
     Streamlitはサーバ側で動くため service_role キーを使ってもブラウザに露出しない。
     SUPABASE_SERVICE_KEY を設定すればアプリ全体が service_role で動くので、PIIテーブルの
-    anon権限を締めても壊れない（A-1是正の前提）。未設定時は従来どおり anon にフォールバック。
+    anon権限を締めても壊れない。未設定時は従来どおり anon にフォールバック
+    （※anon権限剥奪後はSecrets設定が必須になる）。
     """
     def _secret(name):
         try:
@@ -41,14 +75,34 @@ def _get_supabase_config():
         except Exception:
             return None
 
-    url = _secret("SUPABASE_URL") or os.environ.get("SUPABASE_URL", _DEFAULT_SUPABASE_URL)
-    key = (
+    url = _sanitize_key(_secret("SUPABASE_URL") or os.environ.get("SUPABASE_URL", _DEFAULT_SUPABASE_URL))
+    key = _sanitize_key(
         _secret("SUPABASE_SERVICE_KEY")
+        or _secret("SUPABASE_SERVICE_ROLE_KEY")
         or _secret("SUPABASE_KEY")
         or os.environ.get("SUPABASE_SERVICE_KEY")
+        or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
         or os.environ.get("SUPABASE_KEY", _DEFAULT_SUPABASE_KEY)
     )
-    return str(url), str(key)
+    return url, key
+
+
+def connection_health() -> dict:
+    """DB接続の健全性診断（発行者設定ページの管理者向け表示・移行確認用 2026-07-28）。
+
+    Returns: {"role": 接続キーのロール名（service_role / anon / opaque）,
+              "using_default_key": bool, "select_ok": bool, "error": str}
+    """
+    url, key = _get_supabase_config()
+    role = supabase_key_role(key) or ("opaque(sb_*)" if key.startswith("sb_") else "不明")
+    using_default = (key == _sanitize_key(_DEFAULT_SUPABASE_KEY))
+    out = {"role": role, "using_default_key": using_default, "select_ok": False, "error": ""}
+    try:
+        get_client().table("p1_events").select("id").limit(1).execute()
+        out["select_ok"] = True
+    except Exception as e:
+        out["error"] = str(e)[:200]
+    return out
 
 
 @st.cache_resource
@@ -877,6 +931,135 @@ def get_handout_summary(event_id, date) -> dict:
             if v in out[kind]:
                 out[kind][v] += 1
     return out
+
+
+# ============================================================
+# 当日運用コード（日替わりワンタイムコード 2026-07-28 追加）
+# ============================================================
+# 大会当日、TD・給与窓口が「当日運用ページ」（ピット端末・出退勤）に入るための
+# 時限コード。管理者が発行し、有効日の翌朝5時(JST)に自動失効する。
+# DBにはSHA-256ハッシュのみ保存（発行時に一度だけ平文表示）。
+# マイグレ docs/db_migrations/20260728_add_day_codes_and_totp.sql 必須。
+
+def _hash_day_code(code: str) -> str:
+    import hashlib
+    return hashlib.sha256(("p1daycode:" + (code or "").strip()).encode("utf-8")).hexdigest()
+
+
+def issue_day_code(valid_date: str, label: str = "", created_by: str = "") -> str:
+    """当日運用コードを発行して平文を返す（表示は発行時の一度きり）。
+
+    有効期限 = valid_date の翌日 05:00 JST。
+    """
+    import secrets as _secrets
+    from datetime import datetime as _dt, timedelta as _td
+    code = f"{_secrets.randbelow(100000000):08d}"  # 8桁（総当たり耐性・レビュー指摘対応）
+    d = _dt.strptime(valid_date, "%Y-%m-%d")
+    expires = (d + _td(days=1)).replace(hour=5, minute=0, second=0, tzinfo=_JST)
+    get_client().table("p1_day_codes").insert({
+        "code_hash": _hash_day_code(code),
+        "label": (label or "")[:60],
+        "valid_date": valid_date,
+        "expires_at": expires.isoformat(),
+        "active": 1,
+        "created_by": (created_by or "")[:40],
+    }).execute()
+    log_action("issue_day_code", "auth",
+               detail=f"{valid_date} 用の当日運用コードを発行（{label}）",
+               performed_by=created_by or "admin")
+    return code
+
+
+def verify_day_code(code: str):
+    """当日運用コードを照合。有効なら {valid_date, expires_at, label} を返し、無効なら None。"""
+    from datetime import datetime as _dt
+    try:
+        rows = get_client().table("p1_day_codes").select(
+            "id, code_hash, valid_date, expires_at, label, active"
+        ).eq("active", 1).eq("code_hash", _hash_day_code(code)).execute().data or []
+    except Exception:
+        return None
+    now = _dt.now(_JST)
+    for r in rows:
+        try:
+            exp = _dt.fromisoformat(str(r["expires_at"]).replace("Z", "+00:00"))
+            nbf = _dt.strptime(str(r["valid_date"]), "%Y-%m-%d").replace(tzinfo=_JST)
+        except Exception:
+            continue
+        # 有効日の00:00(JST)より前は使えない（未来日コードの先行使用防止・レビュー指摘対応）
+        if nbf <= now < exp:
+            return {"id": r["id"], "valid_date": r["valid_date"],
+                    "expires_at": r["expires_at"], "label": r.get("label") or ""}
+    return None
+
+
+def is_day_code_active(code_id) -> bool:
+    """当日コードが現在も有効（active=1）か。DB障害時は安全側でFalse（レビュー指摘対応）。"""
+    try:
+        rows = get_client().table("p1_day_codes").select("active").eq(
+            "id", code_id).execute().data or []
+        return bool(rows and rows[0].get("active"))
+    except Exception:
+        return False
+
+
+def list_day_codes(limit: int = 20) -> list:
+    """発行済みコードの一覧（ハッシュのみ・平文は返らない）。"""
+    try:
+        return get_client().table("p1_day_codes").select(
+            "id, label, valid_date, expires_at, active, created_by, created_at"
+        ).order("created_at", desc=True).limit(limit).execute().data or []
+    except Exception:
+        return []
+
+
+def revoke_day_code(code_id: int, performed_by: str = "") -> bool:
+    """コードを即時失効させる。"""
+    try:
+        get_client().table("p1_day_codes").update({"active": 0}).eq("id", code_id).execute()
+        log_action("revoke_day_code", "auth", code_id,
+                   detail="当日運用コードを失効", performed_by=performed_by or "admin")
+        return True
+    except Exception:
+        return False
+
+
+# ============================================================
+# TOTP 2要素認証（2026-07-28 追加）
+# ============================================================
+# 管理者ログインに Google Authenticator 等の30秒コードを追加する。
+# secret は p1_admin_totp に保存（アプリログインの防御が目的。
+# スマホ紛失時は Supabase ダッシュボードで該当行を削除すれば解除できる）。
+
+def get_totp(account: str):
+    """有効なTOTP設定を返す（無ければ None）。DB障害時も None（可用性優先・ログのみ）。"""
+    try:
+        rows = get_client().table("p1_admin_totp").select(
+            "account, secret, enabled"
+        ).eq("account", (account or "admin")[:40]).eq("enabled", 1).execute().data or []
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def set_totp(account: str, secret: str, enabled: bool, performed_by: str = "") -> bool:
+    """TOTP設定を保存（upsert）。"""
+    try:
+        client = get_client()
+        acc = (account or "admin")[:40]
+        existing = client.table("p1_admin_totp").select("id").eq("account", acc).execute().data
+        payload = {"account": acc, "secret": secret, "enabled": 1 if enabled else 0,
+                   "updated_at": _now()}
+        if existing:
+            client.table("p1_admin_totp").update(payload).eq("account", acc).execute()
+        else:
+            client.table("p1_admin_totp").insert(payload).execute()
+        log_action("set_totp", "auth",
+                   detail=f"account={acc} 2要素認証を{'有効化' if enabled else '無効化'}",
+                   performed_by=performed_by or acc)
+        return True
+    except Exception:
+        return False
 
 
 def reset_payment_to_pending(event_id, staff_id, reason="凍結再計算"):

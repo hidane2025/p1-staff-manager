@@ -20,7 +20,7 @@ from utils.page_layout import apply_global_style, page_header, flow_bar
 from utils.admin_guard import require_admin, admin_logout_button
 apply_global_style()
 hide_staff_only_pages()
-require_admin(page_name="出退勤管理")
+require_admin(page_name="出退勤管理", allow_day_code=True)
 admin_logout_button()
 
 page_header("🕐 出退勤管理", "シフト通り＝デフォルト。例外（欠勤・遅刻・延長・早退）だけ記録します。")
