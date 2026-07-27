@@ -1,0 +1,26 @@
+# Streamlit Community Cloud のスリープ対策（2026-07-28）
+# 無料ホスティングは一定期間アクセスがないとアプリを自動スリープさせるため、
+# 6時間ごとにトップページへHTTPアクセスして「訪問あり」の状態を維持する。
+# ※スリープ後の自動復帰はできない（復帰ボタンは人間の操作が必要）ので、
+#   「眠る前に触り続ける」方式。効果は運用で経過観察する。
+name: keep-alive
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"   # 6時間ごと（毎時17分にずらしてピーク回避）
+  workflow_dispatch: {}       # 手動実行も可能
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping app
+        run: |
+          set -e
+          URL="https://hidane2025-p1-staff-manager-app-fw8ggg.streamlit.app/"
+          CODE=$(curl -s -o /tmp/body.html -w "%{http_code}" -L --max-time 60 "$URL")
+          echo "HTTP $CODE"
+          if grep -q "スリープ状態" /tmp/body.html; then
+            echo "::warning::アプリがスリープ状態です（pingでは復帰できません。ブラウザで復旧ボタンを押してください）"
+          fi
+          test "$CODE" = "200"

@@ -94,7 +94,7 @@ st.markdown("""
 - F列以降: 日付ごとの時間（例: `13:00~23:00`）。 `×` は休み。
 """)
 
-uploaded = st.file_uploader("CSVまたはTSVファイル", type=["csv", "tsv", "txt"])
+uploaded = st.file_uploader("CSV / TSV / Excelファイル", type=["csv", "tsv", "txt", "xlsx"])
 
 # 年指定: イベント開始年を初期値に
 default_year = 2026
@@ -120,6 +120,11 @@ if uploaded:
         )
         st.stop()
     content = uploaded.read()
+    # 2026-07-28: Excel(xlsx)対応。CSVに変換してから既存パーサーへ渡す
+    if uploaded.name.lower().endswith(".xlsx"):
+        import io
+        _xdf = pd.read_excel(io.BytesIO(content), dtype=str).fillna("")
+        content = _xdf.to_csv(index=False).encode("utf-8")
     parsed = parse_shift_csv(content, year=year_input)
 
     st.success(

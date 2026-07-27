@@ -262,7 +262,7 @@ with import_tab1:
         "staff_template.csv",
         "text/csv",
     )
-    uploaded = st.file_uploader("CSVファイル", type=["csv", "tsv", "txt"], key="bulk_csv")
+    uploaded = st.file_uploader("CSV / Excelファイル", type=["csv", "tsv", "txt", "xlsx"], key="bulk_csv")
     if uploaded:
         # P2#8 (2026-05-04): アップロードサイズの上限チェック（5MB）
         MAX_UPLOAD_SIZE = 5 * 1024 * 1024
@@ -274,11 +274,15 @@ with import_tab1:
             )
             st.stop()
         import pandas as pd
-        content = uploaded.read()
-        text = content.decode("utf-8-sig", errors="replace")
-        sep = "\t" if "\t" in text.split("\n")[0] else ","
         import io
-        df = pd.read_csv(io.StringIO(text), sep=sep, dtype=str).fillna("")
+        content = uploaded.read()
+        # 2026-07-28: Excel(xlsx)対応。スプレッドシートからのDL物をそのまま投入できる
+        if uploaded.name.lower().endswith(".xlsx"):
+            df = pd.read_excel(io.BytesIO(content), dtype=str).fillna("")
+        else:
+            text = content.decode("utf-8-sig", errors="replace")
+            sep = "\t" if "\t" in text.split("\n")[0] else ","
+            df = pd.read_csv(io.StringIO(text), sep=sep, dtype=str).fillna("")
         st.markdown("**プレビュー:**")
         st.dataframe(df.head(10), use_container_width=True, hide_index=True)
         st.caption(f"合計 {len(df)} 行")
