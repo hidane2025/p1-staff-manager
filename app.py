@@ -17,6 +17,7 @@ st.set_page_config(
 
 import db  # noqa: E402
 from utils.ui_helpers import hide_staff_only_pages  # noqa: E402
+from utils.admin_guard import require_admin, admin_logout_button  # noqa: E402
 from utils.page_layout import (  # noqa: E402
     apply_global_style,
     page_header,
@@ -30,6 +31,10 @@ from utils.page_layout import (  # noqa: E402
 
 apply_global_style()
 hide_staff_only_pages()
+# 2026-07-28: 全ページログインゲート化の仕上げ。トップページも認証必須にする。
+# （領収書DL・契約書締結の2ページのみトークン持参型認証のため対象外）
+require_admin(page_name="ホーム", allow_day_code=True)
+admin_logout_button()
 
 
 # ============================================================
