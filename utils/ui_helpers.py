@@ -15,32 +15,22 @@ import streamlit as st
 # ==========================================================================
 _HIDE_STAFF_PAGES_CSS = """
 <style>
-/* Streamlit最新版のサイドバーリンクからスタッフ専用ページを隠す */
-a[data-testid="stSidebarNavLink"][href*="receipt_download"],
-a[data-testid="stSidebarNavLink"][href*="contract_sign"] {
-    display: none !important;
-}
-/* 親liごと隠す（:has()対応ブラウザ = 2023年以降のChrome/Safari/Firefox） */
-[data-testid="stSidebarNavItems"] > li:has(a[data-testid="stSidebarNavLink"][href*="receipt_download"]),
-[data-testid="stSidebarNavItems"] > li:has(a[data-testid="stSidebarNavLink"][href*="contract_sign"]) {
+/* 2026-07-28: ページファイル名を英字化（URLの日本語を排除）したことに伴い、
+   ファイル名由来の英字ラベルが出る標準ナビ全体を隠し、日本語ラベルを持つ
+   クイックナビ（page_layout.render_quick_nav）に一本化する。
+   スタッフ専用ページ（receipt_download / contract_sign）も併せて非表示になる。 */
+[data-testid="stSidebarNav"] {
     display: none !important;
 }
 </style>
 <script>
-/* :has()非対応ブラウザ用のJSフォールバック＋動的再描画対応 */
+/* CSSが効かない描画タイミング用のフォールバック（動的再描画にも追随） */
 (function(){
   const hide = () => {
-    document.querySelectorAll('a[data-testid="stSidebarNavLink"]').forEach(a => {
-      const h = a.getAttribute('href') || '';
-      if (h.includes('/receipt_download') || h.includes('/contract_sign')) {
-        const li = a.closest('li');
-        if (li) li.style.display = 'none';
-        a.style.display = 'none';
-      }
-    });
+    const nav = document.querySelector('[data-testid="stSidebarNav"]');
+    if (nav) nav.style.display = 'none';
   };
   hide();
-  // Streamlitの再レンダリングに追随
   const obs = new MutationObserver(hide);
   obs.observe(document.body, {childList: true, subtree: true});
 })();
@@ -49,7 +39,7 @@ a[data-testid="stSidebarNavLink"][href*="contract_sign"] {
 
 
 def hide_staff_only_pages() -> None:
-    """管理者用ページでsidebarから「receipt download」「contract sign」を隠す"""
+    """標準のページナビを隠す（日本語ラベルのクイックナビに一本化）"""
     st.markdown(_HIDE_STAFF_PAGES_CSS, unsafe_allow_html=True)
 
 

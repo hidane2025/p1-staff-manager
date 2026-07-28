@@ -1,0 +1,49 @@
+# P1 Staff Manager — Basic認証つきリバースプロキシ設定（2026-07-28）
+#
+# 目的:
+#   ①アプリ全体をBasic認証の内側に置き、URLを知られただけでは開けなくする
+#   ②ただしスタッフ本人が使う2つのトークンURL（領収書DL・契約書締結）だけは
+#     Basic認証を免除する（125名にIDとパスワードを配ることは現実的でないため。
+#     この2ページは推測不能トークン＋7日期限＋失効機能で保護されている）
+#
+# ${PORT} と ${STREAMLIT_PORT} は起動時に envsubst で実値へ置換される。
+
+server {
+    listen ${PORT};
+    server_name _;
+
+    # アップロード上限（スタッフ一括登録・シフト取込のExcel等）
+    client_max_body_size 16m;
+
+    # ------------------------------------------------------------
+    # スタッフ専用ページ（Basic認証 免除）
+    #   /receipt_download … 領収書のダウンロード
+    #   /contract_sign    … 業務委託契約の締結（クリック同意）
+    # ------------------------------------------------------------
+    location ~ ^/(receipt_download|contract_sign) {
+        auth_basic off;
+        proxy_pass http://127.0.0.1:${STREAMLIT_PORT};
+        include /etc/nginx/p1_proxy_params.conf;
+    }
+
+    # ------------------------------------------------------------
+    # Streamlit の内部通信（WebSocket・静的資産・ヘルスチェック）
+    #   ブラウザは初回アクセス時にBasic認証を通過済みなので、
+    #   以降のWebSocket確立にも同じ認証情報が自動で付く。
+    # ------------------------------------------------------------
+    location /_stcore/ {
+        auth_basic off;
+        proxy_pass http://127.0.0.1:${STREAMLIT_PORT};
+        include /etc/nginx/p1_proxy_params.conf;
+    }
+
+    # ------------------------------------------------------------
+    # それ以外すべて（管理画面）= Basic認証 必須
+    # ------------------------------------------------------------
+    location / {
+        auth_basic "P1 Staff Manager";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        proxy_pass http://127.0.0.1:${STREAMLIT_PORT};
+        include /etc/nginx/p1_proxy_params.conf;
+    }
+}

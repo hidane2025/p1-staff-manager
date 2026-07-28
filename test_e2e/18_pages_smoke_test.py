@@ -26,15 +26,15 @@ FAIL = "❌"
 
 PAGES_TO_TEST = [
     ("app.py", "ホーム"),
-    ("pages/0_イベント設定.py", "イベント設定（新規）"),
-    ("pages/2_シフト取込.py", "シフト取込（改修済）"),
-    ("pages/1_スタッフ管理.py", "スタッフ管理（既存）"),
-    ("pages/3_支払い計算.py", "支払い計算（既存）"),
-    ("pages/4_封筒リスト.py", "封筒リスト（既存）"),
-    ("pages/7_年間累計.py", "年間累計（既存）"),
-    ("pages/8_交通費.py", "交通費（既存）"),
-    ("pages/10_ピット端末.py", "ピット端末（v3.8 新規）"),
-    ("pages/11_個別手当.py", "個別手当管理（v3.9 新規）"),
+    ("pages/0_event_setup.py", "イベント設定（新規）"),
+    ("pages/2_shift_import.py", "シフト取込（改修済）"),
+    ("pages/1_staff.py", "スタッフ管理（既存）"),
+    ("pages/3_payment.py", "支払い計算（既存）"),
+    ("pages/4_envelope.py", "封筒リスト（既存）"),
+    ("pages/7_yearly.py", "年間累計（既存）"),
+    ("pages/8_transport.py", "交通費（既存）"),
+    ("pages/10_pit_terminal.py", "ピット端末（v3.8 新規）"),
+    ("pages/11_allowances.py", "個別手当管理（v3.9 新規）"),
 ]
 
 

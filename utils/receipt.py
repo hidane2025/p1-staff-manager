@@ -10,7 +10,7 @@
         発行者（右下）   = real_name / address / email （ディーラー本人）
 
     主要パスは utils/receipt_v2.py を推奨。本モジュールは
-    pages/3_支払い計算.py のスタッフ毎クイックDL用に残置。
+    pages/3_payment.py のスタッフ毎クイックDL用に残置。
 """
 
 from io import BytesIO

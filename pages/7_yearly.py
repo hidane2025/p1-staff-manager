@@ -145,7 +145,7 @@ if target_staff:
             if not t.get("real_name") or not t.get("address"):
                 col_err, col_link = st.columns([3, 1])
                 col_err.error("❌ 本名または住所が未登録です（法定調書作成に必要）")
-                col_link.page_link("pages/1_スタッフ管理.py", label="▶ スタッフ管理へ", icon="📋")
+                col_link.page_link("pages/1_staff.py", label="▶ スタッフ管理へ", icon="📋")
 else:
     st.success("¥500,000超のスタッフはいません。")
 

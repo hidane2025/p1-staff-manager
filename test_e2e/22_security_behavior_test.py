@@ -179,12 +179,22 @@ _check(f"require_admin() を使うページが7つ以上",
        len(applied) >= 7,
        f"got {len(applied)}: {applied}")
 
-# 必須ページ（PII濃度高）
-must_have = ["1_スタッフ管理", "6_精算レポート", "7_年間累計",
-             "91_領収書発行", "94_契約書発行", "92_発行者設定", "93_契約書テンプレ"]
-for stem in must_have:
-    found = any(stem in name for name in applied)
-    _check(f"{stem} に require_admin 適用済み", found)
+# 2026-07-28: ページ名の英字化に伴い「特定ファイル名の列挙」をやめ、
+# 「トークンURL型の2ページ以外は全部ゲート必須」という不変条件で検査する。
+# 列挙方式はページ追加・改名のたびに検査漏れを生む（実際に改名で空振りした）。
+TOKEN_PAGES = {"9_receipt_download.py", "99_contract_sign.py"}
+ungated = sorted(
+    p.name for p in pages_dir.glob("*.py")
+    if p.name not in TOKEN_PAGES and p.name not in applied
+)
+_check("トークンURL型の2ページ以外は全て require_admin 適用済み",
+       not ungated,
+       f"未ゲート: {ungated}")
+
+# 逆方向: スタッフ本人が開く2ページに管理者ゲートを付けてしまっていないか
+for name in sorted(TOKEN_PAGES):
+    _check(f"{name} は管理者ゲート無し（スタッフ本人が開くため）",
+           name not in applied)
 
 
 # ============================================================

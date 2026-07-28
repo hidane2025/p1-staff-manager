@@ -95,7 +95,7 @@ _check("補助ツール（折りたたみ）あり",
 # 2. 0_イベント設定（ウィザード）
 # ============================================================
 print("\n[2] 0_イベント設定")
-at = AppTest.from_file(str(ROOT / "pages/0_イベント設定.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/0_event_setup.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル 'イベント設定'", _has(at, "イベント設定"))
 _check("フローバー active=setup",
@@ -106,10 +106,10 @@ _check(f"3タブ構成（JSON投入/プリセット/既存編集） tabs={tab_co
 
 
 # ============================================================
-# 3. 1_スタッフ管理
+# 3. 1_staff
 # ============================================================
-print("\n[3] 1_スタッフ管理")
-at = AppTest.from_file(str(ROOT / "pages/1_スタッフ管理.py"), default_timeout=30).run()
+print("\n[3] 1_staff")
+at = AppTest.from_file(str(ROOT / "pages/1_staff.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル 'スタッフ管理'", _has(at, "スタッフ管理"))
 _check("フローバー active=input",
@@ -125,7 +125,7 @@ _check(f"取込 4タブ構成 tabs={tab_count}",
 # 4. 2_シフト取込
 # ============================================================
 print("\n[4] 2_シフト取込")
-at = AppTest.from_file(str(ROOT / "pages/2_シフト取込.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/2_shift_import.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル 'シフト取込'", _has(at, "シフト取込"))
 _check("フローバー active=input/done=setup",
@@ -136,7 +136,7 @@ _check("フローバー active=input/done=setup",
 # 5. 3_支払い計算
 # ============================================================
 print("\n[5] 3_支払い計算")
-at = AppTest.from_file(str(ROOT / "pages/3_支払い計算.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/3_payment.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '支払い計算'", _has(at, "支払い計算"))
 _check("フローバー active=calc",
@@ -147,7 +147,7 @@ _check("フローバー active=calc",
 # 6. 4_封筒リスト
 # ============================================================
 print("\n[6] 4_封筒リスト")
-at = AppTest.from_file(str(ROOT / "pages/4_封筒リスト.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/4_envelope.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '封筒リスト'", _has(at, "封筒リスト"))
 
@@ -185,7 +185,7 @@ try:
 except Exception:
     _att_event = None
 
-at = AppTest.from_file(str(ROOT / "pages/5_出退勤.py"), default_timeout=30)
+at = AppTest.from_file(str(ROOT / "pages/5_attendance.py"), default_timeout=30)
 if _att_event is not None:
     # select_event は session_state["selected_event_id"] を読む（utils/event_selector.py）
     at.session_state["selected_event_id"] = _att_event
@@ -217,7 +217,7 @@ else:
 # 8. 6_精算レポート（管理者ガード対象）
 # ============================================================
 print("\n[8] 6_精算レポート")
-at = AppTest.from_file(str(ROOT / "pages/6_精算レポート.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/6_report.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '精算レポート'", _has(at, "精算レポート"))
 # ADMIN_PASSWORD未設定なら警告表示・通り抜ける（フォールバック挙動）
@@ -229,7 +229,7 @@ _check("ADMIN_PASSWORD未設定時は警告が出る（フォールバック動�
 # 9. 7_年間累計（管理者ガード対象）
 # ============================================================
 print("\n[9] 7_年間累計")
-at = AppTest.from_file(str(ROOT / "pages/7_年間累計.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/7_yearly.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '年間累計'", _has(at, "年間累計"))
 
@@ -238,7 +238,7 @@ _check("タイトル '年間累計'", _has(at, "年間累計"))
 # 10. 8_交通費
 # ============================================================
 print("\n[10] 8_交通費")
-at = AppTest.from_file(str(ROOT / "pages/8_交通費.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/8_transport.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '交通費'", _has(at, "交通費"))
 
@@ -247,7 +247,7 @@ _check("タイトル '交通費'", _has(at, "交通費"))
 # 11. 91_領収書発行（管理者ガード対象）
 # ============================================================
 print("\n[11] 91_領収書発行")
-at = AppTest.from_file(str(ROOT / "pages/91_領収書発行.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/91_receipt_issue.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '領収書発行'", _has(at, "領収書発行"))
 
@@ -256,7 +256,7 @@ _check("タイトル '領収書発行'", _has(at, "領収書発行"))
 # 12. 92_発行者設定（管理者ガード対象）
 # ============================================================
 print("\n[12] 92_発行者設定")
-at = AppTest.from_file(str(ROOT / "pages/92_発行者設定.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/92_issuer_settings.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '発行者設定'", _has(at, "発行者設定"))
 
@@ -265,7 +265,7 @@ _check("タイトル '発行者設定'", _has(at, "発行者設定"))
 # 13. 93_契約書テンプレ（管理者ガード対象）
 # ============================================================
 print("\n[13] 93_契約書テンプレ")
-at = AppTest.from_file(str(ROOT / "pages/93_契約書テンプレ.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/93_contract_template.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '契約書テンプレート'", _has(at, "契約書テンプレート"))
 
@@ -274,7 +274,7 @@ _check("タイトル '契約書テンプレート'", _has(at, "契約書テン�
 # 14. 94_契約書発行（管理者ガード対象）
 # ============================================================
 print("\n[14] 94_契約書発行")
-at = AppTest.from_file(str(ROOT / "pages/94_契約書発行.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/94_contract_issue.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '契約書発行・管理'", _has(at, "契約書発行"))
 
@@ -283,14 +283,14 @@ _check("タイトル '契約書発行・管理'", _has(at, "契約書発行"))
 # 14.5. 10_ピット端末（v3.8 新規・管理者ガード対象）
 # ============================================================
 print("\n[14.5] 10_ピット端末（v3.8 NEW）")
-at = AppTest.from_file(str(ROOT / "pages/10_ピット端末.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/10_pit_terminal.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル 'ピット端末'", _has(at, "ピット端末"))
 _check("ADMIN_PASSWORD未設定でも警告で通過（フォールバック）",
        _has(at, "ADMIN_PASSWORD") or _has(at, "管理者認証") or _has(at, "退勤打刻"))
 # Codex 4回目 P2 #9 (2026-05-09): 深夜跨ぎ対応のシフト日付セレクタが追加されているか
 # Note: スタッフ未選択状態ではセレクタが表示されないので、ファイル内容で検証
-_pit_src = (ROOT / "pages/10_ピット端末.py").read_text()
+_pit_src = (ROOT / "pages/10_pit_terminal.py").read_text()
 _check("深夜跨ぎ対応の日付セレクタが追加されている",
        "シフト日付（深夜跨ぎ時はここで前日を選択）" in _pit_src)
 _check("交通費の日数倍計算が追加されている",
@@ -306,7 +306,7 @@ _check("前日かつ深夜跨ぎシフトのみ優先（_is_overnight_shift関�
 # 14.6. 11_個別手当（v3.9 新規・管理者ガード対象）
 # ============================================================
 print("\n[14.6] 11_個別手当（v3.9 NEW）")
-at = AppTest.from_file(str(ROOT / "pages/11_個別手当.py"), default_timeout=30).run()
+at = AppTest.from_file(str(ROOT / "pages/11_allowances.py"), default_timeout=30).run()
 _check("例外なし起動", not at.exception)
 _check("タイトル '個別手当'", _has(at, "個別手当"))
 # マイグレ未実行ならエラー表示・実行済みなら手当一覧UIが出る
@@ -335,7 +335,7 @@ _check("タイトル '電子署名'", _has(at, "署名"))
 print("\n[16] 管理者ガード: ADMIN_PASSWORD設定時はゲート表示")
 os.environ["ADMIN_PASSWORD"] = "testpw_for_unit_test_only"
 try:
-    at = AppTest.from_file(str(ROOT / "pages/7_年間累計.py"), default_timeout=30).run()
+    at = AppTest.from_file(str(ROOT / "pages/7_yearly.py"), default_timeout=30).run()
     _check("例外なし起動 (PWあり)", not at.exception)
     _check("管理者認証画面が出る",
            _has(at, "管理者認証") or _has(at, "管理者パスワード"))

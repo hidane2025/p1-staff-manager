@@ -9,7 +9,7 @@ is_off_record=1 の手当は、ピット端末では金額・件数が伏せら�
 給与支給時の管理画面（このページ）でのみ詳細が見える。
 
 【支払い計算との連動】
-支払い計算（pages/3_支払い計算.py）と ピット端末（pages/10_ピット端末.py）が、
+支払い計算（pages/3_payment.py）と ピット端末（pages/10_pit_terminal.py）が、
 calculate_staff_payment() の individual_allowances 引数に
 本テーブルから取得した手当リストを渡して合算する。
 """

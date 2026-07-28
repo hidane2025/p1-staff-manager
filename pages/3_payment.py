@@ -688,7 +688,7 @@ if staff_opts:
                 missing.append("住所")
             col_warn, col_link = st.columns([3, 1])
             col_warn.warning(f"⚠️ {' と '.join(missing)}が未登録のため領収書PDFを発行できません")
-            col_link.page_link("pages/1_スタッフ管理.py", label="▶ スタッフ管理へ", icon="📋")
+            col_link.page_link("pages/1_staff.py", label="▶ スタッフ管理へ", icon="📋")
 
     # --- 備考欄 ---
     st.divider()

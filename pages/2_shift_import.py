@@ -1,7 +1,7 @@
 """P1 Staff Manager — シフト取込ページ
 
 役割: 完成済みイベント（基本情報・レート設定済み）に対してシフトCSVを流し込む。
-イベント本体の作成・編集は pages/0_イベント設定.py に集約。
+イベント本体の作成・編集は pages/0_event_setup.py に集約。
 """
 
 import streamlit as st
@@ -38,7 +38,7 @@ if not events:
         "⚠️ イベントがまだありません。先に **「📋 イベント設定」** ページで "
         "イベントを作成してください。"
     )
-    st.page_link("pages/0_イベント設定.py", label="📋 イベント設定を開く", icon="📋")
+    st.page_link("pages/0_event_setup.py", label="📋 イベント設定を開く", icon="📋")
     st.stop()
 
 event_id = select_event(events, "対象イベント")
@@ -74,7 +74,7 @@ else:
         "（時給¥1,500 / 深夜¥1,875）で自動補完されます。"
         "プリセットを適用するには『📋 イベント設定』を使ってください。"
     )
-    st.page_link("pages/0_イベント設定.py", label="📋 レート設定はこちら", icon="📋")
+    st.page_link("pages/0_event_setup.py", label="📋 レート設定はこちら", icon="📋")
 
 
 # ============================================================

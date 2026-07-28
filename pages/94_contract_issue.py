@@ -31,7 +31,7 @@ db.log_action("view_contracts_admin", "contracts",
 templates = contract_db.list_templates(active_only=True)
 if not templates:
     st.warning("有効なテンプレートがありません。「契約書テンプレート」ページで作成してください。")
-    st.page_link("pages/93_契約書テンプレ.py", label="テンプレート管理へ →",
+    st.page_link("pages/93_contract_template.py", label="テンプレート管理へ →",
                  icon="📝")
     st.stop()
 

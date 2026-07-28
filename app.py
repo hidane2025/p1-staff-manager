@@ -186,7 +186,7 @@ if ev:
                 status['rates_count'] > 0,
                 False,
             ),
-            "page": "pages/0_イベント設定.py",
+            "page": "pages/0_event_setup.py",
             "page_label": "📋 イベント設定を開く",
         },
         {
@@ -197,7 +197,7 @@ if ev:
                 status['staff_count'] >= 5,
                 0 < status['staff_count'] < 5,
             ),
-            "page": "pages/1_スタッフ管理.py",
+            "page": "pages/1_staff.py",
             "page_label": "👥 スタッフ管理を開く",
         },
         {
@@ -208,7 +208,7 @@ if ev:
                 status['shift_count'] >= 10,
                 0 < status['shift_count'] < 10,
             ),
-            "page": "pages/2_シフト取込.py",
+            "page": "pages/2_shift_import.py",
             "page_label": "📅 シフト取込を開く",
         },
         {
@@ -221,7 +221,7 @@ if ev:
                 status['shift_count'] > 0 and status['exception_unconfirmed'] == 0,
                 status['exception_unconfirmed'] > 0,
             ),
-            "page": "pages/5_出退勤.py",
+            "page": "pages/5_attendance.py",
             "page_label": "🕐 出退勤を開く",
         },
         {
@@ -245,7 +245,7 @@ if ev:
                 or (status['expected_paid_staff'] > 0
                     and status['payment_count'] < status['expected_paid_staff']),
             ),
-            "page": "pages/3_支払い計算.py",
+            "page": "pages/3_payment.py",
             "page_label": "💰 支払い計算を開く",
         },
         {
@@ -259,7 +259,7 @@ if ev:
                 status['approved_count'] > 0 and status['receipt_pending'] == 0,
                 status['receipt_pending'] > 0,
             ),
-            "page": "pages/91_領収書発行.py",
+            "page": "pages/91_receipt_issue.py",
             "page_label": "📄 領収書発行を開く",
         },
         {
@@ -279,7 +279,7 @@ if ev:
                 0 < status['paid_count'] < (status['expected_paid_staff']
                                             or status['payment_count']),
             ),
-            "page": "pages/6_精算レポート.py",
+            "page": "pages/6_report.py",
             "page_label": "📊 精算レポートを開く",
         },
     ]
@@ -339,7 +339,7 @@ with c1a:
         "📋",
         "イベント設定",
         "新しい大会の『型』を1画面で組み立てる入口。JSONテンプレ／プリセット／手動編集に対応。",
-        "pages/0_イベント設定.py",
+        "pages/0_event_setup.py",
     )
 
 # --- ② 入れる ---
@@ -351,7 +351,7 @@ with c2a:
         "👥",
         "スタッフ管理",
         "ディーラー・フロア・TD等のスタッフを登録。CSV/フォーム連携で一括取込も可能。",
-        "pages/1_スタッフ管理.py",
+        "pages/1_staff.py",
     )
 with c2b:
     action_card(
@@ -359,7 +359,7 @@ with c2b:
         "📅",
         "シフト取込",
         "Googleスプレッドシートからシフト表を取り込み、自動で日別レートを補完。",
-        "pages/2_シフト取込.py",
+        "pages/2_shift_import.py",
     )
 
 # --- ③ 計算 ---
@@ -371,7 +371,7 @@ with c3a:
         "🎰",
         "ピット端末",
         "退勤打刻と支払い計算を1画面で。NO. を入れて時刻確定するだけで、給与窓口は確認のみに。",
-        "pages/10_ピット端末.py",
+        "pages/10_pit_terminal.py",
     )
 with c3b:
     action_card(
@@ -379,7 +379,7 @@ with c3b:
         "💰",
         "支払い計算",
         "時給×時間＋深夜＋手当＋精勤を自動計算。個別時給・タイミーにも対応。",
-        "pages/3_支払い計算.py",
+        "pages/3_payment.py",
     )
 with c3c:
     action_card(
@@ -387,7 +387,7 @@ with c3c:
         "✉️",
         "封筒リスト",
         "封筒ラベルと紙幣内訳（1万円札・5千円札・千円札）を一括出力。",
-        "pages/4_封筒リスト.py",
+        "pages/4_envelope.py",
     )
 
 # --- ④ 渡す ---
@@ -399,7 +399,7 @@ with c4a:
         "🎁",
         "個別手当",
         "言語手当・人材確保手当・リーダー手当 等を個別付与。オフレコ対応で給与窓口側のみ閲覧可。",
-        "pages/11_個別手当.py",
+        "pages/11_allowances.py",
     )
 with c4b:
     action_card(
@@ -407,7 +407,7 @@ with c4b:
         "📄",
         "領収書発行",
         "承認済み支払いを一括PDF化＋スタッフ向けDL用URLを発行。",
-        "pages/91_領収書発行.py",
+        "pages/91_receipt_issue.py",
     )
 with c4c:
     action_card(
@@ -415,7 +415,7 @@ with c4c:
         "✍️",
         "契約書発行",
         "業務委託契約・NDAをスタッフへ一括送付＋クラウド署名状況を追跡。",
-        "pages/94_契約書発行.py",
+        "pages/94_contract_issue.py",
     )
 
 
@@ -431,21 +431,21 @@ with st.expander("🛠 開く", expanded=False):
             "EVENT", "🕐",
             "出退勤",
             "チェックイン／アウトの打刻、凍結退勤、欠勤マーク。",
-            "pages/5_出退勤.py",
+            "pages/5_attendance.py",
         )
     with sup2:
         action_card(
             "REPORT", "📊",
             "精算レポート",
             "現金照合・小口現金・精算明細CSV出力。",
-            "pages/6_精算レポート.py",
+            "pages/6_report.py",
         )
     with sup3:
         action_card(
             "REPORT", "📆",
             "年間累計",
             "確定申告／法定調書対象者の年間累計。",
-            "pages/7_年間累計.py",
+            "pages/7_yearly.py",
         )
 
     sup4, sup5, sup6 = st.columns(3)
@@ -454,21 +454,21 @@ with st.expander("🛠 開く", expanded=False):
             "SETUP", "🚃",
             "交通費",
             "地域別交通費ルール・領収書入力・事前見積り。",
-            "pages/8_交通費.py",
+            "pages/8_transport.py",
         )
     with sup5:
         action_card(
             "SETUP", "🏢",
             "発行者設定",
             "Pacific 情報・インボイス番号・領収書用設定。",
-            "pages/92_発行者設定.py",
+            "pages/92_issuer_settings.py",
         )
     with sup6:
         action_card(
             "SETUP", "📝",
             "契約書テンプレ",
             "業務委託契約・NDA テンプレートの編集。",
-            "pages/93_契約書テンプレ.py",
+            "pages/93_contract_template.py",
         )
 
 
