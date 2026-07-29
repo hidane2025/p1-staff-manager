@@ -46,8 +46,11 @@ _start_streamlit() {  # $1=script $2=port $3=baseUrlPath(空可) $4=showErrorDet
   extra+=(--client.showErrorDetails="${4:-full}")
   # 2026-07-29: Streamlitは非特権ユーザーで実行する（rootで動かさない）。
   # Basic認証の資格情報はnginxが使うものでアプリには不要なので、環境から除いて渡す。
+  # HOME を p1app 用に差し替える。setpriv はユーザーを変えても HOME を変えないため、
+  # 未指定だと Streamlit が /root/.streamlit/secrets.toml を読もうとして
+  # Permission denied で起動できない（2026-07-29 本番で発生）。
   setpriv --reuid=p1app --regid=p1app --init-groups --inh-caps=-all \
-    env -u BASIC_AUTH_USER -u BASIC_AUTH_PASSWORD \
+    env HOME=/home/p1app -u BASIC_AUTH_USER -u BASIC_AUTH_PASSWORD \
     streamlit run "$1" \
     --server.port="$2" \
     --server.address=127.0.0.1 \
@@ -126,7 +129,7 @@ _expect "スタッフ死活 認証なし"      "$(_probe "http://127.0.0.1:${POR
 # ⑥データベースに実際に到達できるか（ヘルスチェックは画面の応答しか見ないため、
 #   DBが落ちていても「正常」と判定されてしまう。ここで実接続を確認する）
 if setpriv --reuid=p1app --regid=p1app --init-groups --inh-caps=-all \
-     python -c "
+     env HOME=/home/p1app python -c "
 import sys
 sys.path.insert(0, '/app')
 import db

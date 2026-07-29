@@ -27,8 +27,11 @@ COPY . .
 # コンテナ内で行える操作を最小化する。
 # nginxの起動と認証ファイル生成には特権が要るため、entrypointはrootで開始し、
 # Streamlitの2プロセスだけを非特権ユーザー(p1app)へ降格させる。
-RUN useradd --system --create-home --shell /usr/sbin/nologin p1app \
+RUN useradd --system --create-home --home-dir /home/p1app --shell /usr/sbin/nologin p1app \
     && chown -R p1app:p1app /app \
+    # Streamlitが参照する設定ディレクトリを非特権ユーザーのHOME側に用意する
+    && mkdir -p /home/p1app/.streamlit \
+    && chown -R p1app:p1app /home/p1app \
     # nginxがワーカーを起動する際に必要なディレクトリ
     && mkdir -p /var/cache/nginx /var/lib/nginx \
     && chown -R www-data:www-data /var/cache/nginx /var/lib/nginx
