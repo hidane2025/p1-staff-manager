@@ -58,23 +58,32 @@ def _alert_recipient() -> str:
     return ""
 
 
-def _should_send(key: str) -> bool:
-    """重複抑制とレート制限。送ってよければ True。"""
+def _may_send(key: str) -> bool:
+    """重複抑制とレート制限の判定のみを行う（記録はしない）。
+
+    2026-07-29 修正: 以前は判定と同時に「送信済み」として記録していたため、
+    SMTPが落ちて送信に失敗しても30分間は再送されなかった（＝障害時に
+    通知が1通も届かない）。記録は送信成功後に行うよう分離した。
+    """
     now = time.time()
     with _lock:
-        # 時間窓を過ぎた記録を掃除
         for k, t in list(_recent.items()):
             if now - t > _DEDUPE_WINDOW_SEC:
                 _recent.pop(k, None)
         _sent_times[:] = [t for t in _sent_times if now - t < 3600]
-
         if key in _recent:
             return False
         if len(_sent_times) >= _MAX_ALERTS_PER_HOUR:
             return False
+        return True
+
+
+def _record_sent(key: str) -> None:
+    """送信に成功したものだけを記録する。"""
+    now = time.time()
+    with _lock:
         _recent[key] = now
         _sent_times.append(now)
-        return True
 
 
 def alert(subject: str, body: str, *, dedupe_key: Optional[str] = None) -> bool:
@@ -84,7 +93,7 @@ def alert(subject: str, body: str, *, dedupe_key: Optional[str] = None) -> bool:
         実際に送信したら True。抑制・未設定・失敗なら False。
     """
     key = dedupe_key or hashlib.sha256(f"{subject}\n{body}".encode()).hexdigest()[:16]
-    if not _should_send(key):
+    if not _may_send(key):
         return False
 
     to_addr = _alert_recipient()
@@ -98,7 +107,9 @@ def alert(subject: str, body: str, *, dedupe_key: Optional[str] = None) -> bool:
             _logger.warning("[監視] メール未設定のため送信しません: %s", subject)
             return False
         ok, msg = mailer.send_mail(to_addr, f"[P1経理ツール警報] {subject}", body)
-        if not ok:
+        if ok:
+            _record_sent(key)   # 成功したものだけ抑制対象にする（失敗は次回再送される）
+        else:
             _logger.error("[監視] 通知の送信に失敗: %s", msg)
         return bool(ok)
     except Exception:
@@ -123,15 +134,24 @@ class _ExceptionAlertHandler(logging.Handler):
                 exc_text = "".join(traceback.format_exception(*record.exc_info))
             message = record.getMessage()
 
-            # 例外種別＋発生位置で重複判定（同じ不具合の連打を1通にまとめる）
+            # 2026-07-29: 例外メッセージ自体に氏名・住所・金額が入りうる
+            # （例: ValueError("氏名=山田太郎 ...")）。メール本文には型名だけを載せる。
+            _exc_type = record.exc_info[0].__name__ if record.exc_info and record.exc_info[0] else "UnknownError"
             head = exc_text.strip().splitlines()[-1] if exc_text else message
             key = hashlib.sha256(f"{record.name}|{head}".encode()).hexdigest()[:16]
 
+            # 2026-07-29: トレースバックには変数の中身（氏名・住所・金額等）が
+            # 混ざりうる。メールは社外のメールサーバを経由するため、
+            # 発生位置の特定に必要な行だけを送り、本文はマスクする。
+            _frames = [l for l in exc_text.splitlines() if l.strip().startswith("File ")]
+            _where = "\n".join(_frames[-5:]) if _frames else "(位置不明)"
             body = (
                 "アプリ内で例外が発生しました。\n\n"
-                f"■ 発生元: {record.name}\n"
-                f"■ 内容: {message}\n\n"
-                f"■ トレースバック\n{exc_text or '(なし)'}\n\n"
+                f"■ 発生元: {record.name}\n"  # ロガー名のみ（メッセージ本文は載せない）
+                f"■ 種別: {_exc_type}\n\n"
+                f"■ 発生位置（直近5フレーム）\n{_where}\n\n"
+                "※個人情報が混入しないよう、詳細は本文に含めていません。\n"
+                "　詳細はホスティングのログを確認してください。\n"
                 "※同じ内容の通知は30分間まとめられます。\n"
             )
             alert("アプリ例外", body, dedupe_key=key)

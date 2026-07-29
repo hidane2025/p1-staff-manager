@@ -239,6 +239,63 @@ _check("file_name に非ASCII文字が含まれていない", not _bad, f"該当
 
 
 # ============================================================
+# 10. 2026-07-29 の是正が巻き戻っていないか（Codex独立レビュー対応）
+# ============================================================
+print("\n[10] データ消失・fail-open の再発防止")
+_db_src = (ROOT / "db.py").read_text()
+_guard_src = (ROOT / "utils/admin_guard.py").read_text()
+_mon_src = (ROOT / "utils/monitoring.py").read_text()
+_url_src = (ROOT / "utils/url_helper.py").read_text()
+
+# 支払い保存が「削除→挿入」に戻っていないか（削除に成功して挿入で失敗するとデータが消える）
+_save_block = _db_src[_db_src.index("def save_payment("):_db_src.index("def set_payment_adjustment(")]
+_check("save_payment が支払いレコードを delete しない",
+       'p1_payments").delete()' not in _save_block,
+       "delete→insert はデータ消失経路")
+_check("save_payment の更新に支払済みガードがある",
+       'neq("status", "paid")' in _save_block)
+
+# 未承認へ戻す処理の競合ガード
+_reset_block = _db_src[_db_src.index("def reset_payment_to_pending("):_db_src.index("def mark_absent(")]
+_check("reset_payment_to_pending の更新に支払済みガードがある",
+       'neq("status", "paid")' in _reset_block)
+
+# 日別単価が消える経路
+_rate_block = _db_src[_db_src.index("def set_event_rate("):]
+_rate_block = _rate_block[:_rate_block.index("def ", 10)]
+_check("set_event_rate が delete を使わない", '.delete()' not in _rate_block)
+
+# TOTPのfail-open
+_check("TOTP照会失敗を未設定と区別する例外がある", "class TotpLookupError" in _db_src)
+_check("照会失敗時にログインを止める", "TotpLookupError" in _guard_src and "st.stop()" in _guard_src)
+
+# 監視: 送信成功後に抑制記録する（失敗しても再送できる）
+_check("監視は送信成功後に重複記録する", "_record_sent(key)" in _mon_src)
+_check("通知本文に例外メッセージを載せない", "_exc_type" in _mon_src)
+
+# URL生成: 旧環境へのフォールバックを持たない
+_check("旧Streamlit URLへのフォールバックが無い",
+       "streamlit.app" not in _url_src)
+_check("トークンをURLエンコードしている", "_quote(" in _url_src)
+
+# セッション期限
+_check("管理セッションに有効期限がある",
+       "_SESSION_ABSOLUTE_HOURS" in _guard_src and "_SESSION_IDLE_MINUTES" in _guard_src)
+
+# コンテナ権限・レート制限
+_dockerfile = (ROOT / "Dockerfile").read_text()
+_nginx = (ROOT / "deploy/nginx.conf.template").read_text()
+_entry = (ROOT / "deploy/entrypoint.sh").read_text()
+_check("非特権ユーザーを作成している", "useradd" in _dockerfile)
+_check("Streamlitを非特権で起動している", "setpriv" in _entry)
+_check("Basic認証情報をアプリに渡していない", "-u BASIC_AUTH_PASSWORD" in _entry)
+_check("IP単位のレート制限がある", "limit_req_zone" in _nginx and "limit_req zone=" in _nginx)
+_check("同時接続数の制限がある", "limit_conn" in _nginx)
+_check("起動時にDB到達性を検査する", "connection_health" in _entry)
+_check("障害対応手順書が存在する", (ROOT / "deploy/RUNBOOK.md").exists())
+
+
+# ============================================================
 # 結果集計
 # ============================================================
 print()

@@ -12,11 +12,14 @@
 from __future__ import annotations
 
 import os as _os
+from urllib.parse import quote as _quote
 
 import streamlit as st
 
 
-FALLBACK_HOST = "https://hidane2025-p1-staff-manager-app-fw8ggg.streamlit.app"
+# 2026-07-29: 旧Streamlit環境のURLへのフォールバックを廃止。
+# 誤ったドメインのリンクをスタッフに配るより、明示的に失敗させる方が安全。
+FALLBACK_HOST = ""
 
 
 def get_base_host() -> str:
@@ -36,6 +39,9 @@ def get_base_host() -> str:
             return _v.rstrip("/")
 
     # 2) Streamlitのリクエストヘッダから
+    #    ※Hostは利用者側が偽装しうるため、本番では上の APP_BASE_URL を設定して
+    #      この経路に頼らないこと（偽装したHostでトークン付きURLを生成されると
+    #      攻撃者のドメインへ誘導するリンクを作られる）。
     try:
         headers = st.context.headers  # Streamlit 1.36+
         host = (headers.get("Host")
@@ -48,13 +54,16 @@ def get_base_host() -> str:
     except Exception:
         pass
 
-    # 3) fallback
-    return FALLBACK_HOST
+    # 3) いずれも取得できない場合は、誤ったリンクを配らないよう明示的に失敗させる
+    raise RuntimeError(
+        "配布URLの生成元（APP_BASE_URL）が設定されていません。"
+        "ホスティングの環境変数に公開URLを設定してください。"
+    )
 
 
 def receipt_download_url(token: str) -> str:
-    return f"{get_base_host()}/staff/receipt_download?token={token}"
+    return f"{get_base_host()}/staff/receipt_download?token={_quote(str(token), safe='')}"
 
 
 def contract_sign_url(token: str) -> str:
-    return f"{get_base_host()}/staff/contract_sign?token={token}"
+    return f"{get_base_host()}/staff/contract_sign?token={_quote(str(token), safe='')}"

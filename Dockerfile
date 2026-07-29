@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1 \
     STREAMLIT_PORT=8501
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        nginx apache2-utils gettext-base curl \
+        nginx apache2-utils gettext-base curl util-linux \
     && rm -rf /var/lib/apt/lists/* \
     # Debianのnginxが同梱する既定サイト（認証なしでlisten 80）を消す
     && rm -f /etc/nginx/sites-enabled/default \
@@ -22,6 +22,16 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY . .
+
+# 2026-07-29: rootで動かさない。公開側プロセスに万一の脆弱性が出ても、
+# コンテナ内で行える操作を最小化する。
+# nginxの起動と認証ファイル生成には特権が要るため、entrypointはrootで開始し、
+# Streamlitの2プロセスだけを非特権ユーザー(p1app)へ降格させる。
+RUN useradd --system --create-home --shell /usr/sbin/nologin p1app \
+    && chown -R p1app:p1app /app \
+    # nginxがワーカーを起動する際に必要なディレクトリ
+    && mkdir -p /var/cache/nginx /var/lib/nginx \
+    && chown -R www-data:www-data /var/cache/nginx /var/lib/nginx
 
 EXPOSE 8080
 CMD ["/app/deploy/entrypoint.sh"]

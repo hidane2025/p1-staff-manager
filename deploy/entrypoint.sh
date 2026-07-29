@@ -44,7 +44,11 @@ _start_streamlit() {  # $1=script $2=port $3=baseUrlPath(空可) $4=showErrorDet
   local extra=()
   [[ -n "${3:-}" ]] && extra+=(--server.baseUrlPath="$3")
   extra+=(--client.showErrorDetails="${4:-full}")
-  streamlit run "$1" \
+  # 2026-07-29: Streamlitは非特権ユーザーで実行する（rootで動かさない）。
+  # Basic認証の資格情報はnginxが使うものでアプリには不要なので、環境から除いて渡す。
+  setpriv --reuid=p1app --regid=p1app --init-groups --inh-caps=-all \
+    env -u BASIC_AUTH_USER -u BASIC_AUTH_PASSWORD \
+    streamlit run "$1" \
     --server.port="$2" \
     --server.address=127.0.0.1 \
     --server.headless=true \
@@ -118,6 +122,22 @@ _expect "管理トップ 認証あり"        "$(_probe -u "${BASIC_AUTH_USER}:$
 _expect "スタッフ領収書 認証なし"    "$(_probe "http://127.0.0.1:${PORT}/staff/receipt_download?token=selftest")" "200"
 _expect "スタッフ静的資産 認証なし"  "$(_probe "http://127.0.0.1:${PORT}/staff/static/index.html")" "200"
 _expect "スタッフ死活 認証なし"      "$(_probe "http://127.0.0.1:${PORT}/staff/_stcore/health")" "200"
+
+# ⑥データベースに実際に到達できるか（ヘルスチェックは画面の応答しか見ないため、
+#   DBが落ちていても「正常」と判定されてしまう。ここで実接続を確認する）
+if setpriv --reuid=p1app --regid=p1app --init-groups --inh-caps=-all \
+     python -c "
+import sys
+sys.path.insert(0, '/app')
+import db
+ok = db.connection_health().get('ok')
+sys.exit(0 if ok else 1)
+" >/dev/null 2>&1; then
+  echo "  OK   データベース接続"
+else
+  echo "  NG   データベース接続 — 接続できません（URLキーの設定を確認）" >&2
+  _fail=1
+fi
 
 unset BASIC_AUTH_PASSWORD  # このシェルの環境からは消す（既に起動した子には残る点は承知の上）
 

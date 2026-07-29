@@ -577,12 +577,18 @@ def get_event_by_id(event_id):
 def set_event_rate(event_id, date, hourly_rate=1500, night_rate=1875,
                    transport=1000, floor_bonus=3000, mix_bonus=1500, date_label="regular"):
     client = get_client()
-    client.table("p1_event_rates").delete().eq("event_id", event_id).eq("date", date).execute()
-    client.table("p1_event_rates").insert({
+    # 2026-07-29 修正: 削除→挿入だと挿入失敗時に単価設定が消える。更新 or 挿入に変更。
+    _payload = {
         "event_id": event_id, "date": date, "date_label": date_label,
         "hourly_rate": hourly_rate, "night_rate": night_rate,
-        "transport_allowance": transport, "floor_bonus": floor_bonus, "mix_bonus": mix_bonus
-    }).execute()
+        "transport_allowance": transport, "floor_bonus": floor_bonus, "mix_bonus": mix_bonus,
+    }
+    _existing = client.table("p1_event_rates").select("id").eq(
+        "event_id", event_id).eq("date", date).execute().data
+    if _existing:
+        client.table("p1_event_rates").update(_payload).eq("id", _existing[0]["id"]).execute()
+    else:
+        client.table("p1_event_rates").insert(_payload).execute()
 
 
 def get_event_rates(event_id):
@@ -1031,15 +1037,25 @@ def revoke_day_code(code_id: int, performed_by: str = "") -> bool:
 # secret は p1_admin_totp に保存（アプリログインの防御が目的。
 # スマホ紛失時は Supabase ダッシュボードで該当行を削除すれば解除できる）。
 
+class TotpLookupError(Exception):
+    """TOTP設定の照会に失敗した（＝未設定とは区別する）。
+
+    2026-07-29: 従来は照会失敗を「未設定」と同一視していたため、DB障害時に
+    2要素認証が無効化されパスワードだけでログインできた（fail-open）。
+    照会できないときは認証を通さない（fail-closed）ため例外で区別する。
+    """
+
+
 def get_totp(account: str):
-    """有効なTOTP設定を返す（無ければ None）。DB障害時も None（可用性優先・ログのみ）。"""
+    """有効なTOTP設定を返す。未設定なら None。照会失敗は TotpLookupError。"""
     try:
         rows = get_client().table("p1_admin_totp").select(
             "account, secret, enabled"
         ).eq("account", (account or "admin")[:40]).eq("enabled", 1).execute().data or []
         return rows[0] if rows else None
-    except Exception:
-        return None
+    except Exception as e:
+        # 「設定が無い」のか「確認できなかった」のかを呼び出し側が区別できるようにする
+        raise TotpLookupError(str(e)) from e
 
 
 def set_totp(account: str, secret: str, enabled: bool, performed_by: str = "") -> bool:
@@ -1078,9 +1094,16 @@ def reset_payment_to_pending(event_id, staff_id, reason="凍結再計算"):
         log_action("freeze_recalc_skipped", "payments", payment["id"],
                     detail=f"{reason}: 支払済みのため保護", event_id=event_id)
         return False
-    client.table("p1_payments").update({
+    # 2026-07-29 修正: 状態を確認してから更新するまでの間に他端末が支払済みにすると、
+    # 支払済みが未承認へ巻き戻る競合があった（ピット端末と給与窓口の同時操作で起こりうる）。
+    # 更新条件に status を含め、DB側で原子的に弾く。
+    _res = client.table("p1_payments").update({
         "status": "pending", "approved_by": None, "approved_at": None,
-    }).eq("id", payment["id"]).execute()
+    }).eq("id", payment["id"]).neq("status", "paid").execute()
+    if not _res.data:
+        log_action("freeze_recalc_skipped", "payments", payment["id"],
+                   detail=f"{reason}: 直前に支払済みへ変化したため保護", event_id=event_id)
+        return False
     log_action("freeze_recalc", "payments", payment["id"],
                 detail=f"{reason}: 未承認に戻した", event_id=event_id)
     return True
@@ -1185,7 +1208,6 @@ def save_payment(event_id, staff_id, base_pay, night_pay, transport_total,
             return  # 支払済みは上書きしない
         # A-5: 再計算で消えないよう手入力メモを退避
         existing_notes = existing.data[0].get("notes") or "" if _has_notes else ""
-        client.table("p1_payments").delete().eq("id", existing.data[0]["id"]).execute()
     payload = {
         "event_id": event_id, "staff_id": staff_id,
         "base_pay": base_pay, "night_pay": night_pay, "transport_total": transport_total,
@@ -1206,7 +1228,20 @@ def save_payment(event_id, staff_id, base_pay, night_pay, transport_total,
         payload["payable_amount"] = compute_payable_amount(
             total_amount, get_event_rounding_unit(event_id)
         )
-    client.table("p1_payments").insert(payload).execute()
+    # 2026-07-29 修正: 以前は「既存を削除してから挿入」していたため、削除に成功して
+    # 挿入で通信が切れると支払いレコードが丸ごと消えた（会場Wi-Fi断で現実に起こりうる）。
+    # 既存があれば更新、無ければ挿入に変更し、データが消える瞬間を無くした。
+    # 更新には status 述語を付け、確認から更新までの間に他端末が支払済みにした場合も弾く。
+    if existing.data:
+        _res = client.table("p1_payments").update(payload).eq(
+            "id", existing.data[0]["id"]).neq("status", "paid").execute()
+        if not _res.data:
+            # 直前に支払済みへ変わった等で更新されなかった場合は何も壊さず終了
+            log_action("calculate_payment_skipped", "payments", staff_id,
+                       "支払済みへ変化したため上書きせず", event_id)
+            return
+    else:
+        client.table("p1_payments").insert(payload).execute()
     log_action("calculate_payment", "payments", staff_id, f"合計¥{total_amount:,}", event_id)
 
 

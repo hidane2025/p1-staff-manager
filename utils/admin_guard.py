@@ -48,6 +48,12 @@ _ROLE_KEY = "p1_admin_role"
 _DAY_EXPIRES_KEY = "p1_day_code_expires"
 _DAY_CODE_ID_KEY = "p1_day_code_id"
 _DAY_FAILS_KEY = "p1_day_code_fails"
+_LAST_SEEN_KEY = "p1_admin_last_seen"
+
+# 2026-07-29: 管理セッションに期限を設ける。
+# 共有端末を開いたまま離席・紛失した場合に、無期限で操作できてしまうのを防ぐ。
+_SESSION_ABSOLUTE_HOURS = 12   # ログインから12時間で強制ログアウト（大会1日の運用を想定）
+_SESSION_IDLE_MINUTES = 60     # 60分操作がなければログアウト
 _TOTP_PENDING_KEY = "p1_totp_pending"   # {"user":..., "role":...} パスワード通過後のTOTP待ち
 
 _PBKDF2_ALGO = "sha256"
@@ -223,6 +229,43 @@ def _role_allowed(role: str, roles) -> bool:
 
 
 
+
+def _session_expired() -> bool:
+    """絶対期限（ログインから12時間）と無操作期限（60分）を判定する。"""
+    from datetime import datetime as _dt, timedelta as _td
+    now = _dt.now(_JST)
+    try:
+        login_at = st.session_state.get(_LOGIN_AT_KEY)
+        if login_at:
+            t = _dt.strptime(str(login_at), "%Y-%m-%d %H:%M:%S").replace(tzinfo=_JST)
+            if now - t > _td(hours=_SESSION_ABSOLUTE_HOURS):
+                return True
+    except Exception:
+        pass
+    try:
+        last = st.session_state.get(_LAST_SEEN_KEY)
+        if last:
+            t = _dt.fromisoformat(str(last))
+            if now - t > _td(minutes=_SESSION_IDLE_MINUTES):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _touch_session() -> None:
+    """最終操作時刻を更新する（無操作期限の判定用）。"""
+    from datetime import datetime as _dt
+    st.session_state[_LAST_SEEN_KEY] = _dt.now(_JST).isoformat()
+
+
+def _clear_session() -> None:
+    """セッション情報を消す（期限切れ・ログアウト共通）。"""
+    for _k in (_SESSION_KEY, _LOGIN_AT_KEY, _LOGIN_AS_KEY, _ROLE_KEY,
+               _DAY_EXPIRES_KEY, _DAY_CODE_ID_KEY, _LAST_SEEN_KEY, _TOTP_PENDING_KEY):
+        st.session_state.pop(_k, None)
+
+
 def _monitor_login_failure(kind: str, detail: str = "") -> None:
     """認証失敗を監視モジュールへ通知する（失敗しても認証処理は続行）。"""
     try:
@@ -246,6 +289,13 @@ def require_admin(*, page_name: str = "", roles=("admin",),
     # 既に認証済み → ロールを確認
     if is_admin():
         # 当日運用コードセッション: 有効期限と対象ページを毎回確認
+        # 管理セッションの期限判定（day ロールは別途 expires で管理）
+        if current_role() != "day" and _session_expired():
+            _clear_session()
+            st.warning("⏰ セッションの有効期限が切れました。もう一度ログインしてください。")
+            st.stop()
+        _touch_session()
+
         if current_role() == "day":
             from datetime import datetime as _dt
             _exp = str(st.session_state.get(_DAY_EXPIRES_KEY) or "")
@@ -411,8 +461,19 @@ def _finish_or_totp(*, username: str, role: str, account: str, page_name: str) -
     try:
         import db as _db
         totp_cfg = _db.get_totp(account)
-    except Exception:
-        totp_cfg = None  # DB障害時はTOTPなし扱い（可用性優先・ログイン自体はPW済み）
+    except Exception as _e:
+        # 2026-07-29 修正: 以前はDB障害時に「TOTPなし」とみなしてログインを通していた
+        # （fail-open）。2要素認証を設定している意味が消えるため、確認できないときは
+        # ログインを拒否する（fail-closed）。復旧手順は画面に案内する。
+        _is_lookup_failure = type(_e).__name__ == "TotpLookupError"
+        if _is_lookup_failure:
+            st.error(
+                "🔒 **2要素認証の設定を確認できなかったため、ログインを中止しました。**\n\n"
+                "データベースに接続できていない可能性があります。"
+                "時間をおいて再試行してください。復旧しない場合は管理者に連絡してください。"
+            )
+            st.stop()
+        totp_cfg = None
     if totp_cfg and totp_cfg.get("secret"):
         st.session_state[_TOTP_PENDING_KEY] = {
             "user": username, "role": role, "account": account,

@@ -202,7 +202,11 @@ st.caption(
     "Google Authenticator / 1Password / iPhone標準の「パスワード」アプリ等に対応。"
 )
 
-_totp_cfg = db.get_totp("admin")
+try:
+    _totp_cfg = db.get_totp("admin")
+except Exception:
+    _totp_cfg = None
+    st.warning("2要素認証の設定を確認できませんでした（DB接続を確認してください）。")
 if _totp_cfg:
     st.success("✅ 2要素認証は**有効**です。")
     st.caption("無効化するには、現在の6桁コードを入力してください（本人確認）。")
