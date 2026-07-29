@@ -19,6 +19,7 @@ __pycache__
 test_e2e
 tests
 docs
+!docs/event_templates
 scripts
 seed_nagoya.py
 manual_images

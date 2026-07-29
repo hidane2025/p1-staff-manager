@@ -30,6 +30,8 @@ Streamlit Cloud → アプリ設定 → Secrets（またはローカル .streaml
 
 from __future__ import annotations
 
+import os as _os
+
 import hashlib
 import hmac
 from datetime import datetime, timezone, timedelta
@@ -337,13 +339,20 @@ def require_admin(*, page_name: str = "", roles=("admin",),
     # --- モード2: 単一パスワード（後方互換） ---
     expected = _get_admin_password()
     if not expected:
-        # --- モード3: パスワードレス（dev） ---
-        st.warning(
-            "⚠️ **認証が未設定です。** 本番環境では Streamlit Secrets に "
-            "`[auth.users]`（推奨）または `ADMIN_PASSWORD` を設定してください。"
-            "（ローカル開発時はこの警告を無視してOK）",
-            icon="🔓",
-        )
+        # --- モード3: パスワードレス ---
+        # 2026-07-29: 従来はここで警告して素通り（fail-open）させていたが、
+        # ADMIN_PASSWORD の設定漏れが「動いているデプロイ」として通ってしまい、
+        # 全ページが無認証で開く事故になりうるため fail-closed に変更した。
+        # ローカル開発でだけ P1_ALLOW_NO_AUTH=1 で明示的に無効化できる。
+        if str(_os.environ.get("P1_ALLOW_NO_AUTH", "")).strip() not in ("1", "true", "True"):
+            st.error(
+                "🔒 **認証が設定されていないため、このページをブロックしました。**\n\n"
+                "管理者対応: 環境変数（またはSecrets）に `ADMIN_PASSWORD` を設定して"
+                "再起動してください。ローカル開発で認証を外す場合のみ "
+                "`P1_ALLOW_NO_AUTH=1` を指定します。"
+            )
+            st.stop()
+        st.warning("⚠️ 認証なしモード（P1_ALLOW_NO_AUTH=1）で動作しています。", icon="🔓")
         return
 
     st.markdown("## 🔒 管理者認証が必要です")

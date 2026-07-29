@@ -182,7 +182,9 @@ _check(f"require_admin() を使うページが7つ以上",
 # 2026-07-28: ページ名の英字化に伴い「特定ファイル名の列挙」をやめ、
 # 「トークンURL型の2ページ以外は全部ゲート必須」という不変条件で検査する。
 # 列挙方式はページ追加・改名のたびに検査漏れを生む（実際に改名で空振りした）。
-TOKEN_PAGES = {"9_receipt_download.py", "99_contract_sign.py"}
+# 2026-07-29: スタッフ用2ページは staff_site/ へ物理分離したため、
+# pages/ 配下は「全てゲート必須」が正しい不変条件になった。
+TOKEN_PAGES: set[str] = set()
 ungated = sorted(
     p.name for p in pages_dir.glob("*.py")
     if p.name not in TOKEN_PAGES and p.name not in applied

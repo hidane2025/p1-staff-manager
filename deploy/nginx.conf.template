@@ -1,49 +1,73 @@
-# P1 Staff Manager — Basic認証つきリバースプロキシ設定（2026-07-28）
+# P1 Staff Manager — Basic認証つきリバースプロキシ設定（2026-07-29 改訂）
 #
-# 目的:
-#   ①アプリ全体をBasic認証の内側に置き、URLを知られただけでは開けなくする
-#   ②ただしスタッフ本人が使う2つのトークンURL（領収書DL・契約書締結）だけは
-#     Basic認証を免除する（125名にIDとパスワードを配ることは現実的でないため。
-#     この2ページは推測不能トークン＋7日期限＋失効機能で保護されている）
+# ■ 設計（2026-07-29 の敵対レビューを受けて全面的に作り直した）
+#   旧版は「/receipt_download と /contract_sign だけ認証免除」だったが、これは
+#   2つの理由で破綻していた:
+#     ① Streamlitは画面の中身も操作も全て /_stcore/stream（WebSocket）を通る。
+#        そこを認証免除にすると、Basic認証は事実上「何も守っていない」状態になる。
+#     ② 逆に免除しないと、スタッフ用ページが読み込むJS/CSSが401になり真っ白になる。
+#   → 1プロセスに同居させる限り、この二律背反は解けない。
 #
-# ${PORT} と ${STREAMLIT_PORT} は起動時に envsubst で実値へ置換される。
+#   そこでアプリを2プロセスに分けた:
+#     ・管理アプリ  (app.py)            … ポート ${ADMIN_PORT}。/ 配下すべて認証必須
+#     ・スタッフ用  (staff_site/app.py) … ポート ${STAFF_PORT}。--server.baseUrlPath=staff
+#                                          で起動し、WebSocketも静的資産も /staff/ 配下に入る
+#   nginxは /staff/ の前置詞だけを認証免除にすればよく、管理側の /_stcore/ は
+#   認証の内側に残る。スタッフ用プロセスには管理ページのファイルが存在しない。
+#
+# ${PORT} ${ADMIN_PORT} ${STAFF_PORT} は起動時に envsubst で実値へ置換される。
+# （$host や $remote_addr など nginx 自身の変数は proxy_params.conf 側に置き、
+#   envsubst の置換対象から外している。混ぜると空文字に潰されるため。）
+
+# WebSocketのUpgradeがある時だけ Connection: upgrade を送る
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# アクセスログからクエリ文字列を落とす。
+# 領収書・契約書のURLは ?token=... 自体が鍵なので、素のログに残すと
+# ログ閲覧権限がある人が本人になりすませてしまう。
+log_format p1_noargs '$remote_addr - [$time_local] '
+                     '"$request_method $uri $server_protocol" '
+                     '$status $body_bytes_sent';
 
 server {
     listen ${PORT};
     server_name _;
 
-    # アップロード上限（スタッフ一括登録・シフト取込のExcel等）
+    access_log /dev/stdout p1_noargs;
+    error_log  /dev/stderr warn;
+
+    # アップロード上限。Streamlit側（--server.maxUploadSize）と必ず揃えること。
+    # 揃っていないとUIで選べたのに送信時だけ413で落ちる。
     client_max_body_size 16m;
 
     # ------------------------------------------------------------
-    # スタッフ専用ページ（Basic認証 免除）
-    #   /receipt_download … 領収書のダウンロード
-    #   /contract_sign    … 業務委託契約の締結（クリック同意）
+    # スタッフ向け公開サイト（Basic認証 免除）
+    #   /staff/receipt_download?token=... … 領収書ダウンロード
+    #   /staff/contract_sign?token=...     … 業務委託契約の締結
+    #   /staff/_stcore/...                 … このアプリ専用のWebSocket・ヘルスチェック
+    #   /staff/static/...                  … このアプリ専用の静的資産
+    #
+    #   ^~ を付けて、下の正規表現locationより優先させる。
+    #   このプロセスには管理ページのファイルが存在しないので、
+    #   URLを直接叩かれても管理機能には到達できない。
     # ------------------------------------------------------------
-    location ~ ^/(receipt_download|contract_sign) {
+    location ^~ /staff/ {
         auth_basic off;
-        proxy_pass http://127.0.0.1:${STREAMLIT_PORT};
+        proxy_pass http://127.0.0.1:${STAFF_PORT};
         include /etc/nginx/p1_proxy_params.conf;
     }
 
     # ------------------------------------------------------------
-    # Streamlit の内部通信（WebSocket・静的資産・ヘルスチェック）
-    #   ブラウザは初回アクセス時にBasic認証を通過済みなので、
-    #   以降のWebSocket確立にも同じ認証情報が自動で付く。
-    # ------------------------------------------------------------
-    location /_stcore/ {
-        auth_basic off;
-        proxy_pass http://127.0.0.1:${STREAMLIT_PORT};
-        include /etc/nginx/p1_proxy_params.conf;
-    }
-
-    # ------------------------------------------------------------
-    # それ以外すべて（管理画面）= Basic認証 必須
+    # 管理アプリ = それ以外すべて（/_stcore/ の WebSocket を含む）
+    #   ここを通らないと画面は1文字も描画されない。
     # ------------------------------------------------------------
     location / {
         auth_basic "P1 Staff Manager";
         auth_basic_user_file /etc/nginx/.htpasswd;
-        proxy_pass http://127.0.0.1:${STREAMLIT_PORT};
+        proxy_pass http://127.0.0.1:${ADMIN_PORT};
         include /etc/nginx/p1_proxy_params.conf;
     }
 }

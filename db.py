@@ -18,13 +18,13 @@ except ImportError:
 # Supabase接続情報（st.secretsまたは環境変数から取得）
 # 本番のキーは .streamlit/secrets.toml または環境変数に設定
 # デフォルトはanon公開キー（RLS有効＋allow_allポリシー）だが、機密データを扱う場合は必ず上書きすること
-_DEFAULT_SUPABASE_URL = "https://fmqalkwkxckbxxijiprp.supabase.co"
-_DEFAULT_SUPABASE_KEY = (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtcWFsa3dreGNrYnh4aWppcHJwIiwicm9sZSI6ImFub24i"
-    "LCJpYXQiOjE3NzU5ODU5NjgsImV4cCI6MjA5MTU2MTk2OH0."
-    "ECV0yK5b3H2GOZp--Q2iPvh8CmCrMO1h0fMadmm0fLo"
-)
+# 2026-07-29: 接続情報のハードコードを廃止。
+# 従来は実プロジェクトのURLとanonキーを直書きし、未設定時に黙ってそこへ
+# フォールバックしていたため、①公開リポジトリとイメージにキーが焼き込まれる
+# ②本番で設定漏れに気づけない、という二重の問題があった。
+# 現在は未設定なら明示的に失敗させる（fail closed）。
+_DEFAULT_SUPABASE_URL = ""
+_DEFAULT_SUPABASE_KEY = ""
 
 
 def _sanitize_key(raw) -> str:

@@ -9,7 +9,13 @@ ENV PYTHONUNBUFFERED=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx apache2-utils gettext-base curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    # Debianのnginxが同梱する既定サイト（認証なしでlisten 80）を消す
+    && rm -f /etc/nginx/sites-enabled/default \
+    # nginxのログをコンテナの標準出力/エラーへ向け、ホスティングのログに出す
+    #（既定はファイル出力のため502等の実行時エラーが完全に不可視になる）
+    && ln -sf /dev/stdout /var/log/nginx/access.log \
+    && ln -sf /dev/stderr /var/log/nginx/error.log
 
 WORKDIR /app
 COPY requirements.txt .

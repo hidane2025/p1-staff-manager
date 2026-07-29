@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import os as _os
+
 import streamlit as st
 
 
@@ -26,6 +28,12 @@ def get_base_host() -> str:
                 return v.rstrip("/")
     except Exception:
         pass
+
+    # 1b) 環境変数（Railway等のホスティングで設定する想定）
+    for _k in ("APP_BASE_URL", "PUBLIC_URL"):
+        _v = (_os.environ.get(_k) or "").strip()
+        if _v:
+            return _v.rstrip("/")
 
     # 2) Streamlitのリクエストヘッダから
     try:
@@ -45,8 +53,8 @@ def get_base_host() -> str:
 
 
 def receipt_download_url(token: str) -> str:
-    return f"{get_base_host()}/receipt_download?token={token}"
+    return f"{get_base_host()}/staff/receipt_download?token={token}"
 
 
 def contract_sign_url(token: str) -> str:
-    return f"{get_base_host()}/contract_sign?token={token}"
+    return f"{get_base_host()}/staff/contract_sign?token={token}"
