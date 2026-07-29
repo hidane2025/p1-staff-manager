@@ -437,7 +437,7 @@ with tab_edit:
                 st.download_button(
                     "💾 ダウンロード",
                     data=json_str.encode("utf-8"),
-                    file_name=f"event_{eid}_{ev.get('name', 'export').replace(' ', '_')}.json",
+                    file_name=f"event_{eid}.json",
                     mime="application/json",
                 )
             except Exception as e:

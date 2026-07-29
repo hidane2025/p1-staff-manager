@@ -115,7 +115,7 @@ if unsigned_path:
         st.download_button(
             "📄 PDFで内容を確認（任意）",
             data=pdf_u,
-            file_name=f"{contract['contract_no']}_確認用.pdf",
+            file_name=f"{contract['contract_no']}_draft.pdf",
             mime="application/pdf",
         )
 
@@ -170,7 +170,7 @@ if submit:
             st.download_button(
                 "📥 締結済みPDFをダウンロード",
                 data=signed_pdf,
-                file_name=f"{contract['contract_no']}_締結済み.pdf",
+                file_name=f"{contract['contract_no']}_signed.pdf",
                 mime="application/pdf",
                 type="primary",
                 use_container_width=True,
