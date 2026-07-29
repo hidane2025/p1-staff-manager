@@ -1,0 +1,27 @@
+# ビルドコンテキストに入れないもの（機密混入・イメージ肥大の防止）
+.git
+.github
+.venv
+venv
+env
+__pycache__
+*.pyc
+*.pyo
+
+# 機密（万一ローカルに存在してもイメージへ持ち込まない）
+.streamlit/secrets.toml
+*.env
+.env*
+*.pem
+*.key
+
+# 開発・検証専用
+test_e2e
+tests
+docs
+scripts
+seed_nagoya.py
+manual_images
+*.pdf
+.claude
+.DS_Store

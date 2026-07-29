@@ -41,6 +41,14 @@ def apply_global_style(show_quicknav: bool = True) -> None:
     （領収書DL・契約署名）はサイドバー自体を隠すうえ管理リンクを出すべきでないため、
     show_quicknav=False で無効化する。
     """
+    # 2026-07-29: 監視の有効化。全ページが最初に通る場所に置くことで、
+    # ページ追加時の「監視の付け忘れ」が構造的に起きないようにする。
+    try:
+        from utils import monitoring
+        monitoring.install()
+    except Exception:
+        pass
+
     st.markdown(build_global_css(), unsafe_allow_html=True)
     if show_quicknav:
         render_quick_nav()

@@ -220,6 +220,16 @@ def _role_allowed(role: str, roles) -> bool:
     return (role or "") in set(roles)
 
 
+
+def _monitor_login_failure(kind: str, detail: str = "") -> None:
+    """認証失敗を監視モジュールへ通知する（失敗しても認証処理は続行）。"""
+    try:
+        from utils import monitoring
+        monitoring.record_login_failure(kind, detail)
+    except Exception:
+        pass
+
+
 def require_admin(*, page_name: str = "", roles=("admin",),
                   allow_day_code: bool = False) -> None:
     """管理者専用ページの**先頭**で呼ぶ。未認証/権限不足なら認証画面を出して st.stop()。
@@ -306,6 +316,7 @@ def require_admin(*, page_name: str = "", roles=("admin",),
                           detail=f"page={page_name}, user={(username or '').strip()[:40]}",
                           performed_by=(username or "").strip()[:40] or "unknown")
                 st.error("❌ ユーザーIDまたはパスワードが違います")
+            _monitor_login_failure("管理者ログイン（多ユーザー）", f"入力ID: {username!r}")
         if allow_day_code:
             _render_day_code_form(page_name)
         st.stop()
@@ -363,6 +374,7 @@ def require_admin(*, page_name: str = "", roles=("admin",),
                       detail=f"page={page_name}, pw_len={len(pw or '')}, by={operator[:30] if operator else 'anon'}",
                       performed_by=operator[:30] or "anonymous")
             st.error("❌ パスワードが違います")
+            _monitor_login_failure("管理者パスワード")
     if allow_day_code:
         _render_day_code_form(page_name)
     st.stop()
@@ -441,6 +453,7 @@ def _render_totp_form(page_name: str) -> None:
                       detail=f"page={page_name}, user={pend.get('user')}",
                       performed_by=str(pend.get("user") or "unknown")[:40])
             st.error("❌ コードが違います。時計のずれがある場合は次のコードでもう一度。")
+            _monitor_login_failure("2要素認証")
 
 
 def _render_day_code_form(page_name: str) -> None:
@@ -489,6 +502,7 @@ def _render_day_code_form(page_name: str) -> None:
                           performed_by=(op or "").strip()[:40] or "unknown")
                 st.session_state[_DAY_FAILS_KEY] = _fails + 1
                 st.error("❌ コードが無効か、期限切れです。管理者に本日のコードを確認してください。")
+                _monitor_login_failure("当日運用コード", f"入力者: {op!r}")
 
 
 def admin_logout_button() -> None:
