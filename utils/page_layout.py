@@ -81,6 +81,7 @@ _QUICK_NAV_GROUPS = [
         ("🎁 個別手当", "pages/11_allowances.py"),
         ("🏢 発行者設定", "pages/92_issuer_settings.py"),
         ("📑 契約書テンプレ", "pages/93_contract_template.py"),
+        ("👤 アカウント管理", "pages/95_users.py"),
     ]),
     ("📈 集計", [
         ("📅 年間累計", "pages/7_yearly.py"),

@@ -1620,3 +1620,152 @@ def get_petty_cash_for_event(event_id):
 def init_db():
     pass
 
+
+
+# ============================================================
+# アプリユーザー（個人アカウント）2026-07-29 追加
+# ============================================================
+# 従来は secrets/環境変数でしか定義できず、1人追加するのに再デプロイが要った。
+# 画面から追加・削除できるようDBに持たせる。パスワードは平文を保存しない。
+
+_PBKDF2_ITERATIONS = 200_000
+
+
+def hash_password(password: str) -> str:
+    """パスワードをpbkdf2-hmac-sha256（ソルト付き）でハッシュ化する。"""
+    import hashlib
+    import secrets as _sec
+    salt = _sec.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", str(password).encode("utf-8"), bytes.fromhex(salt), _PBKDF2_ITERATIONS
+    ).hex()
+    return f"pbkdf2${_PBKDF2_ITERATIONS}${salt}${digest}"
+
+
+def list_app_users(include_inactive: bool = True) -> list:
+    """アプリユーザー一覧を返す（password_hash は含めない）。"""
+    try:
+        q = get_client().table("p1_app_users").select(
+            "id, username, display_name, role, active, must_change_password, "
+            "created_by, created_at, last_login_at"
+        )
+        if not include_inactive:
+            q = q.eq("active", 1)
+        return q.order("username").execute().data or []
+    except Exception:
+        return []
+
+
+def get_app_users_for_auth() -> dict:
+    """認証用に {username: {password_hash, role, must_change}} を返す。
+
+    有効(active=1)なユーザーのみ。DB障害時は AppUserLookupError を送出し、
+    「ユーザーが居ない」と混同させない（混同すると認証方式が勝手に切り替わる）。
+    """
+    try:
+        rows = get_client().table("p1_app_users").select(
+            "username, password_hash, role, must_change_password"
+        ).eq("active", 1).execute().data or []
+    except Exception as e:
+        raise AppUserLookupError(str(e)) from e
+    out = {}
+    for r in rows:
+        uname = str(r.get("username") or "").strip()
+        ph = str(r.get("password_hash") or "")
+        if not uname or not ph.startswith("pbkdf2$"):
+            continue
+        out[uname] = {
+            "password_hash": ph,
+            "role": str(r.get("role") or "viewer").strip().lower() or "viewer",
+            "must_change": bool(r.get("must_change_password")),
+        }
+    return out
+
+
+class AppUserLookupError(Exception):
+    """アプリユーザーの照会に失敗した（＝0人とは区別する）。"""
+
+
+def create_app_user(username: str, password: str, role: str = "viewer",
+                    display_name: str = "", performed_by: str = "") -> tuple:
+    """ユーザーを作成する。Returns: (成功したか, メッセージ)"""
+    uname = str(username or "").strip()
+    if not uname or not uname.replace("_", "").replace("-", "").isalnum() or not uname.isascii():
+        return False, "ユーザーIDは半角英数字（_ - は可）にしてください。"
+    if len(str(password or "")) < 10:
+        return False, "パスワードは10文字以上にしてください。"
+    if role not in ("admin", "viewer"):
+        return False, "権限の指定が不正です。"
+    try:
+        client = get_client()
+        if client.table("p1_app_users").select("id").eq("username", uname).execute().data:
+            return False, f"ユーザーID「{uname}」は既に使われています。"
+        client.table("p1_app_users").insert({
+            "username": uname,
+            "display_name": str(display_name or "").strip()[:60],
+            "password_hash": hash_password(password),
+            "role": role,
+            "active": 1,
+            "must_change_password": 1,   # 初回ログインで本人に変更させる
+            "created_by": str(performed_by or "")[:40],
+        }).execute()
+        log_action("create_app_user", "auth", detail=f"user={uname}, role={role}",
+                   performed_by=performed_by or "admin")
+        return True, f"ユーザー「{uname}」を作成しました。"
+    except Exception as e:
+        return False, f"作成に失敗しました: {e}"
+
+
+def set_app_user_password(username: str, password: str, *, must_change: bool,
+                          performed_by: str = "") -> tuple:
+    """パスワードを設定する。must_change=True で次回ログイン時の変更を強制する。"""
+    uname = str(username or "").strip()
+    if len(str(password or "")) < 10:
+        return False, "パスワードは10文字以上にしてください。"
+    try:
+        res = get_client().table("p1_app_users").update({
+            "password_hash": hash_password(password),
+            "must_change_password": 1 if must_change else 0,
+            "updated_at": _now(),
+        }).eq("username", uname).execute()
+        if not res.data:
+            return False, "対象のユーザーが見つかりません。"
+        log_action("set_app_user_password", "auth", detail=f"user={uname}",
+                   performed_by=performed_by or uname)
+        return True, "パスワードを更新しました。"
+    except Exception as e:
+        return False, f"更新に失敗しました: {e}"
+
+
+def update_app_user(username: str, *, role: str = None, active: bool = None,
+                    display_name: str = None, performed_by: str = "") -> tuple:
+    """権限・有効/無効・表示名を更新する。"""
+    uname = str(username or "").strip()
+    payload = {"updated_at": _now()}
+    if role is not None:
+        if role not in ("admin", "viewer"):
+            return False, "権限の指定が不正です。"
+        payload["role"] = role
+    if active is not None:
+        payload["active"] = 1 if active else 0
+    if display_name is not None:
+        payload["display_name"] = str(display_name).strip()[:60]
+    try:
+        res = get_client().table("p1_app_users").update(payload).eq(
+            "username", uname).execute()
+        if not res.data:
+            return False, "対象のユーザーが見つかりません。"
+        log_action("update_app_user", "auth",
+                   detail=f"user={uname}, {payload}", performed_by=performed_by or "admin")
+        return True, "更新しました。"
+    except Exception as e:
+        return False, f"更新に失敗しました: {e}"
+
+
+def touch_app_user_login(username: str) -> None:
+    """最終ログイン日時を記録する（失敗しても認証は妨げない）。"""
+    try:
+        get_client().table("p1_app_users").update(
+            {"last_login_at": _now()}).eq("username", str(username or "").strip()).execute()
+    except Exception:
+        pass

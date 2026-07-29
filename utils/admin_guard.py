@@ -94,6 +94,12 @@ def _auth_users_configured() -> bool:
     パスワードレス(dev)に落として無認証アクセスを許さない（fail closed）ための判定。
     """
     try:
+        try:
+            import db as _db
+            if _db.get_app_users_for_auth():
+                return True
+        except Exception:
+            pass
         if _env_auth_users():
             return True
         auth = st.secrets.get("auth")
@@ -113,6 +119,19 @@ def _load_app_users() -> dict:
       パスワードレスに落とさず fail closed する（_auth_users_configured で判定）。
     """
     try:
+        # 2026-07-29: 画面から追加できるDBのユーザーを最優先にする。
+        # （環境変数・secretsは移行期の後方互換として残す）
+        try:
+            import db as _db
+            _dbu = _db.get_app_users_for_auth()
+            if _dbu:
+                return {k: {"password_hash": v["password_hash"], "role": v["role"]}
+                        for k, v in _dbu.items()}
+        except Exception:
+            # DB障害時は環境変数・secretsへフォールバックする。
+            # ここで空を返すと単一パスワードモードに落ちて認証が緩むため、
+            # 下の経路で必ず何らかの定義を探す。
+            pass
         users = _env_auth_users()
         if not users:
             auth = st.secrets.get("auth")
@@ -245,6 +264,14 @@ def admin_login_at() -> str:
     return str(st.session_state.get(_LOGIN_AT_KEY) or "")
 
 
+def current_user() -> str:
+    """ログイン中のユーザーID（多ユーザーモード時）。未ログインや共有PW運用では空。"""
+    try:
+        return str(st.session_state.get(_LOGIN_AS_KEY) or "").strip()
+    except Exception:
+        return ""
+
+
 def operator_name() -> str:
     """現在のセッションの操作者名（多ユーザーならユーザーID）。未認証は 'anonymous'。"""
     return str(st.session_state.get(_LOGIN_AS_KEY) or "anonymous")
@@ -292,6 +319,55 @@ def _clear_session() -> None:
     for _k in (_SESSION_KEY, _LOGIN_AT_KEY, _LOGIN_AS_KEY, _ROLE_KEY,
                _DAY_EXPIRES_KEY, _DAY_CODE_ID_KEY, _LAST_SEEN_KEY, _TOTP_PENDING_KEY):
         st.session_state.pop(_k, None)
+
+
+
+_PWCHANGE_PENDING_KEY = "p1_pwchange_pending"
+
+
+def _must_change_password(username: str) -> bool:
+    """初期パスワードのままかどうか（DBに登録が無い場合は False）。"""
+    try:
+        import db as _db
+        info = _db.get_app_users_for_auth().get(str(username or "").strip())
+        return bool(info and info.get("must_change"))
+    except Exception:
+        return False
+
+
+def _render_password_change(pending: dict) -> None:
+    """初回ログイン時のパスワード変更画面。ここを通らないと中に入れない。"""
+    user = str(pending.get("user") or "")
+    st.markdown("## 🔑 パスワードの変更が必要です")
+    st.caption(
+        f"「{user}」さん、はじめまして。管理者が設定した初期パスワードのままです。\n\n"
+        "ご自身だけが知るパスワードに変更してください。"
+        "変更後は、管理者を含め誰もあなたのパスワードを知らない状態になります。"
+    )
+    with st.form("__pwchange_form__"):
+        pw1 = st.text_input("新しいパスワード（10文字以上）", type="password")
+        pw2 = st.text_input("確認のためもう一度", type="password")
+        ok = st.form_submit_button("🔑 変更してログイン", type="primary")
+    if ok:
+        if len(pw1 or "") < 10:
+            st.error("10文字以上にしてください。")
+        elif pw1 != pw2:
+            st.error("2つの入力が一致しません。")
+        else:
+            try:
+                import db as _db
+                done, msg = _db.set_app_user_password(
+                    user, pw1, must_change=False, performed_by=user)
+            except Exception as e:
+                done, msg = False, str(e)
+            if done:
+                st.session_state.pop(_PWCHANGE_PENDING_KEY, None)
+                _finish_or_totp(username=user, role=str(pending.get("role") or "viewer"),
+                                account=user or "admin",
+                                page_name=str(pending.get("page_name") or ""))
+            else:
+                st.error(f"変更できませんでした: {msg}")
+    st.stop()
 
 
 def _monitor_login_failure(kind: str, detail: str = "") -> None:
@@ -372,6 +448,11 @@ def require_admin(*, page_name: str = "", roles=("admin",),
 
     users = _load_app_users()
 
+    # パスワード変更待ち（初回ログイン）は他の何より先に処理する
+    _pending_pw = st.session_state.get(_PWCHANGE_PENDING_KEY)
+    if _pending_pw:
+        _render_password_change(dict(_pending_pw))
+
     # --- モード1: 多ユーザー（ID/PASS＋ロール） ---
     if users:
         st.markdown("## 🔒 ログインが必要です")
@@ -389,6 +470,13 @@ def require_admin(*, page_name: str = "", roles=("admin",),
             time.sleep(0.15)  # タイミング攻撃の弱体化
             if role:
                 _u = (username or "").strip()[:40]
+                # 管理者が設定した初期パスワードのままなら、本人に変更させてから通す
+                # （＝最終的に本人以外はパスワードを知らない状態にする）
+                if _must_change_password(_u):
+                    st.session_state[_PWCHANGE_PENDING_KEY] = {
+                        "user": _u, "role": role, "page_name": page_name or "",
+                    }
+                    st.rerun()
                 _finish_or_totp(username=_u, role=role, account=_u or "admin",
                                 page_name=page_name)
             else:
@@ -477,6 +565,11 @@ def _finish_login(user: str, role: str, page_name: str, note: str = "") -> None:
     st.session_state[_LOGIN_AT_KEY] = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
     st.session_state[_LOGIN_AS_KEY] = (user or "anonymous_admin")[:40]
     st.session_state[_ROLE_KEY] = role
+    try:
+        import db as _db
+        _db.touch_app_user_login(user or "")
+    except Exception:
+        pass
     _log_safe("admin_login", "auth",
               detail=f"page={page_name}, user={(user or '')[:40]}, role={role}{note}",
               performed_by=(user or "admin")[:40])
