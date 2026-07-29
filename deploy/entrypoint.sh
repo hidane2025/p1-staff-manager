@@ -27,7 +27,13 @@ fi
 # Basic認証ファイルを生成。パスワードは標準入力で渡し、コマンドライン
 # （/proc/<pid>/cmdline から読める）には載せない。
 htpasswd -inB "$BASIC_AUTH_USER" <<<"$BASIC_AUTH_PASSWORD" > /etc/nginx/.htpasswd
-chmod 600 /etc/nginx/.htpasswd
+# nginxのワーカーはroot以外（Debianでは www-data）で動くため、600（root専用）だと
+# 認証ファイルを読めず全リクエストが500になる。ワーカーのユーザー名を設定から読み取り、
+# そのグループにだけ読み取りを許す（他ユーザーには非公開のまま）。
+_nginx_user="$(awk '$1=="user"{print $2}' /etc/nginx/nginx.conf | tr -d ';' | head -1)"
+: "${_nginx_user:=www-data}"
+chown "root:${_nginx_user}" /etc/nginx/.htpasswd 2>/dev/null || true
+chmod 640 /etc/nginx/.htpasswd
 
 cp /app/deploy/proxy_params.conf /etc/nginx/p1_proxy_params.conf
 export PORT ADMIN_PORT STAFF_PORT
