@@ -63,6 +63,30 @@ _PBKDF2_ITER = 200_000
 # ============================================================
 # ユーザーストア（Streamlit Secrets）
 # ============================================================
+
+def _env_auth_users() -> dict:
+    """環境変数 AUTH_USERS（JSON）から個人アカウント定義を読む。
+
+    2026-07-29 追加の理由:
+        個人アカウント方式は従来 secrets.toml（ファイル）からしか読めなかったが、
+        本番はコンテナで動きファイルを置かないため使えなかった。結果として
+        全員が同じパスワードを共有し、監査ログの「誰が」が名前の自己申告に
+        依存していた。環境変数から読めるようにして、1人1アカウントに移行する。
+
+    形式:
+        AUTH_USERS={"nakano":{"password_hash":"pbkdf2$...","role":"admin"},
+                    "ito":{"password_hash":"pbkdf2$...","role":"admin"}}
+    """
+    raw = (_os.environ.get("AUTH_USERS") or "").strip()
+    if not raw:
+        return {}
+    try:
+        import json as _json
+        return dict(_json.loads(raw))
+    except Exception:
+        return {}
+
+
 def _auth_users_configured() -> bool:
     """Secrets に [auth.users] セクションが存在するか（中身の妥当性は問わない）。
 
@@ -70,6 +94,8 @@ def _auth_users_configured() -> bool:
     パスワードレス(dev)に落として無認証アクセスを許さない（fail closed）ための判定。
     """
     try:
+        if _env_auth_users():
+            return True
         auth = st.secrets.get("auth")
         if not auth:
             return False
@@ -87,8 +113,10 @@ def _load_app_users() -> dict:
       パスワードレスに落とさず fail closed する（_auth_users_configured で判定）。
     """
     try:
-        auth = st.secrets.get("auth")
-        users = auth.get("users") if auth else None
+        users = _env_auth_users()
+        if not users:
+            auth = st.secrets.get("auth")
+            users = auth.get("users") if auth else None
         if not users:
             return {}
         out = {}

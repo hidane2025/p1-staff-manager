@@ -15,9 +15,14 @@ set -euo pipefail
 #   といった事故が“成功したデプロイ”として通ってしまう。
 # ------------------------------------------------------------
 _missing=()
-for _v in BASIC_AUTH_USER BASIC_AUTH_PASSWORD ADMIN_PASSWORD SUPABASE_URL SUPABASE_SERVICE_KEY; do
+for _v in BASIC_AUTH_USER BASIC_AUTH_PASSWORD SUPABASE_URL SUPABASE_SERVICE_KEY; do
   [[ -z "${!_v:-}" ]] && _missing+=("$_v")
 done
+# アプリのログインは「個人アカウント(AUTH_USERS)」か「共有パスワード(ADMIN_PASSWORD)」の
+# どちらかが必須。個人アカウントの方が監査ログに実名が残るため推奨。
+if [[ -z "${AUTH_USERS:-}" && -z "${ADMIN_PASSWORD:-}" ]]; then
+  _missing+=("AUTH_USERS または ADMIN_PASSWORD")
+fi
 if (( ${#_missing[@]} > 0 )); then
   echo "FATAL: 必須の環境変数が未設定です: ${_missing[*]}" >&2
   echo "       未設定のまま起動すると認証なしでの公開や誤ったDB接続が起きるため中止します。" >&2
