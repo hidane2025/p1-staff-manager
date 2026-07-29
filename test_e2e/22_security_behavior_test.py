@@ -200,6 +200,29 @@ for name in sorted(TOKEN_PAGES):
 
 
 # ============================================================
+# 8. Railwayヘルスチェックが Basic認証の外側を指しているか
+#    （2026-07-29 事故: /_stcore/health を指定していたが、この経路は
+#     Basic認証の内側で401になり、デプロイが3回失敗した）
+# ============================================================
+print("\n[8] ヘルスチェックのパスと認証範囲の整合")
+import json as _json
+_railway = _json.loads((ROOT / "railway.json").read_text())
+_hc = _railway.get("deploy", {}).get("healthcheckPath", "")
+_check("healthcheckPath が設定されている", bool(_hc), _hc)
+_check("healthcheckPath は認証免除の /staff/ 配下を指している",
+       _hc.startswith("/staff/"),
+       f"{_hc} は Basic認証の内側のため 401 になりデプロイが失敗する")
+
+_nginx = (ROOT / "deploy/nginx.conf.template").read_text()
+_check("nginxに /staff/ の認証免除ブロックがある",
+       "location ^~ /staff/" in _nginx and "auth_basic off" in _nginx)
+_check("管理側 location / は認証必須のまま",
+       "auth_basic \"P1 Staff Manager\"" in _nginx)
+_check("/_stcore/ を丸ごと認証免除にしていない（2026-07-28の設計欠陥の再発防止）",
+       "location /_stcore/" not in _nginx)
+
+
+# ============================================================
 # 結果集計
 # ============================================================
 print()
