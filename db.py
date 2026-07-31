@@ -95,11 +95,14 @@ def connection_health() -> dict:
     """
     url, key = _get_supabase_config()
     role = supabase_key_role(key) or ("opaque(sb_*)" if key.startswith("sb_") else "不明")
-    using_default = (key == _sanitize_key(_DEFAULT_SUPABASE_KEY))
-    out = {"role": role, "using_default_key": using_default, "select_ok": False, "error": ""}
+    # 既定キーは廃止済み（空）。空同士の比較で「既定キー使用」と誤判定しないようにする
+    using_default = bool(_DEFAULT_SUPABASE_KEY) and (key == _sanitize_key(_DEFAULT_SUPABASE_KEY))
+    out = {"role": role, "using_default_key": using_default, "select_ok": False,
+           "ok": False, "error": ""}
     try:
         get_client().table("p1_events").select("id").limit(1).execute()
         out["select_ok"] = True
+        out["ok"] = True   # 起動時セルフテストが参照するキー名（select_ok と同義）
     except Exception as e:
         out["error"] = str(e)[:200]
     return out
