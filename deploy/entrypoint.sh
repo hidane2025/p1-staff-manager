@@ -55,7 +55,7 @@ _start_streamlit() {  # $1=script $2=port $3=baseUrlPath(空可) $4=showErrorDet
   # 未指定だと Streamlit が /root/.streamlit/secrets.toml を読もうとして
   # Permission denied で起動できない（2026-07-29 本番で発生）。
   setpriv --reuid=p1app --regid=p1app --init-groups --inh-caps=-all \
-    env HOME=/home/p1app -u BASIC_AUTH_USER -u BASIC_AUTH_PASSWORD \
+    env -u BASIC_AUTH_USER -u BASIC_AUTH_PASSWORD HOME=/home/p1app \
     streamlit run "$1" \
     --server.port="$2" \
     --server.address=127.0.0.1 \
