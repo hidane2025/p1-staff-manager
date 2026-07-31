@@ -274,7 +274,7 @@ _role_txt = str(_h.get("role"))
 if _h.get("using_default_key"):
     st.warning(
         "⚠️ **内蔵の共有キー（anon）で接続中です。** セキュリティ移行が未完了の状態。"
-        "Streamlit Secrets に `SUPABASE_SERVICE_KEY` を設定してください。"
+        "ホスティングの環境変数に `SUPABASE_SERVICE_KEY` を設定してください。"
     )
 elif _role_txt == "service_role":
     st.success("✅ service_role キー（Secrets設定）で接続中。移行完了状態です。")

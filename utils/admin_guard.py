@@ -4,7 +4,8 @@
 PII（本名・住所・支払額・契約書PDF）を扱う管理ページの手前で認証を要求する。
 
 【認証モードと解決順（後方互換）】
-1. **多ユーザー（推奨）**: Streamlit Secrets に `[auth.users]` があれば
+1. **多ユーザー（推奨）**: アカウント管理画面で作成した個人アカウント
+   （DB）または環境変数 AUTH_USERS があれば
    「ユーザーID＋パスワード＋ロール」で認証する。ロールでアクセス権を制御。
 2. **単一パスワード（旧）**: `[auth.users]` が無く `ADMIN_PASSWORD` があれば、
    従来の単一パスワード方式で動く（既存運用を壊さない）。
@@ -61,7 +62,7 @@ _PBKDF2_ITER = 200_000
 
 
 # ============================================================
-# ユーザーストア（Streamlit Secrets）
+# ユーザーストア（DB > 環境変数 AUTH_USERS > secrets の順で解決）
 # ============================================================
 
 def _env_auth_users() -> dict:
@@ -531,7 +532,7 @@ def require_admin(*, page_name: str = "", roles=("admin",),
                                  placeholder="例: 中野 / 伊藤",
                                  help="操作ログに記録される名前。誰が触ったかの追跡用。")
         pw = st.text_input("管理者パスワード", type="password",
-                           placeholder="Streamlit Secrets の ADMIN_PASSWORD")
+                           placeholder="管理者パスワードを入力")
         submitted = st.form_submit_button("🔓 ログイン", type="primary")
     if submitted:
         ok = (
