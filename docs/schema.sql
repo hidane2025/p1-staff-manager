@@ -1,23 +1,23 @@
 -- =====================================================================
 -- P1 Staff Manager — データベース スキーマ定義（DDL）
 -- =====================================================================
--- 生成日時   : 2026-07-31 12:48:21 (JST)
--- データベース: PostgreSQL 17.6
--- 生成方法   : 本番データベースのシステムカタログ (pg_catalog) から自動生成
---              pg_dump --schema-only と同等の内容です
+-- 生成日時     : 2026-07-31 13:01 (JST)
+-- データベース : PostgreSQL 17.6
+-- 生成方法     : 本番データベースのシステムカタログ(pg_catalog)から自動生成
+--                pg_dump --schema-only と同等の内容
 --
--- 対象範囲   : 本システムが使用するテーブルのみ（プレフィックス p1_）
---              ※本データベースは他事業と同居しているため、無関係な
---                テーブルは意図的に含めていません
+-- 対象範囲     : 本システムが使用するテーブルのみ（プレフィックス p1_）
+--                ※本データベースは他事業と同居しているため、無関係な
+--                  テーブルは含めていない
 --
--- 収録内容   : テーブル 14 / 列 183 / 制約 37
---              索引 32 / RLSポリシー 11 / トリガー 0
+-- 収録         : テーブル 14 / 列 183 / 制約 37
+--                索引 32 / RLSポリシー 28
 -- =====================================================================
 
 SET search_path = public;
 
 -- ---------------------------------------------------------------------
--- p1_admin_totp  … 管理者2要素認証
+-- p1_admin_totp  … 管理者の2要素認証設定
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_admin_totp (
     id bigint DEFAULT nextval('p1_admin_totp_id_seq'::regclass) NOT NULL,
@@ -30,10 +30,18 @@ CREATE TABLE p1_admin_totp (
     CONSTRAINT p1_admin_totp_pkey PRIMARY KEY (id)
 );
 
--- ⚠️ p1_admin_totp: 行レベルセキュリティ(RLS)は無効
+ALTER TABLE p1_admin_totp ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "p1_admin_totp_deny_anon" ON p1_admin_totp
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_admin_totp_service_role_all" ON p1_admin_totp
+    FOR ALL TO service_role
+    USING (true)
+    WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_app_users  … アプリユーザー（個人アカウント）
+-- p1_app_users  … アプリのログインアカウント
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_app_users (
     id bigint DEFAULT nextval('p1_app_users_id_seq'::regclass) NOT NULL,
@@ -55,7 +63,7 @@ CREATE INDEX idx_p1_app_users_lookup ON public.p1_app_users USING btree (active,
 
 ALTER TABLE p1_app_users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "p1_app_users_deny_anon" ON p1_app_users
-    FOR ALL TO anon
+    FOR ALL TO anon, authenticated
     USING (false)
     WITH CHECK (false);
 CREATE POLICY "p1_app_users_service_role_all" ON p1_app_users
@@ -64,7 +72,7 @@ CREATE POLICY "p1_app_users_service_role_all" ON p1_app_users
     WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_audit_log  … 監査ログ
+-- p1_audit_log  … 監査ログ（操作者・対象・日時）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_audit_log (
     id integer DEFAULT nextval('p1_audit_log_id_seq'::regclass) NOT NULL,
@@ -79,13 +87,17 @@ CREATE TABLE p1_audit_log (
 );
 
 ALTER TABLE p1_audit_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all" ON p1_audit_log
-    FOR ALL TO public
+CREATE POLICY "p1_audit_log_deny_anon" ON p1_audit_log
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_audit_log_service_role_all" ON p1_audit_log
+    FOR ALL TO service_role
     USING (true)
     WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_contract_templates  … 契約書テンプレート
+-- p1_contract_templates  … 契約書のひな形
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_contract_templates (
     id integer DEFAULT nextval('p1_contract_templates_id_seq'::regclass) NOT NULL,
@@ -102,10 +114,18 @@ CREATE TABLE p1_contract_templates (
 
 CREATE INDEX idx_contract_templates_provisional ON public.p1_contract_templates USING btree (is_provisional);
 
--- ⚠️ p1_contract_templates: 行レベルセキュリティ(RLS)は無効
+ALTER TABLE p1_contract_templates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "p1_contract_templates_deny_anon" ON p1_contract_templates
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_contract_templates_service_role_all" ON p1_contract_templates
+    FOR ALL TO service_role
+    USING (true)
+    WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_contracts  … 発行済み契約書
+-- p1_contracts  … 発行済み契約書（本文スナップショットと締結記録）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_contracts (
     id integer DEFAULT nextval('p1_contracts_id_seq'::regclass) NOT NULL,
@@ -146,10 +166,18 @@ CREATE INDEX idx_contracts_staff ON public.p1_contracts USING btree (staff_id);
 CREATE INDEX idx_contracts_status ON public.p1_contracts USING btree (status);
 CREATE INDEX idx_contracts_token ON public.p1_contracts USING btree (signing_token) WHERE (signing_token IS NOT NULL);
 
--- ⚠️ p1_contracts: 行レベルセキュリティ(RLS)は無効
+ALTER TABLE p1_contracts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "p1_contracts_deny_anon" ON p1_contracts
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_contracts_service_role_all" ON p1_contracts
+    FOR ALL TO service_role
+    USING (true)
+    WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_day_codes  … 当日運用コード
+-- p1_day_codes  … 当日運用コード（ハッシュのみ保存）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_day_codes (
     id bigint DEFAULT nextval('p1_day_codes_id_seq'::regclass) NOT NULL,
@@ -165,10 +193,18 @@ CREATE TABLE p1_day_codes (
 
 CREATE INDEX idx_p1_day_codes_lookup ON public.p1_day_codes USING btree (active, code_hash);
 
--- ⚠️ p1_day_codes: 行レベルセキュリティ(RLS)は無効
+ALTER TABLE p1_day_codes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "p1_day_codes_deny_anon" ON p1_day_codes
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_day_codes_service_role_all" ON p1_day_codes
+    FOR ALL TO service_role
+    USING (true)
+    WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_event_rates  … 日別レート
+-- p1_event_rates  … 日別レート（通常時給・深夜時給・交通費・各種手当）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_event_rates (
     id integer DEFAULT nextval('p1_event_rates_id_seq'::regclass) NOT NULL,
@@ -185,13 +221,17 @@ CREATE TABLE p1_event_rates (
 );
 
 ALTER TABLE p1_event_rates ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all" ON p1_event_rates
-    FOR ALL TO public
+CREATE POLICY "p1_event_rates_deny_anon" ON p1_event_rates
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_event_rates_service_role_all" ON p1_event_rates
+    FOR ALL TO service_role
     USING (true)
     WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_event_transport_rules  … 地域別 交通費ルール
+-- p1_event_transport_rules  … 地域別の交通費ルール（上限額・領収書要否）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_event_transport_rules (
     id integer DEFAULT nextval('p1_event_transport_rules_id_seq'::regclass) NOT NULL,
@@ -207,13 +247,17 @@ CREATE TABLE p1_event_transport_rules (
 );
 
 ALTER TABLE p1_event_transport_rules ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all" ON p1_event_transport_rules
-    FOR ALL TO public
+CREATE POLICY "p1_event_transport_rules_deny_anon" ON p1_event_transport_rules
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_event_transport_rules_service_role_all" ON p1_event_transport_rules
+    FOR ALL TO service_role
     USING (true)
     WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_events  … イベント（大会）マスター
+-- p1_events  … イベント（大会）マスター。1大会=1行
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_events (
     id integer DEFAULT nextval('p1_events_id_seq'::regclass) NOT NULL,
@@ -235,13 +279,17 @@ CREATE TABLE p1_events (
 );
 
 ALTER TABLE p1_events ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all" ON p1_events
-    FOR ALL TO public
+CREATE POLICY "p1_events_deny_anon" ON p1_events
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_events_service_role_all" ON p1_events
+    FOR ALL TO service_role
     USING (true)
     WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_payments  … 支払い
+-- p1_payments  … 支払い（費目別内訳・確定額・承認状態）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_payments (
     id integer DEFAULT nextval('p1_payments_id_seq'::regclass) NOT NULL,
@@ -281,13 +329,17 @@ CREATE TABLE p1_payments (
 CREATE INDEX idx_payments_receipt_token ON public.p1_payments USING btree (receipt_token) WHERE (receipt_token IS NOT NULL);
 
 ALTER TABLE p1_payments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all" ON p1_payments
-    FOR ALL TO public
+CREATE POLICY "p1_payments_deny_anon" ON p1_payments
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_payments_service_role_all" ON p1_payments
+    FOR ALL TO service_role
     USING (true)
     WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_petty_cash  … 小口経費
+-- p1_petty_cash  … 小口経費の台帳
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_petty_cash (
     id integer DEFAULT nextval('p1_petty_cash_id_seq'::regclass) NOT NULL,
@@ -305,13 +357,17 @@ CREATE TABLE p1_petty_cash (
 );
 
 ALTER TABLE p1_petty_cash ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all" ON p1_petty_cash
-    FOR ALL TO public
+CREATE POLICY "p1_petty_cash_deny_anon" ON p1_petty_cash
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_petty_cash_service_role_all" ON p1_petty_cash
+    FOR ALL TO service_role
     USING (true)
     WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_shifts  … シフト・出退勤実績
+-- p1_shifts  … シフトと出退勤実績（1人×1日=1行）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_shifts (
     id integer DEFAULT nextval('p1_shifts_id_seq'::regclass) NOT NULL,
@@ -348,13 +404,17 @@ CREATE INDEX idx_p1_shifts_event_date_lunch ON public.p1_shifts USING btree (eve
 CREATE INDEX idx_p1_shifts_event_date_lunch2 ON public.p1_shifts USING btree (event_id, date, lunch2_status);
 
 ALTER TABLE p1_shifts ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all" ON p1_shifts
-    FOR ALL TO public
+CREATE POLICY "p1_shifts_deny_anon" ON p1_shifts
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_shifts_service_role_all" ON p1_shifts
+    FOR ALL TO service_role
     USING (true)
     WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_staff  … スタッフマスター
+-- p1_staff  … スタッフ台帳（氏名・本名・住所・連絡先）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_staff (
     id integer DEFAULT nextval('p1_staff_id_seq'::regclass) NOT NULL,
@@ -379,13 +439,17 @@ CREATE TABLE p1_staff (
 );
 
 ALTER TABLE p1_staff ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all" ON p1_staff
-    FOR ALL TO public
+CREATE POLICY "p1_staff_deny_anon" ON p1_staff
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_staff_service_role_all" ON p1_staff
+    FOR ALL TO service_role
     USING (true)
     WITH CHECK (true);
 
 -- ---------------------------------------------------------------------
--- p1_transport_claims  … 交通費請求
+-- p1_transport_claims  … 交通費の請求と精算
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_transport_claims (
     id integer DEFAULT nextval('p1_transport_claims_id_seq'::regclass) NOT NULL,
@@ -403,18 +467,28 @@ CREATE TABLE p1_transport_claims (
 );
 
 ALTER TABLE p1_transport_claims ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all" ON p1_transport_claims
-    FOR ALL TO public
+CREATE POLICY "p1_transport_claims_deny_anon" ON p1_transport_claims
+    FOR ALL TO anon, authenticated
+    USING (false)
+    WITH CHECK (false);
+CREATE POLICY "p1_transport_claims_service_role_all" ON p1_transport_claims
+    FOR ALL TO service_role
     USING (true)
     WITH CHECK (true);
 
 -- =====================================================================
--- 補足
+-- アクセス制御の現況（生成時点の実測値）
 -- =====================================================================
--- ・アプリケーションは service_role で接続し、DBへの直接アクセス経路は
---   公開していません（Basic認証つきリバースプロキシの内側からのみ到達）
--- ・認証情報を持つテーブル（p1_app_users / p1_day_codes / p1_admin_totp）は
---   RLSで anon ロールを拒否し、service_role のみ許可しています
--- ・パスワードと当日運用コードは平文を保存せず、
---   pbkdf2-hmac-sha256（ソルト付き）／SHA-256 のハッシュのみ保持します
+-- ・RLS（行レベルセキュリティ）: 14/14 テーブルで有効
+-- ・anon / authenticated ロールに付与されたテーブル権限: 0 件
+-- ・アプリケーションは service_role キーで接続する（環境変数が未設定なら起動しない）
+-- ・上記のとおり匿名ロールには権限が無く、公開キーを入手してもデータには到達できない
+--   （実測: 公開キーでの p1_staff 読み取りは permission denied で拒否される）
+-- ・当日運用コード（p1_day_codes.code_hash）は SHA-256 のハッシュのみを保存する
+--   （実測: 登録4件すべてが64桁の16進値。平文は保持していない）
+-- ・ログインパスワード（p1_app_users.password_hash）は pbkdf2-hmac-sha256（ソルト付き）
+--   で保存する実装。※本ファイル生成時点の登録件数は0件のため、データによる裏付けは無い
+--
+-- 検証: 本ファイルの全数値（テーブル14／列183／制約37／索引32／ポリシー28）は
+--       生成後にデータベースへ再問い合わせして一致を確認済み
 -- =====================================================================
