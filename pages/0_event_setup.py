@@ -204,14 +204,34 @@ with tab_create:
         with col2:
             c_start = st.date_input("開始日")
             c_end = st.date_input("終了日")
+            # 2026-08-01: 休憩控除の初期値を「直近イベントと同じ」にする。
+            # 従来はテンプレ/プリセットが 0、実在イベントは 45/60 と食い違っており、
+            # 作り方によって同じ勤務でも支払額が変わっていた（12時間勤務で1人¥1,500差）。
+            # 既定を直近実績に合わせ、何が適用されるかを画面に明示する。
+            _prev6, _prev8 = 0, 0
+            _prev_name = ""
+            try:
+                _prev_events = db.get_all_events() or []
+                if _prev_events:
+                    _pe = _prev_events[0]
+                    _prev6 = int(_pe.get("break_minutes_6h") or 0)
+                    _prev8 = int(_pe.get("break_minutes_8h") or 0)
+                    _prev_name = str(_pe.get("name") or "")[:24]
+            except Exception:
+                pass
             c_break6 = st.number_input(
-                "6時間超休憩（分）", value=0, step=5, min_value=0,
-                help="0 = 休憩控除なし（推奨・Pacific運用方針）。ここを変えると、6時間以上勤務した人の支払額からこの分数の休憩時間が控除されます。",
+                "6時間超休憩（分）", value=_prev6, step=5, min_value=0,
+                help="6時間以上勤務した人の支払額から、この分数を控除します。0 = 控除なし。",
             )
             c_break8 = st.number_input(
-                "8時間超休憩（分）", value=0, step=5, min_value=0,
-                help="0 = 休憩控除なし（推奨）。8時間以上勤務した人にだけ適用され、6時間超の値は無視されます。",
+                "8時間超休憩（分）", value=_prev8, step=5, min_value=0,
+                help="8時間以上勤務した人にだけ適用され、6時間超の値は無視されます。0 = 控除なし。",
             )
+            if _prev_name:
+                st.caption(
+                    f"↑ 直近の「{_prev_name}」と同じ値（{_prev6}分 / {_prev8}分）を初期表示しています。"
+                    "変更すると支払額が変わるため、過去大会と揃えるか確認してください。"
+                )
 
         st.markdown("---")
         st.markdown("**レートプリセット**")
