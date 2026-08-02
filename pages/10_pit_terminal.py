@@ -655,9 +655,14 @@ with st.expander("🚃 交通費の領収書金額を入力（任意）", expand
             elif receipt_required and not has_receipt:
                 approved = 0  # 領収書必須なのに無し → 精算0
             else:
-                # 領収書ベース: min(領収書金額, 上限×勤務日数) または 領収書全額
+                # 2026-08-02 修正: 上限の意味が交通費ページと食い違っていた。
+                # ここは「上限×勤務日数」で計算していたが、交通費ページ
+                # （pages/8_transport.py:270-279）は「総額の上限」として扱っており、
+                # 同じ人が入力画面によって精算額が変わっていた（実測で最大¥15,000差）。
+                # 実データの上限額（例: 東北 ¥15,000）は往復交通費の総額としか
+                # 解釈できない金額なので、総額側に統一する。
                 if max_amt > 0:
-                    approved = min(receipt_amt, max_amt * days_worked)
+                    approved = min(receipt_amt, max_amt)
                 else:
                     approved = receipt_amt
             db.upsert_transport_claim(

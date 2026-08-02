@@ -157,8 +157,12 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
             return 0, "住所未登録または圏外のため交通費0"
         rule = transport_rules[region]
         if rule.get("is_venue_region"):
-            # 開催地: 一律 max_amount × 日数
-            return int(rule.get("max_amount", 0) or 0) * days, "開催地一律"
+            # 2026-08-02 修正: ここだけ「× 勤務日数」で計算していたため、
+            # 交通費ページの事前見積（上限額/人＝総額）と食い違い、
+            # 6日大会なら見積の6倍が支給されていた（銀行の現金準備が不足する）。
+            # 画面の表記（8_transport.py:175「上限額/人」、:80「上限額に調整」）は
+            # すべて総額として書かれているので、総額側に統一する。
+            return int(rule.get("max_amount", 0) or 0), "開催地一律（総額）"
         # 圏外: 領収書金額
         claim = transport_claims.get(staff_info.get("id"))
         if claim and claim.get("has_receipt"):
@@ -193,6 +197,11 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
 
     results = []
     skipped = 0
+    # 2026-08-02: 黙って0円にしないための収集。
+    # 交通費0の理由（_msg）は受け取るだけで捨てられており、
+    # 住所未登録・領収書未提出のスタッフが無警告で0円確定していた。
+    transport_zero: list = []      # 交通費が0になった人と理由
+    invalid_shift_notes: list = []  # 打刻ミスで計算対象外にした日
     for staff_id, data in staff_shifts.items():
         if staff_id in protected_ids:
             skipped += 1
@@ -200,6 +209,8 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
         # 新交通費システム（あれば）
         days = len(data["shifts"])
         transport_override, _msg = _calc_transport(data["staff_info"], days)
+        if transport_override == 0 and _msg:
+            transport_zero.append(f"{data['name']}: {_msg}")
         # Phase 3-I (2026-05-08): 個別手当を計算に含める
         indiv_allowances = db.get_individual_allowances(event_id, staff_id)
         payment = calculate_staff_payment(
@@ -216,6 +227,8 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
         # Codex P2 fix #3: 個別手当合計をDBに保存（合計と内訳の整合性確保）
         _allowance_subtotal = getattr(payment, "individual_allowance_total", 0)
         results.append(payment)
+        for _bad in getattr(payment, "invalid_shifts", []) or []:
+            invalid_shift_notes.append(f"{data['name']} — {_bad}")
         db.save_payment(
             event_id=event_id, staff_id=staff_id,
             base_pay=payment.base_pay, night_pay=payment.night_pay,
@@ -234,6 +247,26 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
     if skipped:
         msg += f"（承認/支払済み{skipped}名はスキップ）"
     st.success(msg)
+
+    # 2026-08-02: 「0円で確定した理由」を必ず可視化する。
+    # 以前はこれらが画面に出ず、未払いに気づく手段が無かった。
+    if invalid_shift_notes:
+        st.error(
+            f"⛔ 打刻に不備があり、計算から除外した日が {len(invalid_shift_notes)}件 あります。"
+            "**その日の賃金は支払額に含まれていません。** 出退勤を修正して再計算してください。"
+        )
+        with st.expander(f"除外した日の一覧（{len(invalid_shift_notes)}件）", expanded=True):
+            for _n in invalid_shift_notes:
+                st.write("・", _n)
+
+    if transport_zero:
+        st.warning(
+            f"🚃 交通費が ¥0 で確定した人が {len(transport_zero)}名 います。"
+            "住所未登録・領収書未提出などが原因です。意図した0円か確認してください。"
+        )
+        with st.expander(f"交通費0円の内訳（{len(transport_zero)}名）"):
+            for _n in transport_zero:
+                st.write("・", _n)
 
 # --- 結果表示 ---
 payments = db.get_payments_for_event(event_id)
