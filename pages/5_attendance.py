@@ -7,7 +7,7 @@
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -65,9 +65,12 @@ st.divider()
 st.subheader("① 一括操作")
 
 # --- 全員出勤の時刻フィルタ ---
-today_str = datetime.now().strftime("%Y-%m-%d")
+# 2026-08-02: 実行環境のタイムゾーンに依存しないよう日本時間を明示する。
+# （コンテナのTZ設定に加えた二重の防御。片方が外れても日付がずれない）
+_JST = timezone(timedelta(hours=9))
+today_str = datetime.now(_JST).strftime("%Y-%m-%d")
 is_today = (selected_date == today_str)
-now_str = datetime.now().strftime("%H:%M")
+now_str = datetime.now(_JST).strftime("%H:%M")
 
 scheduled_shifts = [s for s in shifts if s["status"] == "scheduled"]
 
@@ -289,7 +292,7 @@ with tab_freeze:
         )
         col_fh, col_fm = st.columns(2)
         with col_fh:
-            freeze_hour = st.number_input("退勤時刻（時）", min_value=0, max_value=29, value=int(datetime.now().strftime("%H")), key="freeze_hour")
+            freeze_hour = st.number_input("退勤時刻（時）", min_value=0, max_value=29, value=int(datetime.now(_JST).strftime("%H")), key="freeze_hour")
         with col_fm:
             freeze_min = st.selectbox("退勤時刻（分）", [0, 15, 30, 45], key="freeze_min")
         if st.button("🧊 凍結退勤を実行", key="exec_freeze", type="primary"):

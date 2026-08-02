@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import io
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+# ZIPファイル名などに使う日本時間（環境のTZに依存しない）
+_JST_RECEIPT = timezone(timedelta(hours=9))
 
 import streamlit as st
 import pandas as pd
@@ -194,13 +197,13 @@ if not issued:
     st.caption("発行済みの領収書はまだありません。")
 else:
     # 公開URLのベースは自動判定（secrets override → Hostヘッダ → fallback）
-    from utils.url_helper import get_base_host
+    from utils.url_helper import get_base_host, receipt_download_url
     base_host = get_base_host()
 
     table_rows = []
     for r in issued:
         token = r["receipt_token"]
-        url = f"{base_host}/receipt_download?token={token}"
+        url = receipt_download_url(token)
         table_rows.append({
             "No.": r.get("no", 0),
             "ディーラーネーム": r.get("name_jp", ""),
@@ -325,7 +328,7 @@ else:
                 }
                 _rpicked = st.selectbox("送信先", list(_ropts.keys()), key="receipt_mail_pick")
                 _r = _ropts[_rpicked]
-                _rurl = f"{base_host}/receipt_download?token={_r['receipt_token']}"
+                _rurl = receipt_download_url(_r["receipt_token"])
                 with st.expander("📄 送信内容プレビュー"):
                     st.text(f"件名: {_rsubject}\n\n{_receipt_mail_body(_r, _rurl)}")
                 if st.button("📧 この1名に送信", type="primary", key="receipt_mail_send_one"):
@@ -349,7 +352,7 @@ else:
                     _rok, _rfails = 0, []
                     _rbar = st.progress(0.0)
                     for _ri, _r in enumerate(_mailable_r, 1):
-                        _rurl = f"{base_host}/receipt_download?token={_r['receipt_token']}"
+                        _rurl = receipt_download_url(_r["receipt_token"])
                         ok, err = _mailer.send_mail(
                             _r["email"], _rsubject, _receipt_mail_body(_r, _rurl))
                         if ok:
@@ -425,7 +428,7 @@ else:
                             zf.writestr(f"{receipt_no}_原本.pdf", pdf_bytes)
                     zip_buf.seek(0)
 
-                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                stamp = datetime.now(_JST_RECEIPT).strftime("%Y%m%d_%H%M%S")
                 st.download_button(
                     "📥 ZIPをダウンロード",
                     data=zip_buf.getvalue(),

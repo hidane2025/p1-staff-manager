@@ -5,10 +5,14 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    STREAMLIT_PORT=8501
+    STREAMLIT_PORT=8501 \
+    # 2026-08-02: コンテナ既定のUTCのままだと、日本時間の深夜操作が
+    # 「前日・9時間前」として記録され、勤務時間が負になって基本給が¥0になる。
+    # （凍結退勤の既定値がUTC時刻で入る事故を実測で確認）
+    TZ=Asia/Tokyo
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        nginx apache2-utils gettext-base curl util-linux \
+        nginx apache2-utils gettext-base curl util-linux tzdata \
     && rm -rf /var/lib/apt/lists/* \
     # Debianのnginxが同梱する既定サイト（認証なしでlisten 80）を消す
     && rm -f /etc/nginx/sites-enabled/default \

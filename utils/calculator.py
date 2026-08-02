@@ -1,6 +1,6 @@
 """P1 Staff Manager — 支払い計算エンジン v2"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -58,6 +58,9 @@ class StaffPayment:
     # A-5 (2026-06-01): 臨時調整額（±）。「+5,000円」等のイレギュラー手当を
     # 正式な計算項目として total_amount に含める。明細の内訳行にも出す。
     adjustment: int = 0
+    # 2026-08-02: 打刻ミス等で計算対象から外した日の説明。
+    # 空でなければ「その日は0円で確定している」ことを画面で警告する必要がある。
+    invalid_shifts: list = field(default_factory=list)
 
 
 def parse_time_to_minutes(time_str: str) -> Optional[int]:
@@ -105,12 +108,51 @@ def calculate_break_minutes(total_minutes: int, break_6h: int = 45, break_8h: in
     return 0
 
 
+# 1シフトとして妥当とみなす上限（これを超える入力は打刻ミスとして扱う）
+MAX_SHIFT_MINUTES = 20 * 60
+
+
+class InvalidShiftError(ValueError):
+    """勤務時間として成立しない入力（打刻ミス等）。
+
+    2026-08-02 追加の背景:
+        以前は end <= start のとき黙って全ゼロを返していたため、
+        深夜1時の退勤を「01:00」と打刻すると（13:00出勤に対して）
+        勤務時間0分＝基本給¥0のまま、画面には緑の成功表示が出ていた。
+        1人1日あたり約¥19,000の未払いが無警告で確定する経路だった。
+        黙って0にするのではなく、呼び出し側が気づける形にする。
+    """
+
+
+def normalize_overnight_end(start_minutes: int, end_minutes: int) -> int:
+    """退勤が出勤より前なら翌日とみなして24時間を加算する。
+
+    現場では 13:00 出勤・翌 01:00 退勤を「01:00」と打刻することがある
+    （25:00 と書くのが本来だが、深夜の現場で毎回徹底するのは難しい）。
+    人が意図しているのは翌日の01:00なので、その解釈に寄せる。
+    """
+    if end_minutes <= start_minutes:
+        return end_minutes + 24 * 60
+    return end_minutes
+
+
 def calculate_shift_hours(start_minutes: int, end_minutes: int, date: str,
                           break_6h: int = 45, break_8h: int = 60) -> ShiftHours:
-    """シフトの通常時間・深夜時間を分解（休憩控除込み）"""
+    """シフトの通常時間・深夜時間を分解（休憩控除込み）
+
+    Raises:
+        InvalidShiftError: 補正しても勤務時間として成立しない場合
+                           （20時間超＝打刻ミスとみなす）
+    """
+    # 深夜跨ぎ（01:00 と打刻された翌日退勤）を先に補正する
+    end_minutes = normalize_overnight_end(start_minutes, end_minutes)
     total = end_minutes - start_minutes
-    if total <= 0:
-        return ShiftHours(0, 0, 0, 0, date, "", "")
+    if total <= 0 or total > MAX_SHIFT_MINUTES:
+        raise InvalidShiftError(
+            f"勤務時間として成立しません（出勤 {start_minutes // 60}:{start_minutes % 60:02d} / "
+            f"退勤 {end_minutes // 60}:{end_minutes % 60:02d} / 算出 {total}分）。"
+            "打刻時刻を確認してください。深夜の退勤は 25:00 のように24時以降の表記で入力できます。"
+        )
 
     break_min = calculate_break_minutes(total, break_6h, break_8h)
     working_minutes = total - break_min
@@ -224,6 +266,7 @@ def calculate_staff_payment(
     is_timee = employment_type == "timee"
     has_custom = bool(custom_hourly_rate and custom_hourly_rate > 0)
 
+    invalid_shifts: list[str] = []   # 打刻ミス等で計算対象外にした日
     for shift in shifts:
         time_range = f"{shift['start']}~{shift['end']}"
         parsed = parse_shift_time(time_range)
@@ -231,8 +274,14 @@ def calculate_staff_payment(
             continue
 
         start_min, end_min = parsed
-        shift_hours = calculate_shift_hours(start_min, end_min, shift["date"],
-                                            break_6h, break_8h)
+        try:
+            shift_hours = calculate_shift_hours(start_min, end_min, shift["date"],
+                                                break_6h, break_8h)
+        except InvalidShiftError as e:
+            # 打刻ミスの日は「0円で確定」させず、集計から除外して警告に積む。
+            # 黙って0円にすると未払いに気づけないため（2026-08-02 QA指摘）。
+            invalid_shifts.append(f"{shift['date']}（{shift['start']}〜{shift['end']}）: {e}")
+            continue
 
         rate = rates_by_date.get(shift["date"], {})
         is_mix = shift.get("is_mix", False)
@@ -341,4 +390,5 @@ def calculate_staff_payment(
         daily_breakdown=daily_results,
         individual_allowance_total=indiv_total,
         adjustment=adj,
+        invalid_shifts=invalid_shifts,
     )

@@ -185,12 +185,12 @@ contracts = contract_db.list_contracts(
 if not contracts:
     st.caption("該当する契約はありません。")
 else:
-    from utils.url_helper import get_base_host
+    from utils.url_helper import get_base_host, contract_sign_url
     base_host = get_base_host()
     rows = []
     for c in contracts:
         token = c.get("signing_token") or ""
-        url = f"{base_host}/contract_sign?token={token}" if token else ""
+        url = contract_sign_url(token) if token else ""
         icon = {
             "draft": "📝", "sent": "📧",
             "viewed": "👀", "signed": "✅",
@@ -232,7 +232,7 @@ else:
         if copy_mode2 == "個別（1名ずつ）":
             contract_choices = {
                 f"{c['contract_no']} — {c.get('staff_name_jp')}（{c.get('staff_real_name') or '本名未登録'}）":
-                f"{base_host}/contract_sign?token={c['signing_token']}"
+                contract_sign_url(c["signing_token"])
                 for c in pending_contracts
             }
             picked2 = st.selectbox("契約選択", list(contract_choices.keys()),
@@ -242,7 +242,7 @@ else:
             bulk_text2 = "\n\n".join(
                 f"{c.get('staff_real_name') or c.get('staff_name_jp')}さん\n"
                 f"業務委託契約書の署名をお願いします。\n"
-                f"{base_host}/contract_sign?token={c['signing_token']}"
+                + contract_sign_url(c["signing_token"])
                 for c in pending_contracts
             )
             copyable_url(bulk_text2, label="全員分まとめて")
@@ -295,7 +295,7 @@ else:
                 }
                 _picked = st.selectbox("送信先", list(_opts.keys()), key="contract_mail_pick")
                 _c = _opts[_picked]
-                _url = f"{base_host}/contract_sign?token={_c['signing_token']}"
+                _url = contract_sign_url(_c["signing_token"])
                 with st.expander("📄 送信内容プレビュー"):
                     st.text(f"件名: {_subject}\n\n{_contract_mail_body(_c, _url)}")
                 if st.button("📧 この1名に送信", type="primary", key="contract_mail_send_one"):
@@ -321,7 +321,7 @@ else:
                     _ok_n, _fails = 0, []
                     _bar = st.progress(0.0)
                     for _i, _c in enumerate(_mailable, 1):
-                        _url = f"{base_host}/contract_sign?token={_c['signing_token']}"
+                        _url = contract_sign_url(_c["signing_token"])
                         ok, err = _mailer.send_mail(
                             _c["staff_email"], _subject, _contract_mail_body(_c, _url))
                         if ok:

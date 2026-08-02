@@ -2,7 +2,7 @@
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -33,7 +33,9 @@ EMPLOYMENT_LABELS = {
 }
 
 # --- 年選択 ---
-current_year = datetime.now().year
+# 2026-08-02: 実行環境のTZに依存しないよう日本時間を明示する
+_JST = timezone(timedelta(hours=9))
+current_year = datetime.now(_JST).year
 year = st.selectbox("集計年", list(range(current_year + 1, current_year - 5, -1)), index=1)
 
 # --- 雇用区分フィルタ ---

@@ -332,7 +332,7 @@ with st.expander("🧾 領収書QR（スタッフのスマホでスキャン→�
         st.info("発行済みの領収書がまだありません。「📄 領収書発行」ページでPDF一括生成すると、ここにQRが出せます。")
     else:
         from utils.receipt_qr import qr_png_bytes
-        from utils.url_helper import get_base_host
+        from utils.url_helper import get_base_host, receipt_download_url
         _qr_pays.sort(key=lambda p: (p.get("no") or 9999))
         _qr_opts = {
             f"NO.{p.get('no', '—')} {p.get('name_jp', '—')}（¥{db.get_payable(p):,}）"
@@ -342,7 +342,7 @@ with st.expander("🧾 領収書QR（スタッフのスマホでスキャン→�
         _qr_sel = st.selectbox("スタッフを選択", list(_qr_opts.keys()), key="receipt_qr_select")
         if _qr_sel:
             _qp = _qr_opts[_qr_sel]
-            _qr_url = f"{get_base_host()}/receipt_download?token={_qp['receipt_token']}"
+            _qr_url = receipt_download_url(_qp["receipt_token"])
             _c1, _c2 = st.columns([1, 1])
             with _c1:
                 st.image(qr_png_bytes(_qr_url, box_size=10))

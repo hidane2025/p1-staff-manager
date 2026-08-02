@@ -193,7 +193,7 @@ if _print_mode_pre:
     # サーバ側で通常UIを描画していないため、Cmd+Pで純粋に印刷カードのみ印字される
     # 2026-07-06: 領収書発行済みの人はDL用QRを明細に印刷（現金手渡し時に本人がスキャン→即受領）
     from utils.receipt_qr import qr_data_uri
-    from utils.url_helper import get_base_host
+    from utils.url_helper import get_base_host, receipt_download_url
     _qr_base_host = get_base_host()
     for e in envelope_data:
         _allow_total = int(e.get("individual_allowance_total") or 0)
@@ -215,7 +215,7 @@ if _print_mode_pre:
         # 領収書発行済みならDL用QRを載せる（トークンURLの印刷＝手渡し前提の運用）
         _qr_block = ""
         if e.get("receipt_token") and e.get("receipt_pdf_path"):
-            _dl_url = f"{_qr_base_host}/receipt_download?token={e['receipt_token']}"
+            _dl_url = receipt_download_url(e["receipt_token"])
             _qr_block = (
                 f'<div style="margin-top: 12pt; display: flex; align-items: center; gap: 10pt;">'
                 f'<img src="{qr_data_uri(_dl_url, box_size=4)}" '
