@@ -650,8 +650,9 @@ with st.expander("🚃 交通費の領収書金額を入力（任意）", expand
             days_worked = len({s["date"] for s in staff_shifts_all}) or 1
 
             if is_venue:
-                # 開催地: max_amount × 勤務日数 を支給
-                approved = max_amt * days_worked
+                # 2026-08-02 修正: ここも日数倍だったため、支払い計算・交通費ページ
+                # （どちらも総額）と食い違っていた。総額に統一する。
+                approved = max_amt
             elif receipt_required and not has_receipt:
                 approved = 0  # 領収書必須なのに無し → 精算0
             else:
@@ -677,7 +678,7 @@ with st.expander("🚃 交通費の領収書金額を入力（任意）", expand
                 detail=(
                     f"{target['name_jp']} 領収書¥{receipt_amt:,} "
                     f"→ 精算¥{approved:,}"
-                    f"（{days_worked}日分・{'venue' if is_venue else '通常'}）"
+                    f"（勤務{days_worked}日・{'開催地一律' if is_venue else '領収書ベース'}・上限は総額）"
                 ),
                 event_id=event_id,
                 performed_by=operator_name(),
@@ -685,7 +686,7 @@ with st.expander("🚃 交通費の領収書金額を入力（任意）", expand
             st.success(
                 f"💾 交通費を保存しました。"
                 f"領収書 ¥{receipt_amt:,} → 精算額 **¥{approved:,}**"
-                f"（{days_worked}日分計算）"
+                f"（{'開催地一律' if is_venue else '領収書ベース'}／上限は総額で判定）"
             )
             st.rerun()
 
