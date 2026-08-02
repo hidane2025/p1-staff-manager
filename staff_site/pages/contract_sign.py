@@ -4,14 +4,16 @@ URL: /?token=xxxx でアクセス
 トークン検証 → 契約内容確認 → 電子署名パッドで署名 → 送信
 """
 
+from __future__ import annotations
+
 import sys as _sys
 from pathlib import Path as _Path
 
 # staff_site/pages/ から実行されるため、共有モジュール（db, utils）を
 # import できるようリポジトリルートを検索パスに加える。
+# 注意: from __future__ は必ずファイル先頭（docstringの直後）に置くこと。
+#       前に文を置くと SyntaxError でページが起動しない。
 _sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
-
-from __future__ import annotations
 
 import io
 import json

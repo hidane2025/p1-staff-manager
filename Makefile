@@ -31,7 +31,9 @@ install:
 	@echo "✅ セットアップ完了。  make run で起動できます。"
 
 lint:
-	$(PY) -m py_compile app.py db.py utils/*.py scripts/*.py pages/*.py
+	@# 2026-08-02: staff_site/ が対象外で、構文エラーのページを本番へ出しかけた。
+	@# 追跡対象の全Pythonファイルを検査する（除外リストではなく git 管理下を母集団にする）。
+	$(PY) -m py_compile $$(git ls-files '*.py')
 	@echo "✅ 構文OK"
 
 test-fast:

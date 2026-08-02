@@ -316,6 +316,35 @@ if _guard_sql_path.exists():
 
 
 # ============================================================
+# 12. 全Pythonファイルの構文健全性（2026-08-02）
+#     lint が staff_site/ を対象外にしており、構文エラーのページを
+#     本番へ出しかけた（UIテストが拾って発覚）。母集団をgit管理下に固定する。
+# ============================================================
+print("\n[12] 全Pythonファイルの構文健全性")
+import ast as _ast, subprocess as _sp
+_files = _sp.run(["git", "ls-files", "*.py"], cwd=str(ROOT),
+                 capture_output=True, text=True).stdout.split()
+_bad_syntax, _bad_future = [], []
+for _f in _files:
+    _src = (ROOT / _f).read_text()
+    try:
+        _t = _ast.parse(_src)
+    except SyntaxError as _e:
+        _bad_syntax.append(f"{_f}: {_e.msg}")
+        continue
+    # from __future__ は docstring の直後でなければ SyntaxError になる
+    _body = [n for n in _t.body
+             if not (isinstance(n, _ast.Expr) and isinstance(getattr(n, "value", None), _ast.Constant)
+                     and isinstance(n.value.value, str))]
+    for _i, _n in enumerate(_body):
+        if isinstance(_n, _ast.ImportFrom) and _n.module == "__future__" and _i > 0:
+            _bad_future.append(f"{_f}（{_i+1}番目）")
+
+_check(f"git管理下の全{len(_files)}ファイルが構文エラー無し", not _bad_syntax, f"{_bad_syntax}")
+_check("from __future__ が先頭に置かれている", not _bad_future, f"{_bad_future}")
+
+
+# ============================================================
 # 結果集計
 # ============================================================
 print()
