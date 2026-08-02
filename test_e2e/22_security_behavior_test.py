@@ -296,6 +296,26 @@ _check("障害対応手順書が存在する", (ROOT / "deploy/RUNBOOK.md").exis
 
 
 # ============================================================
+# 11. DB整合性ガード（2026-08-02 外部エンジニア点検の指摘3件）
+#     マイグレーションSQLが存在し、必要な制約を定義しているかを検査する。
+#     （実DBへの適用状況は別途 docs/schema.sql の再生成で確認する）
+# ============================================================
+print("\n[11] DB整合性ガードの定義")
+_guard_sql_path = ROOT / "docs/db_migrations/20260802_add_integrity_guards.sql"
+_check("整合性ガードのマイグレーションが存在する", _guard_sql_path.exists())
+if _guard_sql_path.exists():
+    _g = _guard_sql_path.read_text()
+    _check("契約書がスタッフ削除で消えない（RESTRICT化）",
+           "p1_contracts" in _g and "ON DELETE RESTRICT" in _g)
+    _check("給与の二重払いを禁止（event_id, staff_id の一意制約）",
+           "p1_payments" in _g and "UNIQUE (event_id, staff_id)" in _g)
+    _check("同日レートの重複を禁止（event_id, date の一意制約）",
+           "p1_event_rates" in _g and "UNIQUE (event_id, date)" in _g)
+    _check("個別手当・交通費もスタッフ削除で消えない",
+           "p1_staff_event_allowances" in _g and "p1_transport_claims" in _g)
+
+
+# ============================================================
 # 結果集計
 # ============================================================
 print()
