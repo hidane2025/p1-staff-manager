@@ -1236,6 +1236,29 @@ def save_payment(event_id, staff_id, base_pay, night_pay, transport_total,
     # 既存があれば更新、無ければ挿入に変更し、データが消える瞬間を無くした。
     # 更新には status 述語を付け、確認から更新までの間に他端末が支払済みにした場合も弾く。
     if existing.data:
+        # 2026-08-02: 金額が変わるのに承認・領収書がそのまま残る欠陥を是正。
+        # ピット端末の再打刻（多日程スタッフは毎日通る）で
+        #   ・誰も承認していない金額が「承認済み」として現金支払いされる
+        #   ・旧額の領収書PDFとトークンが有効なまま、違う額の現金が渡る
+        # という統制の穴があった。set_payment_adjustment / recompute_payable_for_event は
+        # 既に同じ状況で差し戻し・失効を行っており、save_payment だけが漏れていた。
+        _old_total = int(existing.data[0].get("total_amount") or 0)
+        if int(total_amount or 0) != _old_total:
+            # 金額が変わった → 承認をやり直させる（承認情報もクリア）
+            payload["status"] = "pending"
+            payload["approved_by"] = None
+            payload["approved_at"] = None
+            # 旧額の領収書は無効化する（再発行が必要）
+            if db_schema.has_column("p1_payments", "receipt_received"):
+                payload["receipt_received"] = 0
+            if db_schema.has_column("p1_payments", "receipt_pdf_path"):
+                payload["receipt_pdf_path"] = None
+                payload["receipt_token"] = None
+                if db_schema.has_column("p1_payments", "receipt_token_expires_at"):
+                    payload["receipt_token_expires_at"] = None
+            log_action("payment_reverted_by_recalc", "payments", staff_id,
+                       f"再計算で金額変更（¥{_old_total:,}→¥{total_amount:,}）のため"
+                       "未承認へ差し戻し・領収書を無効化", event_id)
         _res = client.table("p1_payments").update(payload).eq(
             "id", existing.data[0]["id"]).neq("status", "paid").execute()
         if not _res.data:

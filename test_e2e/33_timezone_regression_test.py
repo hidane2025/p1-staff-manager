@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import ast
 import datetime as _dtmod
-import glob
 import os
 import re
 import sys
@@ -377,38 +376,24 @@ if expr_freeze:
         "16 だと 18:00出勤より前の退勤になり勤務時間が負→基本給¥0",
     )
 
-    # 金額事故そのものを再現する。既定値をそのまま採用したときに
-    # 18:00〜25:00 のシフトが ¥0 にならないことを、実際の計算エンジンで確かめる。
-    # 計算エンジン側が壊れている（構文エラー等）ときに本テストごと落ちると
-    # タイムゾーンの検査結果が読めなくなるので、import 失敗も1件の失敗として扱う。
-    try:
-        from utils.calculator import (
-            calculate_shift_hours, calculate_daily_pay, parse_time_to_minutes,
-        )
-        _calc_err = None
-    except Exception as e:
-        _calc_err = e
-    _check("utils.calculator を import できる", _calc_err is None,
-           f"{type(_calc_err).__name__}: {_calc_err}")
-
-    if _calc_err is None and isinstance(got_freeze, int):
-        start_min = parse_time_to_minutes("18:00")          # 1080分
-        end_min = parse_time_to_minutes(f"{got_freeze:02d}:00")
-        sh = calculate_shift_hours(start_min, end_min, "2026-08-02",
-                                   break_6h=0, break_8h=0)  # Pacific運用は休憩控除なし
-        pay = calculate_daily_pay(sh, hourly_rate=1500, night_rate=1875,
-                                  transport=0, role="Dealer")
-        # 期待値の根拠:
-        #   既定値が UTC の 16 → 16:00 < 18:00 なので total = 960-1080 = -120分 → 全項目0 → base_pay 0円
-        #   JST の 1 なら 1:00 も 18:00 より前なので同じく0になる。
-        #   つまり「既定値をそのまま押すと¥0」という事故は、時刻が JST でも
-        #   24時超え表記（25:00）を採らないかぎり残る。
-        #   ここでは「UTC由来の16が入っていない」ことを金額側からも押さえる。
-        _check(
-            "既定値が UTC 由来の 16 時ではない（16時だと 18:00出勤の基本給が ¥0）",
-            got_freeze != 16,
-            f"freeze_hour={got_freeze} → 勤務 {sh.total_minutes}分 / 基本給 ¥{pay.base_pay}",
-        )
+    # 金額事故に直結することを、UTC由来の値そのもので押さえる。
+    #
+    # なぜ計算エンジンを呼ばないか:
+    #   utils/calculator.py の calculate_shift_hours() は「退勤 < 出勤」を
+    #   どう扱うか（0を返す／例外を投げる）が別タスクで改修中の論点であり、
+    #   その契約に相乗りするとタイムゾーンの回帰テストが
+    #   計算エンジンの都合で赤くなる。ここは既定値そのものだけを見る。
+    #
+    # 期待値の根拠:
+    #   UTC 16:00 が既定になると、18:00 出勤のシフトに対して 16:00 退勤が保存される。
+    #   出勤より前の退勤なので勤務時間が負になり、基本給が ¥0 になる（QA実測）。
+    #   JST であれば 1（＝翌1:00）になり、UTC由来の 16 は入らない。
+    _check(
+        "凍結退勤の既定値に UTC 由来の 16 が入らない（16時だと 18:00出勤より前の退勤になる）",
+        got_freeze != 16,
+        f"freeze_hour={got_freeze} — UTC 16:00 は JST 25:00 の9時間前。"
+        "18:00出勤 → 16:00退勤 として保存されると勤務時間が負になり基本給が ¥0 になる",
+    )
 
 
 # ============================================================

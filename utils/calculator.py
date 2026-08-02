@@ -5,6 +5,11 @@ from typing import Optional
 
 
 NIGHT_START_HOUR = 22  # 深夜割増の開始時刻
+NIGHT_END_HOUR = 29    # 深夜割増の終了時刻（翌5:00 = 24+5）
+# SPEC.md:242「night_rate を 22:00〜翌5:00 に適用」。
+# 2026-08-02 まで終端が実装されておらず、翌5:00以降も深夜単価が続いていた
+# （22:00〜翌6:00 の勤務で ¥375 の過払い）。逆に 0:00〜5:00 と表記された
+# 勤務は深夜と判定されず ¥1,875 の過少支給になっていた。
 
 
 @dataclass(frozen=True)
@@ -83,15 +88,32 @@ def parse_shift_time(time_range: str) -> Optional[tuple]:
     """'13:00~23:00' → (start_minutes, end_minutes)"""
     if not time_range or time_range.strip() in ("", "×", "x", "X", "-"):
         return None
-    clean = time_range.strip().replace("〜", "~").replace("－", "~").replace("-", "~")
-    for sep in ["~", "~"]:
-        if sep in clean:
-            parts = clean.split(sep)
-            if len(parts) == 2:
-                start = parse_time_to_minutes(parts[0])
-                end = parse_time_to_minutes(parts[1])
-                if start is not None and end is not None:
-                    return (start, end)
+    # 2026-08-02: 区切り文字の対応漏れでシフトが無言で消えていた。
+    # シフト表は外部（各PC・各IME）から届くため、見た目が同じでも文字が違う。
+    # 特に U+FF5E（～）は Windows の日本語IMEが「から」で出す既定の字形で、
+    # これが未対応だとその行のシフトが丸ごと取り込まれず未払いになる。
+    # 旧実装の `for sep in ["~", "~"]` は両方ともASCIIチルダで重複していた。
+    _SEPARATORS = (
+        "\u301c",  # 〜 波ダッシュ
+        "\uff5e",  # ～ 全角チルダ（Windows日本語IMEの既定）
+        "\u30fc",  # ー 長音符（誤入力として頻出）
+        "\uff0d",  # － 全角ハイフンマイナス
+        "\u2212",  # − マイナス記号
+        "\u2013",  # – エヌダッシュ
+        "\u2014",  # — エムダッシュ
+        "-",        # ASCIIハイフン
+        "\uff5c",  # ｜ 全角縦棒（稀に使われる）
+        "|",
+    )
+    clean = time_range.strip()
+    for _sep in _SEPARATORS:
+        clean = clean.replace(_sep, "~")
+    parts = clean.split("~")
+    if len(parts) == 2:
+        start = parse_time_to_minutes(parts[0])
+        end = parse_time_to_minutes(parts[1])
+        if start is not None and end is not None:
+            return (start, end)
     return None
 
 
@@ -157,20 +179,28 @@ def calculate_shift_hours(start_minutes: int, end_minutes: int, date: str,
     break_min = calculate_break_minutes(total, break_6h, break_8h)
     working_minutes = total - break_min
 
-    night_boundary = NIGHT_START_HOUR * 60
+    # 深夜帯は [22:00, 翌5:00) と [46:00, 翌々5:00) … と24時間周期で並ぶ。
+    # 勤務区間 [start, end) と各深夜帯の「重なり」を足し合わせて深夜時間を求める。
+    # 以前は開始時刻だけで判定していたため、
+    #   ・0:00〜5:00 表記の勤務が深夜と認識されない（過少支給）
+    #   ・翌5:00を過ぎても深夜単価が続く（過払い）
+    # の両方が起きていた。
+    def _night_overlap(a: int, b: int) -> int:
+        """勤務区間 [a, b) と深夜帯の重なりの合計（分）"""
+        total_overlap = 0
+        # 前日ぶん・当日ぶん・翌日ぶんの深夜帯を順に重ねる
+        for day in (-1, 0, 1):
+            ns = NIGHT_START_HOUR * 60 + day * 24 * 60
+            ne = NIGHT_END_HOUR * 60 + day * 24 * 60
+            total_overlap += max(0, min(b, ne) - max(a, ns))
+        return total_overlap
 
-    if end_minutes <= night_boundary:
-        regular = working_minutes
-        night = 0
-    elif start_minutes >= night_boundary:
-        regular = 0
-        night = working_minutes
-    else:
-        raw_regular = night_boundary - start_minutes
-        raw_night = end_minutes - night_boundary
-        # 休憩は通常時間から控除（深夜前に休憩を取る前提）
-        regular = max(0, raw_regular - break_min)
-        night = raw_night
+    night = _night_overlap(start_minutes, end_minutes)
+    raw_regular = total - night
+    # 休憩は通常時間から控除する（深夜に入る前に休憩を取る運用）。
+    # 通常時間が休憩より短い場合は残りを深夜から引く。
+    regular = max(0, raw_regular - break_min)
+    night = max(0, night - max(0, break_min - raw_regular))
 
     start_str = f"{start_minutes // 60}:{start_minutes % 60:02d}"
     end_str = f"{end_minutes // 60}:{end_minutes % 60:02d}"
