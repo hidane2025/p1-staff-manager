@@ -637,11 +637,26 @@ def bulk_set_event_rates(event_id: int, rates: list) -> int:
 
 def upsert_shift(event_id, staff_id, date, planned_start, planned_end, is_mix=0):
     client = get_client()
-    existing = client.table("p1_shifts").select("id").eq("event_id", event_id).eq("staff_id", staff_id).eq("date", date).execute()
+    existing = client.table("p1_shifts").select(
+        "id, planned_start, planned_end, is_mix, event_id, staff_id"
+    ).eq("event_id", event_id).eq("staff_id", staff_id).eq("date", date).execute()
     if existing.data:
+        _old = existing.data[0]
         client.table("p1_shifts").update({
             "planned_start": planned_start, "planned_end": planned_end, "is_mix": is_mix
-        }).eq("id", existing.data[0]["id"]).execute()
+        }).eq("id", _old["id"]).execute()
+        # 2026-08-04: シフト再取込で予定時刻やMIX区分が変わった場合も、打刻経路
+        # （checkin/checkout/欠勤）と同じく承認済み支払いを未承認へ差し戻す。
+        # ここだけガードが無く、承認後にシフトを再取込すると承認済みの金額が
+        # 古いまま黙って残っていた（UI運用テスト第3弾で実測）。支払済みは
+        # reset_payment_to_pending 側が保護する。
+        if (str(_old.get("planned_start")) != str(planned_start)
+                or str(_old.get("planned_end")) != str(planned_end)
+                or int(_old.get("is_mix") or 0) != int(is_mix or 0)):
+            _revert_payment_if_amount_affected(
+                _old,
+                reason=f"シフト再取込で予定変更 {planned_start}〜{planned_end}（要再計算）",
+            )
     else:
         client.table("p1_shifts").insert({
             "event_id": event_id, "staff_id": staff_id, "date": date,

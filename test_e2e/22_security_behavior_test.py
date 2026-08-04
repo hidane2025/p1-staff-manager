@@ -375,6 +375,17 @@ _check("交通費ページ: 開催地見積はスタッフ別シフト日数を�
 _check("交通費0円の理由が画面に出る", "transport_zero" in _pay)
 _check("打刻ミスで除外した日が画面に出る", "invalid_shift_notes" in _pay)
 
+# 承認済み金額の黙った陳腐化を防ぐ（2026-08-04 UI運用テスト第3弾で発見）
+#   差戻しガードは打刻3経路（checkin/checkout/欠勤）にはあったが、
+#   シフト再取込（upsert_shift の予定時刻更新）だけ素通りで、
+#   承認後に再取込すると承認済みの金額が古いまま残っていた。
+print("\n[13b] シフト再取込の差戻しガード")
+_dbsrc = (ROOT / "db.py").read_text()
+_ups = _dbsrc[_dbsrc.index("def upsert_shift"):_dbsrc.index("def get_shifts_for_event")]
+_check("upsert_shiftの予定変更が承認済み支払いを差し戻す",
+       "_revert_payment_if_amount_affected" in _ups,
+       "シフト再取込で承認済み金額が黙って古いまま残る")
+
 
 # ============================================================
 # 14. 実行環境の一致（2026-08-04 UI運用テストで発覚）
