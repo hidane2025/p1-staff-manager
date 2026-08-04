@@ -370,6 +370,40 @@ _check("打刻ミスで除外した日が画面に出る", "invalid_shift_notes"
 
 
 # ============================================================
+# 14. 実行環境の一致（2026-08-04 UI運用テストで発覚）
+#     本番は python:3.12-slim、CI/ローカルは 3.9 だった。
+#     pages/3_payment.py が 3.10+ 構文（int | None）を使っており、
+#     「支払い額を計算」ボタンが 3.9 では TypeError で動かなかった。
+#     最も金額に効く機能が、CIでもローカルでも一度も実行されていなかった。
+# ============================================================
+print("\n[14] 実行環境の一致と構文の互換性")
+import re as _re3, subprocess as _sp3
+_dockerfile = (ROOT / "Dockerfile").read_text()
+_m = _re3.search(r"FROM python:(\d+)\.(\d+)", _dockerfile)
+_check("Dockerfile が Python バージョンを固定している", bool(_m), _dockerfile[:60])
+
+_ci_path = ROOT / ".github/workflows/test.yml"
+if _ci_path.exists() and _m:
+    _ci = _ci_path.read_text()
+    _prod_ver = f"{_m.group(1)}.{_m.group(2)}"
+    _check(f"CIのPythonが本番と一致（{_prod_ver}）",
+           f"'{_prod_ver}'" in _ci or f'"{_prod_ver}"' in _ci,
+           "CIと本番でバージョンが違うと、本番でしか動かない/落ちるコードを検出できない")
+
+# 3.10+ 構文を使うなら from __future__ import annotations が必要（3.9互換のため）
+_pep604 = []
+for _f in _sp3.run(["git","ls-files","*.py"], cwd=str(ROOT),
+                   capture_output=True, text=True).stdout.split():
+    _src = (ROOT / _f).read_text()
+    if "from __future__ import annotations" in _src:
+        continue
+    if _re3.search(r"->\s*[\w\[\], ]*\|\s*None|:\s*\w+\s*\|\s*None\s*[,)=]", _src):
+        _pep604.append(_f)
+_check("3.10+の型構文を使うファイルは __future__ を宣言している",
+       not _pep604, f"未宣言: {_pep604}")
+
+
+# ============================================================
 # 結果集計
 # ============================================================
 print()

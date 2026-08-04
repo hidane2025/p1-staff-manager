@@ -28,7 +28,7 @@ jobs:
       - name: Python 3.9 をセットアップ
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.12'   # 本番コンテナ（python:3.12-slim）と揃える
           cache: pip
 
       # 3) 依存をインストール

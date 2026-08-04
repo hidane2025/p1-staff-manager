@@ -3,6 +3,12 @@
 領収書連動: 領収書未受領 → 支払い不可
 """
 
+# 2026-08-04: 型注釈を遅延評価にする。
+# 147行の `tuple[int | None, str]` は Python 3.10+ の構文で、
+# 3.9 では関数定義の時点で TypeError になり「支払い額を計算」ボタンが
+# 押せなかった（本番は3.12なので動くが、CI/ローカルの3.9では未検証だった）。
+from __future__ import annotations
+
 import streamlit as st
 import pandas as pd
 import sys
