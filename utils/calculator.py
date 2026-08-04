@@ -152,8 +152,12 @@ def normalize_overnight_end(start_minutes: int, end_minutes: int) -> int:
     現場では 13:00 出勤・翌 01:00 退勤を「01:00」と打刻することがある
     （25:00 と書くのが本来だが、深夜の現場で毎回徹底するのは難しい）。
     人が意図しているのは翌日の01:00なので、その解釈に寄せる。
+
+    2026-08-04: 比較は「未満」に限定する。出勤==退勤（実働0分）を翌日扱いに
+    すると24時間勤務→InvalidShiftError になるが、0分勤務は「不正」ではなく
+    正当な0分・0円（test_e2e/30 D-5 で固定済みの仕様）。
     """
-    if end_minutes <= start_minutes:
+    if end_minutes < start_minutes:
         return end_minutes + 24 * 60
     return end_minutes
 
@@ -169,7 +173,10 @@ def calculate_shift_hours(start_minutes: int, end_minutes: int, date: str,
     # 深夜跨ぎ（01:00 と打刻された翌日退勤）を先に補正する
     end_minutes = normalize_overnight_end(start_minutes, end_minutes)
     total = end_minutes - start_minutes
-    if total <= 0 or total > MAX_SHIFT_MINUTES:
+    # total == 0（出勤==退勤）は「不正」ではなく正当な実働0分・0円として通す。
+    # 退勤<出勤は normalize で翌日補正されるためここには来ない。
+    # （test_e2e/30 D-5 で固定済み。<= にすると0分勤務が巻き添えでエラーになる）
+    if total < 0 or total > MAX_SHIFT_MINUTES:
         raise InvalidShiftError(
             f"勤務時間として成立しません（出勤 {start_minutes // 60}:{start_minutes % 60:02d} / "
             f"退勤 {end_minutes // 60}:{end_minutes % 60:02d} / 算出 {total}分）。"

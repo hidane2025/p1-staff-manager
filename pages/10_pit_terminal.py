@@ -606,8 +606,9 @@ with st.expander("🚃 交通費の領収書金額を入力（任意）", expand
         receipt_required = bool(rule.get("receipt_required"))
         st.caption(
             f"📍 適用ルール（地域: {region or '未設定'}）— "
-            f"上限 ¥{max_amt:,}　／ "
-            f"開催地: {'はい' if is_venue else 'いいえ'}　／ "
+            + (f"日額 ¥{max_amt:,}（×出勤日数）　／ " if is_venue
+               else f"上限 ¥{max_amt:,}（往復総額）　／ ")
+            + f"開催地: {'はい' if is_venue else 'いいえ'}　／ "
             f"領収書: {'必要' if receipt_required else '不要'}"
         )
     else:
@@ -650,18 +651,18 @@ with st.expander("🚃 交通費の領収書金額を入力（任意）", expand
             days_worked = len({s["date"] for s in staff_shifts_all}) or 1
 
             if is_venue:
-                # 2026-08-02 修正: ここも日数倍だったため、支払い計算・交通費ページ
-                # （どちらも総額）と食い違っていた。総額に統一する。
-                approved = max_amt
+                # 2026-08-04 修正: 開催地は日額×勤務日数（交通費統一ルール
+                # 2026-07-22 TAKA起草・木村さん基本承認「出勤1日あたり一律」。
+                # 支払い計算 _calc_transport と同一式）。
+                approved = max_amt * days_worked
             elif receipt_required and not has_receipt:
                 approved = 0  # 領収書必須なのに無し → 精算0
             else:
-                # 2026-08-02 修正: 上限の意味が交通費ページと食い違っていた。
-                # ここは「上限×勤務日数」で計算していたが、交通費ページ
-                # （pages/8_transport.py:270-279）は「総額の上限」として扱っており、
+                # 2026-08-02 修正: 遠方の上限は「往復交通費の総額」。以前は
+                # 「上限×勤務日数」で計算しており、交通費ページ（総額の上限）と
                 # 同じ人が入力画面によって精算額が変わっていた（実測で最大¥15,000差）。
-                # 実データの上限額（例: 東北 ¥15,000）は往復交通費の総額としか
-                # 解釈できない金額なので、総額側に統一する。
+                # 承認済みルール（2026-07-22）でも遠方は「往復上限」＝総額なので
+                # 日数倍しない。
                 if max_amt > 0:
                     approved = min(receipt_amt, max_amt)
                 else:
@@ -678,7 +679,8 @@ with st.expander("🚃 交通費の領収書金額を入力（任意）", expand
                 detail=(
                     f"{target['name_jp']} 領収書¥{receipt_amt:,} "
                     f"→ 精算¥{approved:,}"
-                    f"（勤務{days_worked}日・{'開催地一律' if is_venue else '領収書ベース'}・上限は総額）"
+                    f"（勤務{days_worked}日・"
+                    f"{'開催地一律 日額×勤務日数' if is_venue else '領収書ベース・上限は往復総額'}）"
                 ),
                 event_id=event_id,
                 performed_by=operator_name(),
@@ -686,7 +688,7 @@ with st.expander("🚃 交通費の領収書金額を入力（任意）", expand
             st.success(
                 f"💾 交通費を保存しました。"
                 f"領収書 ¥{receipt_amt:,} → 精算額 **¥{approved:,}**"
-                f"（{'開催地一律' if is_venue else '領収書ベース'}／上限は総額で判定）"
+                f"（{'開催地一律（日額×勤務日数）' if is_venue else '領収書ベース／上限は往復総額で判定'}）"
             )
             st.rerun()
 

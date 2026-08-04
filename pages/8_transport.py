@@ -31,7 +31,9 @@ event = db.get_event_by_id(event_id)
 st.divider()
 st.subheader("① 地域別 交通費ルール")
 st.markdown(
-    "開催地（領収書不要・一律支給）とそれ以外（領収書必要・上限あり）を地域別に設定します。"
+    "開催地（領収書不要・**出勤1日あたり一律**）とそれ以外（領収書必要・**往復総額の上限**）を"
+    "地域別に設定します。"
+    "（交通費統一ルール 2026-07-22 TAKA起草・木村さん基本承認に準拠。個別具体例は都度相談）"
 )
 
 existing_rules = db.get_transport_rules(event_id)
@@ -73,11 +75,11 @@ edited_rules = st.data_editor(
         "地域": st.column_config.TextColumn("地域", width="small"),
         "開催地": st.column_config.CheckboxColumn(
             "開催地",
-            help="チェックを入れた地域は、領収書不要で上限額を一律支給",
+            help="チェックを入れた地域は、領収書不要で「上限額(円)×出勤日数」を一律支給（上限額欄＝1日あたりの金額）",
         ),
         "上限額(円)": st.column_config.NumberColumn(
             "上限額(円)", min_value=0, step=500,
-            help="領収書金額がこの額を超えた場合、自動で上限額に調整",
+            help="開催地=1日あたりの一律支給額／それ以外=イベント全体（往復）の上限。領収書金額が上限を超えた場合は自動で上限額に調整",
         ),
         "領収書必要": st.column_config.CheckboxColumn("領収書必要"),
         "備考": "備考",
@@ -130,6 +132,13 @@ if not unique_staff_ids:
 all_staff_map = {s["id"]: s for s in db.get_all_staff()}
 participating = [all_staff_map[sid] for sid in unique_staff_ids if sid in all_staff_map]
 
+# 2026-08-04: 開催地は「日額×出勤日数」で支給するため（支払い計算・ピット端末と同一式）、
+# 見積・確定サマリーでもスタッフごとのシフト日数を使う（欠勤は除く）
+_days_by_staff: dict = {}
+for _s in shifts:
+    if _s.get("status") != "absent":
+        _days_by_staff.setdefault(_s["staff_id"], set()).add(_s["date"])
+
 # 地域別集計
 region_summary = {r: {"count": 0, "estimate": 0, "need_receipt": 0, "no_region": 0}
                    for r in REGIONS}
@@ -144,7 +153,11 @@ for staff in participating:
     region_summary[region]["count"] += 1
     rule = rules_map.get(region)
     if rule:
-        region_summary[region]["estimate"] += int(rule["max_amount"])
+        _amt = int(rule["max_amount"])
+        if rule.get("is_venue_region"):
+            # 開催地: 日額 × そのスタッフのシフト日数
+            _amt *= len(_days_by_staff.get(staff["id"], ()))
+        region_summary[region]["estimate"] += _amt
         if rule.get("receipt_required"):
             region_summary[region]["need_receipt"] += 1
 
@@ -172,7 +185,11 @@ for region in REGIONS + ["未登録"]:
     summary_rows.append({
         "地域": region,
         "人数": data["count"],
-        "上限額/人": f"¥{rule.get('max_amount', 0):,}" if rule else "—",
+        "上限額/人": (
+            (f"¥{rule.get('max_amount', 0):,}/日" if rule.get("is_venue_region")
+             else f"¥{rule.get('max_amount', 0):,}")
+            if rule else "—"
+        ),
         "領収書": "必要" if rule.get("receipt_required") else "不要",
         "見積合計": f"¥{data['estimate']:,}",
     })
@@ -187,7 +204,7 @@ st.divider()
 st.subheader("③ 領収書金額入力（確定モード）")
 st.markdown(
     "圏外スタッフの領収書金額を入力します。上限超過時は自動で上限額に調整されます。"
-    "開催地在住者は入力不要（一律支給）。"
+    "開催地在住者は入力不要（日額×出勤日数を自動支給）。"
 )
 
 # 既存の請求情報
@@ -214,10 +231,11 @@ for staff in sorted(participating, key=lambda s: (s.get("region") or "zzz", s.ge
 if venue_staff:
     with st.expander(f"🏠 開催地在住・自動支給（{len(venue_staff)}名）"):
         for staff, rule in venue_staff:
+            _d = len(_days_by_staff.get(staff["id"], ()))
             col1, col2, col3 = st.columns([2, 1, 1])
             col1.write(f"{staff['name_jp']}（{staff.get('region', '')}）")
-            col2.write(f"上限: ¥{rule['max_amount']:,}")
-            col3.success(f"¥{rule['max_amount']:,} 自動支給")
+            col2.write(f"日額: ¥{rule['max_amount']:,} × {_d}日")
+            col3.success(f"¥{int(rule['max_amount']) * _d:,} 自動支給")
 
 # 住所未登録者
 if unregistered_staff:
@@ -309,7 +327,8 @@ for staff in participating:
     if not rule:
         continue
     if rule.get("is_venue_region"):
-        venue_total += int(rule["max_amount"])
+        # 開催地: 日額 × そのスタッフのシフト日数（支払い計算と同一式）
+        venue_total += int(rule["max_amount"]) * len(_days_by_staff.get(staff["id"], ()))
     else:
         claim = claims_map.get(staff["id"])
         if claim and claim.get("has_receipt"):
