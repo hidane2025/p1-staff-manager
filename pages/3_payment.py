@@ -322,8 +322,10 @@ row2[1].metric("MIX手当", f"¥{sum(p['mix_bonus_total'] for p in payments):,}"
 row2[2].metric("精勤手当", f"¥{sum(p['attendance_bonus'] for p in payments):,}")
 
 # Codex 4回目 P2 #10 fix (2026-05-09): 個別手当合計を内訳に表示
-# （表示の一貫性確保。封筒リスト・精算レポートと同じ並び）
-_total_allowance = sum(int(p.get("individual_allowance_total") or 0) for p in payments)
+# 2026-08-06 修正: DBに存在しない列（individual_allowance_total・マイグレ未適用）を
+# 参照していて常に¥0＝手当があってもメトリクスが出なかった。実テーブルから集計する。
+_total_allowance = sum(
+    int(a.get("amount") or 0) for a in db.get_individual_allowances(event_id))
 if _total_allowance > 0:
     st.metric("🎁 個別手当", f"¥{_total_allowance:,}",
               help="言語手当・人材確保手当 等の個別付与分。"
@@ -567,8 +569,18 @@ if staff_opts:
     col_d1, col_d2 = st.columns(2)
     with col_d1:
         # A-5/A-6: 個別手当・臨時調整を内訳行に出し、確定額(payable)も明示。
-        # 内訳の総和 = 合計、合計 + 端数調整 = 確定額 が常に成立する。
-        _allow = int(p.get("individual_allowance_total") or 0)
+        # 2026-08-06 中野さん指摘で表を再設計: 「表の行を足したら合計と一致する」を
+        # 不変条件にする。
+        #   ・休憩控除は計算段階で基本給（まれに深夜手当）の時間から控除済みなのに
+        #     マイナス行として並べていたため、引き忘れ（or 二重控除）に見えた。
+        #     → 行をやめ、基本給ラベルに「休憩控除後」と明記し、控除額は注記へ。
+        #   ・個別手当は DB に無い列（individual_allowance_total・マイグレ未適用）を
+        #     参照していて、手当があっても行が出ず合計と食い違って見えた。
+        #     → 実テーブル（個別手当）から直接集計して表示する。
+        _allow = sum(
+            int(a.get("amount") or 0)
+            for a in db.get_individual_allowances(event_id, p["staff_id"])
+        )
         _allow_row = f"| 個別手当 | ¥{_allow:,} |\n" if _allow else ""
         _adj = int(p.get("adjustment") or 0)
         _adj_row = (
@@ -580,14 +592,15 @@ if staff_opts:
             f"（端数調整 +¥{_payable - p['total_amount']:,}） |\n"
             if _payable != p["total_amount"] else ""
         )
+        _break = int(p.get("break_deduction") or 0)
+        _base_label = "基本給（休憩控除後）" if _break else "基本給"
         st.markdown(f"""
 **{p['name_jp']}** (NO.{p['no']}) — {p['role']}
 
 | 項目 | 金額 |
 |------|------|
-| 基本給 | ¥{p['base_pay']:,} |
+| {_base_label} | ¥{p['base_pay']:,} |
 | 深夜手当 | ¥{p['night_pay']:,} |
-| 休憩控除 | -¥{p.get('break_deduction', 0):,} |
 | 交通費 | ¥{p['transport_total']:,} |
 | フロア手当 | ¥{p['floor_bonus_total']:,} |
 | MIX手当 | ¥{p['mix_bonus_total']:,} |
@@ -596,6 +609,11 @@ if staff_opts:
 {_payable_row}
 承認者: {p.get('approved_by') or '未承認'}
 """)
+        if _break:
+            st.caption(
+                f"⏱️ 休憩控除 −¥{_break:,} は基本給等の勤務時間から控除済みです"
+                f"（6h超{break_6h}分／8h超{break_8h}分）。表の行の合計＝支給合計になります。"
+            )
 
     with col_d2:
         # 承認（承認者はログイン中の operator に束縛済み）
