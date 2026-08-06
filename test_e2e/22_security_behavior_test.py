@@ -396,6 +396,15 @@ _check("基本給ラベルに控除後と明記", "休憩控除後" in _pay)
 _check("個別手当は実テーブルから集計",
        'db.get_individual_allowances(event_id, p["staff_id"])' in _pay,
        "存在しない列参照では手当行が永久に出ない")
+# 封筒リスト・精算レポートも同じ幻列（individual_allowance_total）を参照していた
+_env = (ROOT / "pages/4_envelope.py").read_text()
+_rep = (ROOT / "pages/6_report.py").read_text()
+for _nm, _src in (("封筒リスト", _env), ("精算レポート", _rep)):
+    _check(f"{_nm}: 個別手当を実テーブルから集計",
+           "_allow_by_staff" in _src
+           and 'e.get("individual_allowance_total")' not in _src
+           and 'p.get("individual_allowance_total")' not in _src,
+           "DBに無い列の参照が残ると手当が常に¥0表示になる")
 
 # 承認済み金額の黙った陳腐化を防ぐ（2026-08-04 UI運用テスト第3弾で発見）
 #   差戻しガードは打刻3経路（checkin/checkout/欠勤）にはあったが、

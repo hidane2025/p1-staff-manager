@@ -117,6 +117,14 @@ for p in payments:
         "denomination": breakdown,
     })
 
+# 2026-08-06: individual_allowance_total 列はDBに存在しない（マイグレ未適用）ため
+# 常に¥0で、手当があっても明細に出ず内訳の和が合計と食い違って見えた。
+# 3_payment と同じく実テーブル（個別手当）から集計する。
+_allow_by_staff: dict = {}
+for _a in db.get_individual_allowances(event_id):
+    _allow_by_staff[_a["staff_id"]] = (
+        _allow_by_staff.get(_a["staff_id"], 0) + int(_a.get("amount") or 0))
+
 # 並び替え
 if sort_by == "名前順":
     envelope_data.sort(key=lambda x: x["name_jp"])
@@ -196,7 +204,7 @@ if _print_mode_pre:
     from utils.url_helper import get_base_host, receipt_download_url
     _qr_base_host = get_base_host()
     for e in envelope_data:
-        _allow_total = int(e.get("individual_allowance_total") or 0)
+        _allow_total = _allow_by_staff.get(e.get("staff_id"), 0)
         _allow_row = (
             f'<tr><td>個別手当</td><td>¥{_allow_total:,}</td></tr>'
             if _allow_total else ""
@@ -257,7 +265,7 @@ else:
     for e in envelope_data:
         with st.expander(f"NO.{e['no']} {e['name_jp']}（{e['role']}）— ¥{e['adjusted_amount']:,}"):
             # Codex P2 fix #3: 個別手当を内訳に表示（合計との整合性）
-            _allow_total = int(e.get("individual_allowance_total") or 0)
+            _allow_total = _allow_by_staff.get(e.get("staff_id"), 0)
             _allow_row = (
                 f"| 個別手当 | ¥{_allow_total:,} |\n" if _allow_total else ""
             )
@@ -306,7 +314,7 @@ if not _print_mode_pre:
             "フロア手当": e["floor_bonus_total"],
             "MIX手当": e["mix_bonus_total"],
             "精勤手当": e["attendance_bonus"],
-            "個別手当": int(e.get("individual_allowance_total") or 0),
+            "個別手当": _allow_by_staff.get(e.get("staff_id"), 0),
             "臨時調整": int(e.get("adjustment") or 0),
             "端数調整": _tanchosei,
             "合計": e["adjusted_amount"],

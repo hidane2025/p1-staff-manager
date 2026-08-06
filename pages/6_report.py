@@ -64,6 +64,12 @@ section_header("支払い内訳", "費目ごとの構成比。深夜手当・交
 # A-5/A-6: 臨時調整・端数調整も費目に含め、費目合計＝確定額(total_amount) を成立させる。
 _sum_total_raw = sum(int(p.get("total_amount") or 0) for p in payments)
 _sum_rounding = total_amount - _sum_total_raw  # 端数調整の総和（payable - 丸め前）
+# 2026-08-06: individual_allowance_total 列はDBに無い（マイグレ未適用）ため常に¥0
+# だった。実テーブル（個別手当）から集計する（3_payment・封筒リストと同方式）。
+_allow_by_staff: dict = {}
+for _a in db.get_individual_allowances(event_id):
+    _allow_by_staff[_a["staff_id"]] = (
+        _allow_by_staff.get(_a["staff_id"], 0) + int(_a.get("amount") or 0))
 breakdown = {
     "基本給": sum(p["base_pay"] for p in payments),
     "深夜手当": sum(p["night_pay"] for p in payments),
@@ -71,8 +77,8 @@ breakdown = {
     "フロア手当": sum(p["floor_bonus_total"] for p in payments),
     "MIX手当": sum(p["mix_bonus_total"] for p in payments),
     "精勤手当": sum(p["attendance_bonus"] for p in payments),
-    # Codex P2 fix #3: 個別手当を内訳に追加（マイグレ未実行時は 0 のまま）
-    "個別手当": sum(int(p.get("individual_allowance_total") or 0) for p in payments),
+    # Codex P2 fix #3: 個別手当を内訳に追加（実テーブルから集計）
+    "個別手当": sum(_allow_by_staff.get(p["staff_id"], 0) for p in payments),
     "臨時調整": sum(int(p.get("adjustment") or 0) for p in payments),
 }
 if _sum_rounding:
@@ -258,7 +264,7 @@ with col_dl1:
             "フロア手当": p["floor_bonus_total"],
             "MIX手当": p["mix_bonus_total"],
             "精勤手当": p["attendance_bonus"],
-            "個別手当": int(p.get("individual_allowance_total") or 0),
+            "個別手当": _allow_by_staff.get(p["staff_id"], 0),
             "臨時調整": int(p.get("adjustment") or 0),
             "確定額": db.get_payable(p),
             "合計": p["total_amount"],
