@@ -147,8 +147,12 @@ class FakeClient:
 def install_fake_db(seed: dict | None = None) -> FakeClient:
     """db.get_client() を差し替える。既に差し替え済みなら seed だけ更新する。"""
     import db as _db
+    from dbx import core as _core
 
     client = FakeClient(seed)
+    # 2026-08-06 db.py分割対応: 実体は dbx.core.get_client。全モジュールが
+    # core.get_client() を呼ぶため、ここを差し替えれば全体に効く。
+    _core.get_client = lambda: client  # type: ignore[assignment]
     _db.get_client = lambda: client  # type: ignore[assignment]
 
     # db_schema.has_column は実DBを見に行くのでテストでは常に True にする

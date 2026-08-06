@@ -211,8 +211,10 @@ class RecordingClient(FakeClient):
 def _install(seed: dict) -> RecordingClient:
     """db.get_client() を RecordingClient に差し替える（本番DBには繋がない）。"""
     install_fake_db(seed)            # db_schema.has_column を常に True にする副作用も使う
+    from dbx import core as _core    # 2026-08-06 db.py分割: 実体の差し替え点は dbx.core
     client = RecordingClient(seed)
     db.get_client = lambda: client   # type: ignore[assignment]
+    _core.get_client = lambda: client  # type: ignore[assignment]
     return client
 
 

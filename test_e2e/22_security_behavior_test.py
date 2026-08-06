@@ -242,7 +242,7 @@ _check("file_name に非ASCII文字が含まれていない", not _bad, f"該当
 # 10. 2026-07-29 の是正が巻き戻っていないか（Codex独立レビュー対応）
 # ============================================================
 print("\n[10] データ消失・fail-open の再発防止")
-_db_src = (ROOT / "db.py").read_text()
+_db_src = (ROOT / "dbx/payments.py").read_text()  # 2026-08-06 db.py分割
 _guard_src = (ROOT / "utils/admin_guard.py").read_text()
 _mon_src = (ROOT / "utils/monitoring.py").read_text()
 _url_src = (ROOT / "utils/url_helper.py").read_text()
@@ -256,17 +256,19 @@ _check("save_payment の更新に支払済みガードがある",
        'neq("status", "paid")' in _save_block)
 
 # 未承認へ戻す処理の競合ガード
-_reset_block = _db_src[_db_src.index("def reset_payment_to_pending("):_db_src.index("def mark_absent(")]
+_reset_block = _db_src[_db_src.index("def reset_payment_to_pending("):_db_src.index("def rounding_supported(")]
 _check("reset_payment_to_pending の更新に支払済みガードがある",
        'neq("status", "paid")' in _reset_block)
 
 # 日別単価が消える経路
-_rate_block = _db_src[_db_src.index("def set_event_rate("):]
+_rate_block = (ROOT / "dbx/events.py").read_text()
+_rate_block = _rate_block[_rate_block.index("def set_event_rate("):]
 _rate_block = _rate_block[:_rate_block.index("def ", 10)]
 _check("set_event_rate が delete を使わない", '.delete()' not in _rate_block)
 
 # TOTPのfail-open
-_check("TOTP照会失敗を未設定と区別する例外がある", "class TotpLookupError" in _db_src)
+_auth_src = (ROOT / "dbx/auth.py").read_text()
+_check("TOTP照会失敗を未設定と区別する例外がある", "class TotpLookupError" in _auth_src)
 _check("照会失敗時にログインを止める", "TotpLookupError" in _guard_src and "st.stop()" in _guard_src)
 
 # 監視: 送信成功後に抑制記録する（失敗しても再送できる）
@@ -387,7 +389,7 @@ _check("打刻ミスで除外した日が画面に出る", "invalid_shift_notes"
 #   DB列 issuer_name の既定値が旧社名「株式会社パシフィック」のままで、
 #   アプリが明示しないと新規大会の契約書・領収書の甲が旧社名になる。
 print("\n[13c] 発行者名義の既定")
-_dbsrc0 = (ROOT / "db.py").read_text()
+_dbsrc0 = (ROOT / "dbx/events.py").read_text()  # 2026-08-06 db.py分割
 _cre = _dbsrc0[_dbsrc0.index("def create_event"):_dbsrc0.index("def update_event_meta")]
 _check("create_eventが現行社名を明示している",
        '"issuer_name": "株式会社P1 Entertainment"' in _cre,
@@ -419,7 +421,7 @@ for _nm, _src in (("封筒リスト", _env), ("精算レポート", _rep)):
 #   シフト再取込（upsert_shift の予定時刻更新）だけ素通りで、
 #   承認後に再取込すると承認済みの金額が古いまま残っていた。
 print("\n[13b] シフト再取込の差戻しガード")
-_dbsrc = (ROOT / "db.py").read_text()
+_dbsrc = (ROOT / "dbx/shifts.py").read_text()  # 2026-08-06 db.py分割
 _ups = _dbsrc[_dbsrc.index("def upsert_shift"):_dbsrc.index("def get_shifts_for_event")]
 _check("upsert_shiftの予定変更が承認済み支払いを差し戻す",
        "_revert_payment_if_amount_affected" in _ups,
