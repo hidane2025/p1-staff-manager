@@ -47,11 +47,17 @@ def ensure_fonts() -> None:
 class DocBuilder:
     """段組みPDFビルダー（縦Y座標を自動追跡・ページ跨ぎ処理つき）"""
 
-    def __init__(self, out_path: Path):
+    def __init__(self, out_path: Path,
+                 header_left: str = "P1 Staff Manager ｜ 領収書デジタル発行マニュアル",
+                 header_right: str = "株式会社ヒダネ × Pacific"):
+        # 2026-08-06: ヘッダー文言を引数化（DocBuilderを他の資料からも使うため）。
+        # 既定値は従来の領収書マニュアルのままなので、既存の呼び出しは影響を受けない。
         self.c = canvas.Canvas(str(out_path), pagesize=A4)
         self.page_no = 1
         self.y = PAGE_H - MARGIN_TOP
         self.section_title = ""
+        self.header_left = header_left
+        self.header_right = header_right
         self._draw_header_footer()
 
     # ---------- 内部ユーティリティ ----------
@@ -61,10 +67,10 @@ class DocBuilder:
         self.c.rect(0, PAGE_H - 12 * mm, PAGE_W, 12 * mm, fill=1, stroke=0)
         self.c.setFillColor(white)
         self.c.setFont(FONT_JP_REG, 9)
-        self.c.drawString(MARGIN_X, PAGE_H - 8 * mm,
-                          "P1 Staff Manager ｜ 領収書デジタル発行マニュアル")
-        self.c.drawRightString(PAGE_W - MARGIN_X, PAGE_H - 8 * mm,
-                               "株式会社ヒダネ × Pacific")
+        # 2026-08-06: 他の資料からも DocBuilder を使うため、ヘッダー文言を差し替え可能にした
+        # （未指定なら従来どおり領収書マニュアルの文言）
+        self.c.drawString(MARGIN_X, PAGE_H - 8 * mm, self.header_left)
+        self.c.drawRightString(PAGE_W - MARGIN_X, PAGE_H - 8 * mm, self.header_right)
 
         # フッター
         self.c.setFillColor(COLOR_MUTED)
