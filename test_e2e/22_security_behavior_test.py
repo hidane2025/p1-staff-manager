@@ -375,6 +375,16 @@ _check("交通費ページ: 開催地見積はスタッフ別シフト日数を�
 _check("交通費0円の理由が画面に出る", "transport_zero" in _pay)
 _check("打刻ミスで除外した日が画面に出る", "invalid_shift_notes" in _pay)
 
+# 新規イベントの発行者名義が旧社名に落ちないこと（2026-08-06 発見）
+#   DB列 issuer_name の既定値が旧社名「株式会社パシフィック」のままで、
+#   アプリが明示しないと新規大会の契約書・領収書の甲が旧社名になる。
+print("\n[13c] 発行者名義の既定")
+_dbsrc0 = (ROOT / "db.py").read_text()
+_cre = _dbsrc0[_dbsrc0.index("def create_event"):_dbsrc0.index("def update_event_meta")]
+_check("create_eventが現行社名を明示している",
+       '"issuer_name": "株式会社P1 Entertainment"' in _cre,
+       "DB既定値（旧社名）に落ちると新規大会の書類が旧社名で発行される")
+
 # 承認済み金額の黙った陳腐化を防ぐ（2026-08-04 UI運用テスト第3弾で発見）
 #   差戻しガードは打刻3経路（checkin/checkout/欠勤）にはあったが、
 #   シフト再取込（upsert_shift の予定時刻更新）だけ素通りで、
