@@ -23,6 +23,11 @@
 ALTER TABLE p1_events
     ALTER COLUMN issuer_name SET DEFAULT '株式会社P1 Entertainment';
 
+-- 甲（発注者）の住所既定値も設定する。登記上の本店所在地
+-- （法人番号 1180001113559・商号変更日 2026-06-30・中野さん提供 2026-08-06）
+ALTER TABLE p1_events
+    ALTER COLUMN issuer_address SET DEFAULT '愛知県名古屋市東区泉1丁目23番37号';
+
 -- 既存イベントの名義は変更しない（過去大会で発行済みの書類の名義を保全）。
 -- 8月大阪の2イベント(id=10,11)は「株式会社P1 Entertainment」設定済みで影響なし。
 

@@ -525,10 +525,13 @@ def create_event(name, venue, start_date, end_date, break_minutes_6h=0, break_mi
         # 2026-08-06: DB列の既定値が旧社名「株式会社パシフィック」のままのため、
         # ここで現行の発行者名義を明示し、DB既定値に落とさない。放置すると
         # 新規大会の契約書・領収書の甲が旧社名で発行される（運営会社は
-        # PRT→株式会社P1 Entertainment へ移行済み・2026-07-25 領収書名義移行）。
+        # PRT→株式会社P1 Entertainment へ移行済み・商号変更日2026-06-30、
+        # 2026-07-25 領収書名義移行）。住所は登記上の本店所在地
+        # （法人番号1180001113559・中野さん提供 2026-08-06）。
         # DB側の既定値修正は docs/db_migrations/20260806_fix_issuer_default.sql
         # （SQL実行権限の回復待ち）。既存イベントの名義はここでは変更しない。
         "issuer_name": "株式会社P1 Entertainment",
+        "issuer_address": "愛知県名古屋市東区泉1丁目23番37号",
     }
     # マイグレ後のカラムは存在チェックして条件付きで投入
     if prefecture and db_schema.has_column("p1_events", "prefecture"):
