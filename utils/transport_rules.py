@@ -1,0 +1,42 @@
+"""交通費ルールの解釈を1箇所に集約する（2026-08-06 リファクタリング）
+
+背景:
+    「開催地=日額×出勤日数／遠方=往復総額の上限」という同じ解釈が
+    支払い計算・ピット端末・交通費ページの3箇所に別々に書かれており、
+    片方だけ直して食い違う事故が実際に起きた（2026-08-02 に総額へ統一→
+    2026-08-04 に承認済み業務ルールへ再統一、の2回とも3箇所を手で揃えた）。
+    式をここへ集約し、画面側は必ず本モジュールを通す。
+
+業務ルールの出典:
+    交通費統一ルール（2026-07-22 TAKA起草・木村さん基本承認）
+    - 近郊通勤エリア（開催地）: 出勤1日あたり一律（領収書不要）
+    - それ以外: 往復総額の上限内で実費精算（領収書必須）
+"""
+
+from __future__ import annotations
+
+
+def venue_amount(per_day: int, days_worked: int) -> int:
+    """開催地: 日額 × 出勤日数（欠勤日は含めない）"""
+    return int(per_day or 0) * max(0, int(days_worked or 0))
+
+
+def clip_to_cap(receipt_amount: int, cap: int) -> int:
+    """遠方: 領収書金額を往復総額の上限で頭打ち。上限0は「上限なし」"""
+    r, c = int(receipt_amount or 0), int(cap or 0)
+    return min(r, c) if c > 0 else r
+
+
+def approved_amount(rule: dict, days_worked: int,
+                    receipt_amount: int = 0, has_receipt: bool = False) -> tuple:
+    """地域ルールから精算額を決める。
+
+    Returns:
+        (精算額, 説明文字列)
+    """
+    max_amt = int(rule.get("max_amount") or 0)
+    if rule.get("is_venue_region"):
+        return venue_amount(max_amt, days_worked), "開催地一律（日額×勤務日数）"
+    if rule.get("receipt_required") and not has_receipt:
+        return 0, "領収書必須・未受領"
+    return clip_to_cap(receipt_amount, max_amt), "領収書ベース（上限=往復総額）"

@@ -356,17 +356,25 @@ _pit = (ROOT / "pages/10_pit_terminal.py").read_text()
 _pay = (ROOT / "pages/3_payment.py").read_text()
 _tra = (ROOT / "pages/8_transport.py").read_text()
 
-_check("ピット端末: 開催地は日額×勤務日数",
-       "approved = max_amt * days_worked" in _pit,
-       "開催地の総額支給は承認ルール（出勤1日あたり一律）と食い違う")
-_check("ピット端末: 遠方は領収書と往復総額上限の低い方",
-       "approved = min(receipt_amt, max_amt)" in _pit,
-       "遠方上限の日数倍は同じ人の精算額が画面で変わる事故に戻る")
-_check("支払い計算: 開催地は日額×勤務日数",
-       'per_day * days, f"開催地一律' in _pay,
-       "支払い計算だけ総額だとピット端末・見積と金額が食い違う")
-_check("交通費ページ: 遠方は総額として上限を適用",
-       "if receipt > limit and limit > 0" in _tra)
+# 2026-08-06 リファクタリング: 式の正は utils/transport_rules.py に一本化した。
+# 3画面が共通モジュールを使っていること＋モジュール自体の式が正しいことを固定する。
+_mod = (ROOT / "utils/transport_rules.py").read_text()
+for _nm, _src in (("支払い計算", _pay), ("ピット端末", _pit), ("交通費ページ", _tra)):
+    _check(f"{_nm}: 共通モジュール(transport_rules)を使用",
+           "transport_rules_mod" in _src,
+           "画面に式を再インライン化すると3画面の食い違い事故に戻る")
+import sys as _sys
+_sys.path.insert(0, str(ROOT))
+from utils import transport_rules as _tr
+_check("共通式: 開催地=日額×勤務日数", _tr.venue_amount(1000, 3) == 3000)
+_check("共通式: 遠方=上限で頭打ち", _tr.clip_to_cap(18000, 15000) == 15000)
+_check("共通式: 上限0は頭打ちなし", _tr.clip_to_cap(9800, 0) == 9800)
+_check("共通式: 領収書必須・未受領は0",
+       _tr.approved_amount({"max_amount": 15000, "receipt_required": 1},
+                           2, receipt_amount=12000, has_receipt=False)[0] == 0)
+_check("共通式: 開催地は領収書を無視して日額×日数",
+       _tr.approved_amount({"max_amount": 1000, "is_venue_region": 1},
+                           2, receipt_amount=5000, has_receipt=True)[0] == 2000)
 _check("交通費ページ: 開催地見積はスタッフ別シフト日数を使う",
        "_days_by_staff" in _tra,
        "見積が日額のままだと銀行の現金準備が日数分不足する")

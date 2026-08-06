@@ -6,6 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
+from utils import transport_rules as transport_rules_mod
 from utils.region import REGIONS, default_regions_for_event, address_to_region
 from utils.event_selector import select_event
 
@@ -153,10 +154,12 @@ for staff in participating:
     region_summary[region]["count"] += 1
     rule = rules_map.get(region)
     if rule:
-        _amt = int(rule["max_amount"])
         if rule.get("is_venue_region"):
-            # 開催地: 日額 × そのスタッフのシフト日数
-            _amt *= len(_days_by_staff.get(staff["id"], ()))
+            # 開催地: 日額 × シフト日数（式の正=utils/transport_rules.py）
+            _amt = transport_rules_mod.venue_amount(
+                rule["max_amount"], len(_days_by_staff.get(staff["id"], ())))
+        else:
+            _amt = int(rule["max_amount"])
         region_summary[region]["estimate"] += _amt
         if rule.get("receipt_required"):
             region_summary[region]["need_receipt"] += 1
@@ -232,10 +235,11 @@ if venue_staff:
     with st.expander(f"🏠 開催地在住・自動支給（{len(venue_staff)}名）"):
         for staff, rule in venue_staff:
             _d = len(_days_by_staff.get(staff["id"], ()))
+            _auto = transport_rules_mod.venue_amount(rule["max_amount"], _d)
             col1, col2, col3 = st.columns([2, 1, 1])
             col1.write(f"{staff['name_jp']}（{staff.get('region', '')}）")
             col2.write(f"日額: ¥{rule['max_amount']:,} × {_d}日")
-            col3.success(f"¥{int(rule['max_amount']) * _d:,} 自動支給")
+            col3.success(f"¥{_auto:,} 自動支給")
 
 # 住所未登録者
 if unregistered_staff:
@@ -287,11 +291,10 @@ if receipt_staff:
             receipt = int(row["領収書金額(円)"]) if row["領収書金額(円)"] else 0
             limit = int(row["上限額"])
             has_receipt = int(bool(row["領収書あり"]))
-            if receipt > limit and limit > 0:
-                approved = limit
-                errors.append(f"{row['名前']}: ¥{receipt:,} → ¥{limit:,}（上限）に調整")
-            else:
-                approved = receipt
+            # 上限調整の式の正=utils/transport_rules.py（3画面共通）
+            approved = transport_rules_mod.clip_to_cap(receipt, limit)
+            if approved != receipt:
+                errors.append(f"{row['名前']}: ¥{receipt:,} → ¥{approved:,}（上限）に調整")
             # 領収書なし・金額0は支払いなし
             if not has_receipt:
                 approved = 0
@@ -327,8 +330,9 @@ for staff in participating:
     if not rule:
         continue
     if rule.get("is_venue_region"):
-        # 開催地: 日額 × そのスタッフのシフト日数（支払い計算と同一式）
-        venue_total += int(rule["max_amount"]) * len(_days_by_staff.get(staff["id"], ()))
+        # 開催地: 日額 × シフト日数（式の正=utils/transport_rules.py）
+        venue_total += transport_rules_mod.venue_amount(
+            rule["max_amount"], len(_days_by_staff.get(staff["id"], ())))
     else:
         claim = claims_map.get(staff["id"])
         if claim and claim.get("has_receipt"):

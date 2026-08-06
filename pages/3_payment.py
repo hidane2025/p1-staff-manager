@@ -15,6 +15,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
+from utils import transport_rules as transport_rules_mod
 from utils.calculator import calculate_staff_payment
 from utils.event_selector import select_event
 
@@ -163,16 +164,10 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
             return 0, "住所未登録または圏外のため交通費0"
         rule = transport_rules[region]
         if rule.get("is_venue_region"):
-            # 2026-08-04 修正: 開催地は「出勤1日あたり一律」＝日額×勤務日数で支給する。
-            # 根拠: 交通費統一ルール（2026-07-22 TAKA起草・木村さん基本承認
-            # 「近郊通勤エリア: 出勤1日あたり一律1,000円」。TAKAさんが同文面を
-            # ディーラー個別連絡でも送付済み）および経費区分ルール2026-04
-            # 「ディーラー交通費（イベント時・一律）1,000円/日」。
-            # 2026-08-02 に画面表記に合わせて総額へ統一したが、承認済みの業務ルールが
-            # 日額だったため日額側へ再統一（見積・ピット端末・画面表記も同時に日額へ
-            # 揃えた）。遠方（開催地以外）の上限は従来どおり往復総額で変更なし。
+            # 開催地=日額×勤務日数。式の正は utils/transport_rules.py（3画面共通）
             per_day = int(rule.get("max_amount", 0) or 0)
-            return per_day * days, f"開催地一律（¥{per_day:,}/日 × {days}日）"
+            return (transport_rules_mod.venue_amount(per_day, days),
+                    f"開催地一律（¥{per_day:,}/日 × {days}日）")
         # 圏外: 領収書金額
         claim = transport_claims.get(staff_info.get("id"))
         if claim and claim.get("has_receipt"):
