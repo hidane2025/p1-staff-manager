@@ -63,7 +63,7 @@ def main() -> None:
               "11_receipt_issue", "12_contract_issue", "13_users", "14_allowances",
               "15_pit_searched", "16_payment_calculated", "17_payment_detail",
               "18_envelope_after", "19_report_after", "20_receipt_after",
-              "21_payment_approved"):
+              "21_payment_approved", "22_pit_checkout_form"):
         if (SHOTS / f"{n}.png").exists():
             crop_content(n)
 
