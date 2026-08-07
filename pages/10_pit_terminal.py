@@ -31,6 +31,9 @@ import db
 from utils import transport_rules as transport_rules_mod
 from utils.calculator import calculate_staff_payment, parse_shift_time
 from utils.event_selector import select_event
+from utils.time_input import (
+    MINUTE_CHOICES, HOUR_MIN, HOUR_MAX, snap_minute, minute_index, split_hhmm,
+)
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import (
     apply_global_style, page_header, flow_bar, section_header, kpi_row,
@@ -366,7 +369,7 @@ section_header(
     "NO. を入力して Enter または ディーラーネームの一部を入力。",
 )
 
-col_search1, col_search2 = st.columns([1, 2])
+col_search1, col_search2, col_search3 = st.columns([1, 2, 1])
 with col_search1:
     pit_no_input = st.text_input(
         "NO.（数字）",
@@ -379,23 +382,42 @@ with col_search2:
         placeholder="例: EveKat（部分一致）",
         key="pit_name_input",
     )
+with col_search3:
+    st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
+    # 2026-08-07: NO.が残ったままだと名前で探せず「見つかりません」に見える。
+    # 次のスタッフを呼ぶ前に1タップで空にできる導線を用意する。
+    if st.button("🔄 検索をクリア", use_container_width=True, key="pit_clear_search"):
+        st.session_state["pit_no_input"] = ""
+        st.session_state["pit_name_input"] = ""
+        st.rerun()
 
 # 候補を絞り込む
+# 2026-08-07: 従来は NO. が入っていると名前欄を一切見なかったため、前の人の
+# NO. が残っているだけで名前検索が空振りし「該当なし」に見えていた（実地検証で判明）。
+# NO. で見つからないときは名前でも探す（フォールバック）。
 all_staff = db.get_all_staff()
 candidates = []
+_no_missed = False
 if pit_no_input:
     try:
         no_val = int(pit_no_input.strip())
         candidates = [s for s in all_staff if s.get("no") == no_val]
+        _no_missed = not candidates
     except ValueError:
         st.error("NO. は数字で入れてください")
-elif pit_name_input:
+        _no_missed = True
+if not candidates and pit_name_input:
     q = pit_name_input.strip().lower()
     candidates = [
         s for s in all_staff
         if q in (s.get("name_jp", "") or "").lower()
         or q in (s.get("name_en", "") or "").lower()
     ][:10]
+    if candidates and _no_missed:
+        st.info(
+            f"NO.「{pit_no_input}」では見つからなかったため、"
+            "ディーラーネームで検索しました。"
+        )
 
 if not candidates:
     if pit_no_input or pit_name_input:
@@ -704,25 +726,51 @@ else:
         f"{today_shift.get('actual_end', '—')}"
     )
 
-    if cur_status in ("scheduled", "checked_in"):
-        # 退勤打刻フォーム
-        with st.form("pit_checkout_form"):
+    # 2026-08-07: 退勤済みでも時刻を直せるようにする。
+    # 従来は checked_out に分岐が無く入力欄そのものが消えていたため、
+    # 打ち間違えると「出退勤ページで個別リセット → ピットで再入力」の2画面を
+    # またぐ必要があった（実地検証で判明。現場では必ず起きる操作）。
+    # 支払済みだけは画面から触らせない（経理の確定を後から動かさないため）。
+    _pay_status = ""
+    try:
+        _pr = db.get_client().table("p1_payments").select("status").eq(
+            "event_id", event_id).eq("staff_id", target["id"]).execute().data
+        _pay_status = (_pr[0].get("status") or "") if _pr else ""
+    except Exception:
+        _pay_status = ""
+
+    _is_fix = cur_status == "checked_out"
+    if _is_fix and _pay_status == "paid":
+        st.info(
+            "💴 このスタッフは **支払い済み** です。"
+            "退勤時刻の修正が必要な場合は経理へご連絡ください。"
+        )
+    elif cur_status in ("scheduled", "checked_in") or _is_fix:
+        # 退勤打刻フォーム（退勤済みのときは「修正」として折りたたみで出す）
+        _form_box = (st.expander("🔧 退勤時刻を修正する（打ち間違えたとき）")
+                     if _is_fix else st.container())
+        with _form_box, st.form("pit_checkout_form"):
             now_jst = datetime.now(_JST)
+            # 分の刻みは utils/time_input.py で一元管理（画面ごとの食い違い防止）
             default_hour = now_jst.hour
-            default_min = (now_jst.minute // 15) * 15  # 15分丸め
+            default_min = snap_minute(now_jst.minute)
+            if _is_fix and today_shift.get("actual_end"):
+                # 修正時は今の記録値を初期値にする（押し間違いで別時刻に飛ばさない）
+                default_hour, default_min = split_hhmm(
+                    today_shift["actual_end"], default_hour, default_min)
             col_h, col_m = st.columns(2)
             with col_h:
                 checkout_hour = st.number_input(
                     "退勤時刻（時）",
-                    min_value=0, max_value=29,
-                    value=default_hour,
+                    min_value=HOUR_MIN, max_value=HOUR_MAX,
+                    value=min(HOUR_MAX, max(HOUR_MIN, default_hour)),
                     help="深夜（24以降）も入力可。例: 25 = 翌日1時",
                 )
             with col_m:
                 checkout_min = st.selectbox(
                     "退勤時刻（分）",
-                    [0, 15, 30, 45],
-                    index=[0, 15, 30, 45].index(default_min) if default_min in [0, 15, 30, 45] else 0,
+                    MINUTE_CHOICES,
+                    index=minute_index(default_min),
                 )
             confirm_pay = st.checkbox(
                 "✅ この退勤時刻で支払い計算も同時に実行する（推奨）",
@@ -745,7 +793,9 @@ else:
                     "⚠️ 自動承認にはオペレーター名の設定（再ログイン）が必要です。"
                     "このまま実行すると打刻と支払い計算のみ行います。"
                 )
-            submitted = st.form_submit_button("🔴 退勤＋支払い確定", type="primary")
+            submitted = st.form_submit_button(
+                "🔧 この時刻に修正する" if _is_fix else "🔴 退勤＋支払い確定",
+                type="primary")
 
             if submitted:
                 checkout_time = f"{checkout_hour:02d}:{checkout_min:02d}"
@@ -763,8 +813,13 @@ else:
                         "status": "checked_out",
                     }).eq("id", today_shift["id"]).execute()
                     db.log_action(
-                        "pit_checkout", "shifts", today_shift["id"],
-                        detail=f"{target['name_jp']} (NO.{target.get('no')}) {today} 退勤={checkout_time}",
+                        "pit_checkout_fix" if _is_fix else "pit_checkout",
+                        "shifts", today_shift["id"],
+                        detail=(
+                            f"{target['name_jp']} (NO.{target.get('no')}) {today} "
+                            + (f"退勤修正 {today_shift.get('actual_end')}→{checkout_time}"
+                               if _is_fix else f"退勤={checkout_time}")
+                        ),
                         event_id=event_id,
                         performed_by=operator_name(),
                     )

@@ -416,6 +416,33 @@ for _nm, _src in (("封筒リスト", _env), ("精算レポート", _rep)):
            and 'p.get("individual_allowance_total")' not in _src,
            "DBに無い列の参照が残ると手当が常に¥0表示になる")
 
+# ピット端末の現場操作（2026-08-07 説明書のファクトチェックで発見した3件）
+print("\n[13e] ピット端末の現場操作")
+_pit2 = (ROOT / "pages/10_pit_terminal.py").read_text()
+_att = (ROOT / "pages/5_attendance.py").read_text()
+_check("退勤済みでも時刻を修正できる（checked_outの分岐がある）",
+       "_is_fix" in _pit2 and 'cur_status == "checked_out"' in _pit2,
+       "分岐が無いと打ち間違えを別画面でリセットするまで直せない")
+_check("支払済みはピットから修正できない",
+       '_pay_status == "paid"' in _pit2,
+       "経理が確定した支払いを現場から動かせてはいけない")
+_check("修正はログの action を分けている",
+       "pit_checkout_fix" in _pit2, "通常の打刻と修正が区別できない")
+_check("NO.が空振りしたら名前で探す",
+       "_no_missed" in _pit2, "前の人のNO.が残ると名前検索が空振りする")
+_check("検索をクリアするボタンがある", "pit_clear_search" in _pit2)
+# 分の刻みは1箇所で決める（画面ごとに違う刻みになるのを防ぐ）
+from utils import time_input as _ti  # noqa: E402
+_check("分の選択肢が共通モジュールに一元化されている",
+       "MINUTE_CHOICES" in _pit2 and "MINUTE_CHOICES" in _att
+       and "[0, 15, 30, 45]" not in _att and "[0, 15, 30, 45]" not in _pit2,
+       "画面ごとに刻みが違うと同じ勤務が別の額になる")
+_check("分の刻みは5分（丸め誤差が最大2分）", _ti.STEP_MINUTES == 5,
+       f"STEP_MINUTES={_ti.STEP_MINUTES}")
+_check("任意の分を選択肢に丸められる",
+       _ti.snap_minute(47) == 45 and _ti.snap_minute(3) == 0 and _ti.snap_minute(99) == 0)
+_check("24時超えの時刻を分解できる", _ti.split_hhmm("27:47") == (27, 45))
+
 # 承認済み金額の黙った陳腐化を防ぐ（2026-08-04 UI運用テスト第3弾で発見）
 #   差戻しガードは打刻3経路（checkin/checkout/欠勤）にはあったが、
 #   シフト再取込（upsert_shift の予定時刻更新）だけ素通りで、

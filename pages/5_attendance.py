@@ -13,6 +13,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
 from utils.event_selector import select_event
+from utils.time_input import MINUTE_CHOICES  # 分の刻みは1箇所で決める
 
 st.set_page_config(page_title="出退勤", page_icon="🕐", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
@@ -237,7 +238,7 @@ with tab_late:
         with col_lh:
             late_hour = st.number_input("時", min_value=0, max_value=29, value=int(s['planned_start'].split(':')[0]), key="late_hour")
         with col_lm:
-            late_min = st.selectbox("分", [0, 15, 30, 45], key="late_min")
+            late_min = st.selectbox("分", MINUTE_CHOICES, key="late_min")
         if st.button("⏰ 遅刻を記録", key="mark_late"):
             time_str = f"{late_hour:02d}:{late_min:02d}"
             db.checkin_staff(s["id"], time_str)
@@ -251,7 +252,7 @@ with tab_overtime:
         s = staff_options[ot_staff]
         st.info(f"予定退勤: {s['planned_end']}")
         ot_hour = st.number_input("実際の退勤（時）", min_value=0, max_value=29, value=int(s['planned_end'].split(':')[0]) + 1, key="ot_hour")
-        ot_min = st.selectbox("実際の退勤（分）", [0, 15, 30, 45], key="ot_min")
+        ot_min = st.selectbox("実際の退勤（分）", MINUTE_CHOICES, key="ot_min")
         if st.button("⏩ 延長を記録", key="mark_ot"):
             time_str = f"{ot_hour:02d}:{ot_min:02d}"
             db.checkout_staff(s["id"], time_str)
@@ -268,7 +269,7 @@ with tab_early:
         with col_eh:
             early_hour = st.number_input("時", min_value=0, max_value=29, value=max(0, int(s['planned_end'].split(':')[0]) - 1), key="early_hour")
         with col_em:
-            early_min = st.selectbox("分", [0, 15, 30, 45], key="early_min")
+            early_min = st.selectbox("分", MINUTE_CHOICES, key="early_min")
         if st.button("⏪ 早退を記録", key="mark_early"):
             time_str = f"{early_hour:02d}:{early_min:02d}"
             db.checkout_staff(s["id"], time_str)
@@ -294,7 +295,7 @@ with tab_freeze:
         with col_fh:
             freeze_hour = st.number_input("退勤時刻（時）", min_value=0, max_value=29, value=int(datetime.now(_JST).strftime("%H")), key="freeze_hour")
         with col_fm:
-            freeze_min = st.selectbox("退勤時刻（分）", [0, 15, 30, 45], key="freeze_min")
+            freeze_min = st.selectbox("退勤時刻（分）", MINUTE_CHOICES, key="freeze_min")
         if st.button("🧊 凍結退勤を実行", key="exec_freeze", type="primary"):
             if freeze_selected:
                 freeze_time = f"{freeze_hour:02d}:{freeze_min:02d}"
@@ -443,11 +444,11 @@ col_sh, col_sm, col_eh2, col_em2 = st.columns(4)
 with col_sh:
     add_start_hour = st.number_input("開始（時）", min_value=0, max_value=29, value=18, key="add_start_h")
 with col_sm:
-    add_start_min = st.selectbox("開始（分）", [0, 15, 30, 45], key="add_start_m")
+    add_start_min = st.selectbox("開始（分）", MINUTE_CHOICES, key="add_start_m")
 with col_eh2:
     add_end_hour = st.number_input("終了（時）", min_value=0, max_value=29, value=23, key="add_end_h")
 with col_em2:
-    add_end_min = st.selectbox("終了（分）", [0, 15, 30, 45], key="add_end_m")
+    add_end_min = st.selectbox("終了（分）", MINUTE_CHOICES, key="add_end_m")
 
 if st.button("➕ 当日シフトに追加", key="exec_add_staff", type="primary"):
     planned_start = f"{add_start_hour:02d}:{add_start_min:02d}"
