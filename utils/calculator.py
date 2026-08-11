@@ -4,6 +4,12 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
+# 日当（フロア手当）の対象役職。
+# P1の単価ルール「TD・FLOOR・PIT・CHIP は Dealer時給＋日当3,000円」に対応する
+# （出典: シフトコスト試算まとめ.pdf p.1 / 2026-08-09 中野さん確認）。
+# 2026-08-09 まで Floor だけに付いており、TD・PIT・CHIP に付いていなかった。
+DAY_ALLOWANCE_ROLES = ("Floor", "TD", "Pit", "Chip")
+
 NIGHT_START_HOUR = 22  # 深夜割増の開始時刻
 NIGHT_END_HOUR = 29    # 深夜割増の終了時刻（翌5:00 = 24+5）
 # SPEC.md:242「night_rate を 22:00〜翌5:00 に適用」。
@@ -229,7 +235,7 @@ def calculate_daily_pay(shift_hours: ShiftHours, hourly_rate: int,
     night = round(night_hours * night_rate)
     break_ded = round(break_hours * hourly_rate)
 
-    f_bonus = floor_bonus if role == "Floor" else 0
+    f_bonus = floor_bonus if role in DAY_ALLOWANCE_ROLES else 0
     # MIX手当: シフト単位のis_mixフラグで判定（役職ではなく日別）
     m_bonus = mix_bonus if is_mix else 0
 

@@ -437,7 +437,7 @@ else:
         new_name_jp = st.text_input("名前（日本語）", key="new_staff_name_jp")
     with col_new2:
         new_name_en = st.text_input("名前（英語）", value="", key="new_staff_name_en")
-        new_role = st.selectbox("役職", ["Dealer", "Floor", "Chip", "Other"], key="new_staff_role")
+        new_role = st.selectbox("役職", ["Dealer", "Floor", "Chip", "Pit", "TD", "Other"], key="new_staff_role")
     add_staff_data = None
 
 col_sh, col_sm, col_eh2, col_em2 = st.columns(4)

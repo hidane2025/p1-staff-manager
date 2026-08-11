@@ -502,7 +502,7 @@ col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
 with col_f1:
     search = st.text_input("🔍 名前で検索", key="payment_search")
 with col_f2:
-    role_filter = st.selectbox("役職", ["すべて", "Dealer", "Floor", "TD", "DC", "Chip"], key="payment_role")
+    role_filter = st.selectbox("役職", ["すべて", "Dealer", "Floor", "TD", "DC", "Chip", "Pit"], key="payment_role")
 with col_f3:
     status_filter = st.selectbox("状態", ["すべて", "⏳ 未承認", "✅ 承認済", "💴 支払済"], key="payment_status")
 

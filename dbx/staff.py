@@ -291,10 +291,21 @@ def find_or_create_staff(no, name_jp, name_en="", role="Dealer"):
     NO.未指定/未一致のときだけ、表記揺れを吸収したディーラーネームで照合する。
     """
     client = core.get_client()
+    has_no = False
     if no not in (None, ""):
+        try:
+            has_no = int(no) > 0
+        except (ValueError, TypeError):
+            has_no = False
+    if has_no:
         r = client.table("p1_staff").select("id").eq("no", no).execute()
         if r.data:
             return r.data[0]["id"]
+        # NO.があって未登録なら「新しい人」。ここで名前照合に落とすと、
+        # 同姓同名の別人（例: 2026-08 大阪の NO.79 と NO.510 の「Aoi」）が
+        # 1人に統合され、片方の勤務が上書きで消える。NO.は一意キーなので、
+        # 明示されている以上それを尊重して新規作成する。
+        return create_staff(no, name_jp, name_en, role)
     nk = _norm_key(name_jp)
     if nk:
         r = client.table("p1_staff").select("id, name_jp").execute()

@@ -84,14 +84,10 @@ st.divider()
 st.subheader("3. シフト表を取り込み")
 
 st.markdown("""
-**対応フォーマット:** CSV / TSV（Googleスプレッドシートからダウンロード可）
+**対応フォーマット:** CSV / TSV / Excel（Googleスプレッドシートからダウンロード可）
 
-**必要な列:**
-- A列: 役職（TD / Floor / Dealer 等）
-- C列: NO.
-- D列: 名前（日本語）
-- E列: 名前（英語）
-- F列以降: 日付ごとの時間（例: `13:00~23:00`）。 `×` は休み。
+見出し行と列の対応は**自動で判定**します。表の上にタイトルや注記の行があっても構いません。
+判定結果は取り込む前に画面で確認・変更できます。
 """)
 
 uploaded = st.file_uploader("CSV / TSV / Excelファイル", type=["csv", "tsv", "txt", "xlsx"])
@@ -125,51 +121,154 @@ if uploaded:
         import io
         _xdf = pd.read_excel(io.BytesIO(content), dtype=str).fillna("")
         content = _xdf.to_csv(index=False).encode("utf-8")
-    parsed = parse_shift_csv(content, year=year_input)
+    # --- 読み取り条件（自動判定 → 必要なら手で直す） ---
+    probe = parse_shift_csv(content, year=year_input)
+    _cols = probe.get("columns") or []
+    _auto_map = probe.get("mapping") or {}
 
-    st.success(
-        f"パース完了: {len(parsed['staff'])}名のスタッフ / "
-        f"{len(parsed['dates'])}日間 / {len(parsed['shifts'])}シフト"
+    with st.expander("⚙️ 読み取り条件（自動判定済み・必要なときだけ開く）",
+                     expanded=not probe.get("dates")):
+        c1, c2 = st.columns(2)
+        with c1:
+            header_row = st.number_input(
+                "見出し行（0始まり）", min_value=0, max_value=50,
+                value=int(probe.get("header_row", 0)),
+                help="日付が並んでいる行を指定します。通常は自動判定のままで構いません。",
+            )
+        with c2:
+            paren_label = st.radio(
+                "括弧つきの時刻（例 `12:00-21:00 (22:00)`）",
+                ["手前の時刻を使う", "括弧の時刻を使う"],
+                horizontal=True,
+                help="どちらを選んでも、当日ピット端末で打刻すれば実績で上書きされます。",
+            )
+        paren_mode = "paren" if paren_label.startswith("括弧") else "first"
+
+        st.caption("列の対応（自動判定を上書きしたいときだけ変更）")
+        mc = st.columns(4)
+        mapping = {}
+        for i, (field, label) in enumerate(
+                (("role", "役職"), ("no", "NO."), ("name_jp", "名前"), ("name_en", "英名"))):
+            opts = ["（使わない）"] + _cols
+            cur = _auto_map.get(field)
+            idx = opts.index(cur) if cur in opts else 0
+            with mc[i]:
+                sel = st.selectbox(label, opts, index=idx, key=f"map_{field}")
+            mapping[field] = None if sel == "（使わない）" else sel
+
+        exclude_raw = st.text_input(
+            "取り込まないNO.（カンマ区切り）",
+            help="他社が支払いを管理するスタッフなど。例: 1001,1002,1007",
+            placeholder="例: 1001,1002,1003",
+        )
+
+    exclude_nos = [x.strip() for x in (exclude_raw or "").replace("、", ",").split(",") if x.strip()]
+    parsed = parse_shift_csv(content, year=year_input, header_row=int(header_row),
+                             mapping=mapping, paren_mode=paren_mode,
+                             exclude_nos=exclude_nos)
+
+    # --- 判定結果のサマリ ---
+    st.markdown("#### 読み取り結果")
+    s1, s2, s3, s4 = st.columns(4)
+    s1.metric("スタッフ", f"{len(parsed['staff'])}名")
+    s2.metric("日付", f"{len(parsed['dates'])}日")
+    s3.metric("シフト", f"{len(parsed['shifts'])}件")
+    s4.metric("読めなかったセル", f"{len(parsed['skipped'])}件")
+    st.caption(
+        f"見出し行: {parsed['header_row']}行目 ／ "
+        f"役職={parsed['mapping'].get('role') or '—'}・"
+        f"NO.={parsed['mapping'].get('no') or '—'}・"
+        f"名前={parsed['mapping'].get('name_jp') or '—'}・"
+        f"英名={parsed['mapping'].get('name_en') or '—'}"
     )
 
-    # プレビュー
-    if parsed["staff"]:
-        st.markdown("**スタッフプレビュー:**")
-        st.dataframe(pd.DataFrame(parsed["staff"]), use_container_width=True, hide_index=True)
+    for w in parsed.get("warnings", []):
+        st.warning(f"⚠️ {w}")
 
-    if parsed["shifts"]:
-        st.markdown("**シフトプレビュー（先頭20件）:**")
-        st.dataframe(pd.DataFrame(parsed["shifts"][:20]), use_container_width=True, hide_index=True)
+    if parsed.get("excluded"):
+        with st.expander(f"🚫 取り込まない{len(parsed['excluded'])}名（NO.指定による除外）"):
+            st.dataframe(pd.DataFrame(parsed["excluded"]),
+                         use_container_width=True, hide_index=True)
+
+    if parsed.get("skipped"):
+        st.error(
+            f"❌ 時刻として読めないセルが {len(parsed['skipped'])} 件あります。"
+            "このままだと**その勤務は取り込まれません**。内容を確認してください。"
+        )
+        st.dataframe(pd.DataFrame(parsed["skipped"]),
+                     use_container_width=True, hide_index=True)
+
+    if parsed.get("paren_cells"):
+        _used = "括弧の時刻" if paren_mode == "paren" else "手前の時刻"
+        with st.expander(
+                f"🔎 括弧つきの時刻が {len(parsed['paren_cells'])} 件（いま{_used}を採用中）"):
+            st.dataframe(pd.DataFrame(parsed["paren_cells"]),
+                         use_container_width=True, hide_index=True)
+
+    if not parsed["shifts"]:
+        st.error("シフトが1件も読み取れませんでした。上の『読み取り条件』を確認してください。")
+        st.stop()
+
+    # プレビュー
+    with st.expander(f"👥 スタッフ {len(parsed['staff'])}名", expanded=False):
+        st.dataframe(pd.DataFrame(parsed["staff"]), use_container_width=True, hide_index=True)
+    with st.expander(f"📅 シフト {len(parsed['shifts'])}件（先頭50件）", expanded=False):
+        st.dataframe(pd.DataFrame(parsed["shifts"][:50]),
+                     use_container_width=True, hide_index=True)
 
     if st.button("🚀 取り込み実行", type="primary"):
-        imported_staff = 0
-        imported_shifts = 0
+        prog = st.progress(0.0, text="スタッフを登録中…")
+        # スタッフを先に作り、(NO., 名前) → staff_id の対応表を持つ。
+        # シフトごとに find_or_create を呼ぶと同じ問い合わせを何百回も繰り返すため。
+        id_map = {}
+        for i, s in enumerate(parsed["staff"]):
+            id_map[(s["no"], s["name_jp"])] = db.find_or_create_staff(
+                s["no"], s["name_jp"], s["name_en"], s["role"])
+            prog.progress((i + 1) / max(1, len(parsed["staff"])) * 0.3,
+                          text=f"スタッフを登録中… {i + 1}/{len(parsed['staff'])}")
 
-        for s in parsed["staff"]:
-            db.find_or_create_staff(s["no"], s["name_jp"], s["name_en"], s["role"])
-            imported_staff += 1
-
-        for shift in parsed["shifts"]:
-            staff_id = db.find_or_create_staff(shift["no"], shift["name_jp"], role=shift["role"])
+        imported_shifts, failed = 0, []
+        total = max(1, len(parsed["shifts"]))
+        for i, shift in enumerate(parsed["shifts"]):
+            staff_id = id_map.get((shift["no"], shift["name_jp"]))
+            if not staff_id:
+                staff_id = db.find_or_create_staff(
+                    shift["no"], shift["name_jp"], role=shift["role"])
             time_parsed = parse_shift_time(shift["time_range"])
-            if time_parsed:
-                start_min, end_min = time_parsed
-                start_str = f"{start_min // 60:02d}:{start_min % 60:02d}"
-                end_str = f"{end_min // 60:02d}:{end_min % 60:02d}"
-                db.upsert_shift(event_id, staff_id, shift["date"], start_str, end_str)
-                imported_shifts += 1
+            if not time_parsed:
+                failed.append(shift)
+                continue
+            start_min, end_min = time_parsed
+            db.upsert_shift(
+                event_id, staff_id, shift["date"],
+                f"{start_min // 60:02d}:{start_min % 60:02d}",
+                f"{end_min // 60:02d}:{end_min % 60:02d}",
+            )
+            imported_shifts += 1
+            prog.progress(0.3 + (i + 1) / total * 0.7,
+                          text=f"シフトを登録中… {i + 1}/{total}")
 
         # 日付からレートを自動設定（未設定の日のみ）
         existing_rate_dates = {r["date"] for r in db.get_event_rates(event_id)}
         for date in parsed["dates"]:
             if date not in existing_rate_dates:
                 db.set_event_rate(event_id, date)
+        prog.empty()
 
         st.success(
-            f"取り込み完了: {imported_staff}名のスタッフ / {imported_shifts}シフトを登録"
+            f"取り込み完了: スタッフ {len(parsed['staff'])}名 / "
+            f"シフト {imported_shifts}件を登録"
+            + (f" ／ 除外 {len(parsed['excluded'])}名" if parsed.get("excluded") else "")
         )
+        if failed:
+            st.error(f"❌ {len(failed)}件は登録できませんでした")
+            st.dataframe(pd.DataFrame(failed), use_container_width=True, hide_index=True)
+        if parsed.get("skipped"):
+            st.warning(
+                f"⚠️ 読めなかった {len(parsed['skipped'])} 件は取り込まれていません。"
+                "上の一覧を確認し、必要なら『出退勤』ページで手入力してください。"
+            )
         st.balloons()
-        st.rerun()
 
 
 # ============================================================
