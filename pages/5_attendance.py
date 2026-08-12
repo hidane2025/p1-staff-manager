@@ -33,7 +33,7 @@ if _READONLY:
     st.info("👀 **閲覧のみのアカウントです。** 記録の変更はできません。")
 admin_logout_button()
 
-page_header("🕐 出退勤管理", "シフト通り＝デフォルト。例外（欠勤・遅刻・延長・早退）だけ記録します。")
+page_header("🕐 出退勤管理", "シフト通り＝デフォルト。例外（欠勤・遅刻/早入り・延長・早退）だけ記録します。")
 flow_bar(active="input", done=["setup"])
 
 # --- イベント・日付選択（全ページ共通のsession_state共有） ---
@@ -204,7 +204,7 @@ st.subheader("② 例外を記録（来てない人・時間が違う人だけ�
 
 # タブで操作を分ける（凍結退勤を最初＝最終日の主要操作）
 tab_freeze, tab_absent, tab_late, tab_overtime, tab_early, tab_reset = st.tabs([
-    "🧊 凍結退勤（一括）", "❌ 欠勤", "⏰ 遅刻", "⏩ 延長（残業）", "⏪ 早退", "↩️ 個別リセット"
+    "🧊 凍結退勤（一括）", "❌ 欠勤", "⏰ 遅刻・早入り", "⏩ 延長（残業）", "⏪ 早退", "↩️ 個別リセット"
 ])
 
 # スタッフ選択肢を生成
@@ -241,7 +241,8 @@ with tab_absent:
                 )
 
 with tab_late:
-    st.markdown("遅刻した人の実際の到着時刻を記録")
+    st.markdown("**実際の到着時刻**を記録します（遅刻・早入りの両方）。"
+                "予定より**早い時刻**を入れれば早入りとして、その分も支払いに反映されます。")
     late_staff = st.selectbox("スタッフ", list(staff_options.keys()), key="late_select")
     if late_staff:
         s = staff_options[late_staff]
@@ -251,7 +252,7 @@ with tab_late:
             late_hour = st.number_input("時", min_value=0, max_value=29, value=int(s['planned_start'].split(':')[0]), key="late_hour")
         with col_lm:
             late_min = st.selectbox("分", MINUTE_CHOICES, key="late_min")
-        if st.button("⏰ 遅刻を記録", key="mark_late", disabled=_READONLY):
+        if st.button("⏰ この到着時刻で記録", key="mark_late", disabled=_READONLY):
             time_str = f"{late_hour:02d}:{late_min:02d}"
             db.checkin_staff(s["id"], time_str)
             st.success(f"{s['name_jp']} の到着時刻を {time_str} に記録しました（予定: {s['planned_start']}）")
@@ -513,6 +514,10 @@ for s in shifts:
         note = "欠勤"
     elif s.get("actual_start") and s.get("planned_start") and s["actual_start"] > s["planned_start"]:
         note = f"⚠️ 遅刻（{s['actual_start']}着）"
+    elif s.get("actual_start") and s.get("planned_start") and s["actual_start"] < s["planned_start"]:
+        # 予定より早い到着は「早入り」。以前は遅刻の裏返しで無表示だったため、
+        # 早く来た事実（＝支払い増の根拠）が一覧から見えなかった
+        note = f"🌅 早入り（{s['actual_start']}着）"
     elif s.get("actual_end") and s.get("planned_end") and s["actual_end"] > s["planned_end"]:
         note = f"⏩ 延長（{s['actual_end']}退勤）"
     elif s.get("actual_end") and s.get("planned_end") and s["actual_end"] < s["planned_end"]:
@@ -546,7 +551,7 @@ edited_df = st.data_editor(
         "出勤": st.column_config.CheckboxColumn(
             "✅出勤", default=False,
             help="チェック＝予定時刻どおり出勤として確定。外す＝未確定に戻す。"
-                 "遅刻など時間が違う人は「②例外を記録」で。退勤済・欠勤はここでは変更できません。",
+                 "遅刻・早入りなど時間が違う人は「②例外を記録」で。退勤済・欠勤はここでは変更できません。",
         ),
         "MIX": st.column_config.CheckboxColumn("MIX", default=False),
         "備考": st.column_config.TextColumn("備考", help="イレギュラー対応等を自由入力"),
