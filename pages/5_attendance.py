@@ -18,10 +18,18 @@ from utils.time_input import MINUTE_CHOICES  # 分の刻みは1箇所で決め�
 st.set_page_config(page_title="出退勤", page_icon="🕐", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header, flow_bar
-from utils.admin_guard import require_admin, admin_logout_button
+from utils.admin_guard import require_admin, admin_logout_button, current_role
 apply_global_style()
 hide_staff_only_pages()
-require_admin(page_name="出退勤管理", allow_day_code=True)
+require_admin(page_name="出退勤管理", roles=("admin", "viewer"),
+              allow_day_code=True)
+
+# 2026-08-12: 共催相手（韓国側）に進行状況だけ見せるため viewer を開放した。
+# この画面は金額も本名も出さない（NO.・ディーラーネーム・役職・時刻のみ）が、
+# 出退勤の記録そのものは書き換えられるので、viewer では更新操作を全て止める。
+_READONLY = (current_role() == "viewer")
+if _READONLY:
+    st.info("👀 **閲覧のみのアカウントです。** 記録の変更はできません。")
 admin_logout_button()
 
 page_header("🕐 出退勤管理", "シフト通り＝デフォルト。例外（欠勤・遅刻・延長・早退）だけ記録します。")
@@ -92,7 +100,8 @@ eligible_count = len(eligible_shifts)
 col_bulk1, col_bulk2, col_bulk3 = st.columns(3)
 
 with col_bulk1:
-    if st.button(btn_label, type="primary", use_container_width=True):
+    if st.button(btn_label, type="primary", use_container_width=True,
+                 disabled=_READONLY):
         if eligible_count == 0:
             st.info("対象のスタッフがいません（全員出勤済みまたは欠勤）")
         else:
@@ -119,7 +128,8 @@ with col_bulk1:
                 )
 
 with col_bulk2:
-    if st.button("🔴 全員退勤（予定時刻で確定）", use_container_width=True):
+    if st.button("🔴 全員退勤（予定時刻で確定）", use_container_width=True,
+                 disabled=_READONLY):
         # A-7: 1件ずつ try/except。退勤は冪等なので失敗分は再ボタンで安全に再実行可能。
         client = db.get_client()
         targets = [s for s in shifts if s["status"] in ("checked_in", "scheduled")]
@@ -151,7 +161,8 @@ with col_bulk3:
         st.session_state["confirm_reset"] = False
     if not st.session_state["confirm_reset"]:
         if st.button("🔄 全員リセット", use_container_width=True,
-                      help="この日の全員の出退勤記録を未確定に戻します。1人だけ取り消したいときは下の『↩️ 個別リセット』タブを使ってください。"):
+                      help="この日の全員の出退勤記録を未確定に戻します。1人だけ取り消したいときは下の『↩️ 個別リセット』タブを使ってください。",
+                      disabled=_READONLY):
             st.session_state["confirm_reset"] = True
             st.rerun()
     else:
@@ -208,7 +219,7 @@ with tab_absent:
         list(staff_options.keys()),
         key="absent_select"
     )
-    if st.button("❌ 選択した人を欠勤にする", key="mark_absent"):
+    if st.button("❌ 選択した人を欠勤にする", key="mark_absent", disabled=_READONLY):
         if absent_staff:
             # A-7: 1件ずつ try/except。失敗分だけ再実行できる（冪等）。
             ok_n, fails = 0, []
@@ -239,7 +250,7 @@ with tab_late:
             late_hour = st.number_input("時", min_value=0, max_value=29, value=int(s['planned_start'].split(':')[0]), key="late_hour")
         with col_lm:
             late_min = st.selectbox("分", MINUTE_CHOICES, key="late_min")
-        if st.button("⏰ 遅刻を記録", key="mark_late"):
+        if st.button("⏰ 遅刻を記録", key="mark_late", disabled=_READONLY):
             time_str = f"{late_hour:02d}:{late_min:02d}"
             db.checkin_staff(s["id"], time_str)
             st.success(f"{s['name_jp']} の到着時刻を {time_str} に記録しました（予定: {s['planned_start']}）")
@@ -253,7 +264,7 @@ with tab_overtime:
         st.info(f"予定退勤: {s['planned_end']}")
         ot_hour = st.number_input("実際の退勤（時）", min_value=0, max_value=29, value=int(s['planned_end'].split(':')[0]) + 1, key="ot_hour")
         ot_min = st.selectbox("実際の退勤（分）", MINUTE_CHOICES, key="ot_min")
-        if st.button("⏩ 延長を記録", key="mark_ot"):
+        if st.button("⏩ 延長を記録", key="mark_ot", disabled=_READONLY):
             time_str = f"{ot_hour:02d}:{ot_min:02d}"
             db.checkout_staff(s["id"], time_str)
             st.success(f"{s['name_jp']} の退勤を {time_str} に記録しました（予定: {s['planned_end']}）")
@@ -270,7 +281,7 @@ with tab_early:
             early_hour = st.number_input("時", min_value=0, max_value=29, value=max(0, int(s['planned_end'].split(':')[0]) - 1), key="early_hour")
         with col_em:
             early_min = st.selectbox("分", MINUTE_CHOICES, key="early_min")
-        if st.button("⏪ 早退を記録", key="mark_early"):
+        if st.button("⏪ 早退を記録", key="mark_early", disabled=_READONLY):
             time_str = f"{early_hour:02d}:{early_min:02d}"
             db.checkout_staff(s["id"], time_str)
             st.success(f"{s['name_jp']} の退勤を {time_str} に記録しました（予定: {s['planned_end']}）")
@@ -296,7 +307,7 @@ with tab_freeze:
             freeze_hour = st.number_input("退勤時刻（時）", min_value=0, max_value=29, value=int(datetime.now(_JST).strftime("%H")), key="freeze_hour")
         with col_fm:
             freeze_min = st.selectbox("退勤時刻（分）", MINUTE_CHOICES, key="freeze_min")
-        if st.button("🧊 凍結退勤を実行", key="exec_freeze", type="primary"):
+        if st.button("🧊 凍結退勤を実行", key="exec_freeze", type="primary", disabled=_READONLY):
             if freeze_selected:
                 freeze_time = f"{freeze_hour:02d}:{freeze_min:02d}"
                 freeze_ids = [freeze_candidates[name]["id"] for name in freeze_selected]
@@ -377,6 +388,7 @@ with tab_reset:
                 "↩️ この人だけリセット",
                 type="primary",
                 key="exec_reset_individual",
+                disabled=_READONLY,
             ):
                 client = db.get_client()
                 # シフト記録を未確定に戻す
@@ -450,7 +462,8 @@ with col_eh2:
 with col_em2:
     add_end_min = st.selectbox("終了（分）", MINUTE_CHOICES, key="add_end_m")
 
-if st.button("➕ 当日シフトに追加", key="exec_add_staff", type="primary"):
+if st.button("➕ 当日シフトに追加", key="exec_add_staff", type="primary",
+             disabled=_READONLY):
     planned_start = f"{add_start_hour:02d}:{add_start_min:02d}"
     planned_end = f"{add_end_hour:02d}:{add_end_min:02d}"
 
