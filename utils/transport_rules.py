@@ -40,3 +40,31 @@ def approved_amount(rule: dict, days_worked: int,
     if rule.get("receipt_required") and not has_receipt:
         return 0, "領収書必須・未受領"
     return clip_to_cap(receipt_amount, max_amt), "領収書ベース（上限=往復総額）"
+
+
+def payment_amount(rules_by_region: dict, region, days_worked: int,
+                   claim: dict = None) -> tuple:
+    """**支払いに載せる**交通費を決める（ピット端末・支払い計算の共通入口）。
+
+    2026-08-12 追加。ピット端末だけがこの判定を持っておらず、領収書が未登録の
+    遠方スタッフに対して「イベントレートの日額」を素通しで加算していた
+    （transport_override=None → calculator が日額×日数を積む）。結果、同じ打刻でも
+    ピットの表示額が支払い計算より 1,000円/日 多くなり、8月大阪の実データで
+    54名・合計 269,000円の差が出ることを実測。現場はピット表示額で現金を渡すため、
+    そのまま過払いになる。
+
+    Returns: (amount or None, reason)
+        None = 交通費ルール未設定 → 旧ロジック（イベントレートの日額）に委ねる
+    """
+    if not rules_by_region:
+        return None, ""
+    rule = rules_by_region.get(region)
+    if not rule:
+        return 0, "住所未登録または圏外のため交通費0"
+    if rule.get("is_venue_region"):
+        per_day = int(rule.get("max_amount") or 0)
+        return (venue_amount(per_day, days_worked),
+                f"開催地一律（¥{per_day:,}/日 × {days_worked}日）")
+    if claim and claim.get("has_receipt"):
+        return int(claim.get("approved_amount") or 0), "領収書確定"
+    return 0, "領収書が未提出のため0（提出後に精算）"

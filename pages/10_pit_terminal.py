@@ -878,15 +878,24 @@ else:
                         individual_allowances = db.get_individual_allowances(
                             event_id, target["id"]
                         )
-                        # 交通費が領収書ベースで保存されていれば、それを transport_override に
-                        transport_override = None
+                        # 交通費は支払い計算画面と同じ判定を通す（utils/transport_rules）。
+                        # 2026-08-12 まで「領収書の登録が無ければ None」にしており、
+                        # calculator がイベントレートの日額を素通しで積んでいた。
+                        # 遠方スタッフのピット表示額が支払い計算より 1,000円/日 多くなり、
+                        # 現場がその額で現金を渡すと過払いになる（実測54名・269,000円）。
                         claim = next(
                             (c for c in (db.get_transport_claims(event_id) or [])
                              if c.get("staff_id") == target["id"]),
                             None,
                         )
-                        if claim is not None:
-                            transport_override = int(claim.get("approved_amount") or 0)
+                        _rules_by_region = {
+                            r["region"]: r
+                            for r in (db.get_transport_rules(event_id) or [])
+                        }
+                        transport_override, _tr_reason = transport_rules_mod.payment_amount(
+                            _rules_by_region, target.get("region"),
+                            len(shifts_for_calc), claim,
+                        )
                         # A-5: 既存の臨時調整を保全（ピット再退勤で消さない）
                         _existing_pay = db.get_client().table("p1_payments").select(
                             "adjustment, adjustment_note").eq(

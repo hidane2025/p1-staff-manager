@@ -157,22 +157,13 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
         Returns: (交通費金額 or None, 説明メッセージ)
             Noneの場合は旧システム（rate.transportで日数分）を使う
         """
-        if not transport_rules:
-            return None, ""  # ルール未設定なら旧ロジック
-        region = staff_info.get("region")
-        if not region or region not in transport_rules:
-            return 0, "住所未登録または圏外のため交通費0"
-        rule = transport_rules[region]
-        if rule.get("is_venue_region"):
-            # 開催地=日額×勤務日数。式の正は utils/transport_rules.py（3画面共通）
-            per_day = int(rule.get("max_amount", 0) or 0)
-            return (transport_rules_mod.venue_amount(per_day, days),
-                    f"開催地一律（¥{per_day:,}/日 × {days}日）")
-        # 圏外: 領収書金額
-        claim = transport_claims.get(staff_info.get("id"))
-        if claim and claim.get("has_receipt"):
-            return int(claim.get("approved_amount") or 0), "領収書確定"
-        return 0, "領収書未提出のため0"
+        # 判定の正は utils/transport_rules.payment_amount（ピット端末と共通）。
+        # 2026-08-12: 同じ判定がピット端末側に無く、遠方スタッフの表示額が
+        # 1,000円/日ずれていたため、両画面をこの1関数に寄せた。
+        return transport_rules_mod.payment_amount(
+            transport_rules, staff_info.get("region"), days,
+            transport_claims.get(staff_info.get("id")),
+        )
 
     # スタッフごとにグループ化
     staff_shifts = {}
