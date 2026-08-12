@@ -22,6 +22,7 @@ from utils.event_selector import select_event
 st.set_page_config(page_title="支払い計算", page_icon="💰", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header, flow_bar
+from utils.roles import CANONICAL_ROLES
 from utils.admin_guard import require_admin, admin_logout_button, operator_name, is_auth_enabled
 apply_global_style()
 hide_staff_only_pages()
@@ -493,7 +494,7 @@ col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
 with col_f1:
     search = st.text_input("🔍 名前で検索", key="payment_search")
 with col_f2:
-    role_filter = st.selectbox("役職", ["すべて", "Dealer", "Floor", "TD", "DC", "Chip", "Pit"], key="payment_role")
+    role_filter = st.selectbox("役職", ["すべて"] + list(CANONICAL_ROLES), key="payment_role")
 with col_f3:
     status_filter = st.selectbox("状態", ["すべて", "⏳ 未承認", "✅ 承認済", "💴 支払済"], key="payment_status")
 

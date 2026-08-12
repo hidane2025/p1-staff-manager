@@ -22,7 +22,8 @@ flow_bar(active="input", done=["setup"])
 db.log_action("view_staff_list", "staff",
               detail=f"page=スタッフ管理", performed_by=operator_name())
 
-ROLES = ["Dealer", "Floor", "TD", "DC", "Chip", "Pit"]
+from utils.roles import CANONICAL_ROLES
+ROLES = list(CANONICAL_ROLES)
 EMPLOYMENT_TYPES = {
     "contractor": "業務委託",
     "timee": "タイミー",

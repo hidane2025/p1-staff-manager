@@ -18,6 +18,7 @@ from utils.time_input import MINUTE_CHOICES  # 分の刻みは1箇所で決め�
 st.set_page_config(page_title="出退勤", page_icon="🕐", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header, flow_bar
+from utils.roles import CANONICAL_ROLES
 from utils.admin_guard import require_admin, admin_logout_button, current_role
 apply_global_style()
 hide_staff_only_pages()
@@ -449,7 +450,7 @@ else:
         new_name_jp = st.text_input("名前（日本語）", key="new_staff_name_jp")
     with col_new2:
         new_name_en = st.text_input("名前（英語）", value="", key="new_staff_name_en")
-        new_role = st.selectbox("役職", ["Dealer", "Floor", "Chip", "Pit", "TD", "Other"], key="new_staff_role")
+        new_role = st.selectbox("役職", list(CANONICAL_ROLES) + ["Other"], key="new_staff_role")
     add_staff_data = None
 
 col_sh, col_sm, col_eh2, col_em2 = st.columns(4)

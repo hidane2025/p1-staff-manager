@@ -4,11 +4,12 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
-# 日当（フロア手当）の対象役職。
-# P1の単価ルール「TD・FLOOR・PIT・CHIP は Dealer時給＋日当3,000円」に対応する
-# （出典: シフトコスト試算まとめ.pdf p.1 / 2026-08-09 中野さん確認）。
+# 日当（フロア手当）の対象役職。正準は utils/roles.py（画面と共有）。
 # 2026-08-09 まで Floor だけに付いており、TD・PIT・CHIP に付いていなかった。
-DAY_ALLOWANCE_ROLES = ("Floor", "TD", "Pit", "Chip")
+try:
+    from utils.roles import DAY_ALLOWANCE_ROLES
+except ImportError:  # utils/ 直下がパスに載る実行形態（テスト等）
+    from roles import DAY_ALLOWANCE_ROLES
 
 NIGHT_START_HOUR = 22  # 深夜割増の開始時刻
 NIGHT_END_HOUR = 29    # 深夜割増の終了時刻（翌5:00 = 24+5）

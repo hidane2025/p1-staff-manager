@@ -349,8 +349,15 @@ _check("ADMIN_PASSWORD未設定でも警告で通過（フォールバック）"
 _pit_src = (ROOT / "pages/10_pit_terminal.py").read_text()
 _check("深夜跨ぎ対応の日付セレクタが追加されている",
        "シフト日付（深夜跨ぎ時はここで前日を選択）" in _pit_src)
-_check("交通費の日数倍計算が追加されている",
-       "max_amt * days_worked" in _pit_src or "max_amt × 勤務日数" in _pit_src)
+# 2026-08-12 更新: 日数倍の式そのものは utils/transport_rules.py に集約された
+# （3画面で式が重複し2度食い違った事故の再発防止）。ピット端末側は
+# 共通モジュールを経由していることを検証する。
+_check("交通費の日数倍計算が共通モジュール経由になっている",
+       "transport_rules_mod.payment_amount" in _pit_src
+       or "transport_rules_mod.approved_amount" in _pit_src)
+_check("共通モジュールに日数倍の式がある",
+       "per_day or 0) * max(0, int(days_worked" in
+       (ROOT / "utils/transport_rules.py").read_text())
 # Codex 6回目 P2 #13 (2026-05-09): 古い no-show を誤って優先しない
 _check("前日の判定が「厳密に前日」(_prev_date)に絞り込まれている",
        "_prev_date" in _pit_src and "timedelta(days=1)" in _pit_src)
