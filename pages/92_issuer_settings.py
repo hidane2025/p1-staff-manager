@@ -146,7 +146,7 @@ st.divider()
 st.subheader("🎫 当日運用コード")
 st.caption(
     "大会当日、TD・給与窓口が**ピット端末・出退勤**に入るための時限コードです。"
-    "有効日の**翌朝5時に自動失効**します。管理者パスワードを現場に配る必要がなくなります。"
+    "有効日の**翌朝7時に自動失効**します。管理者パスワードを現場に配る必要がなくなります。"
 )
 
 from datetime import datetime as _dtn, timedelta as _tdn, timezone as _tzn
@@ -169,7 +169,7 @@ if st.button("🎫 コードを発行", type="primary", key="issue_day_code"):
             f'border-radius:12px;">{_code}</div>',
             unsafe_allow_html=True,
         )
-        st.caption(f"有効: {_dc_date} 0:00 〜 翌朝5:00（JST）／対象ページ: ピット端末・出退勤のみ")
+        st.caption(f"有効: {_dc_date} 0:00 〜 翌朝7:00（JST）／対象ページ: ピット端末・出退勤のみ")
     except Exception as _e:
         st.error("発行に失敗しました。DBマイグレーション（20260728_add_day_codes_and_totp.sql）"
                  "が未適用の可能性があります。")

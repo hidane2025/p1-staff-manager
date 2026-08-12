@@ -389,7 +389,7 @@ def require_admin(*, page_name: str = "", roles=("admin",),
         roles: 入室を許可するロールの集合（既定 admin のみ）。
                閲覧者にも開くページは roles=("admin","viewer") を渡す。
         allow_day_code: True の場合「当日運用コード」でも入室可（ピット端末・出退勤用。
-               2026-07-28 追加。コードは管理者が発行・翌朝5時JSTに自動失効）。
+               2026-07-28 追加。コードは管理者が発行・翌朝7時JSTに自動失効）。
     """
     # 既に認証済み → ロールを確認
     if is_admin():
@@ -652,7 +652,7 @@ def _render_day_code_form(page_name: str) -> None:
     """当日運用コードでの入室フォーム（ピット端末・出退勤のみ有効）。"""
     with st.expander("🎫 当日運用コードで入る（TD・給与窓口用）", expanded=False):
         st.caption(
-            "管理者から受け取った**本日のコード**で入室できます（翌朝5時に自動失効）。"
+            "管理者から受け取った**本日のコード**で入室できます（翌朝7時に自動失効）。"
             "操作できるのはピット端末・出退勤のみです。"
         )
         _fails = int(st.session_state.get(_DAY_FAILS_KEY) or 0)

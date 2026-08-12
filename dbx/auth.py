@@ -18,7 +18,9 @@ from dbx.core import _JST
 # 当日運用コード（日替わりワンタイムコード 2026-07-28 追加）
 # ============================================================
 # 大会当日、TD・給与窓口が「当日運用ページ」（ピット端末・出退勤）に入るための
-# 時限コード。管理者が発行し、有効日の翌朝5時(JST)に自動失効する。
+# 時限コード。管理者が発行し、有効日の翌朝7時(JST)に自動失効する。
+# 2026-08-12 5時→7時に変更: シフトが30:00（朝6時）まであり、5時失効だと
+# 最終退勤の打刻中にピット端末が締め出されるため（中野さん指示）。
 # DBにはSHA-256ハッシュのみ保存（発行時に一度だけ平文表示）。
 # マイグレ docs/db_migrations/20260728_add_day_codes_and_totp.sql 必須。
 
@@ -27,16 +29,21 @@ def _hash_day_code(code: str) -> str:
     return hashlib.sha256(("p1daycode:" + (code or "").strip()).encode("utf-8")).hexdigest()
 
 
+# 当日コードの失効時刻（翌日のこの時。シフト終端30:00＋清算の余裕をみて7時）
+DAY_CODE_EXPIRE_HOUR = 7
+
+
 def issue_day_code(valid_date: str, label: str = "", created_by: str = "") -> str:
     """当日運用コードを発行して平文を返す（表示は発行時の一度きり）。
 
-    有効期限 = valid_date の翌日 05:00 JST。
+    有効期限 = valid_date の翌日 07:00 JST（シフト終端30:00の後処理まで持たせる）。
     """
     import secrets as _secrets
     from datetime import datetime as _dt, timedelta as _td
     code = f"{_secrets.randbelow(100000000):08d}"  # 8桁（総当たり耐性・レビュー指摘対応）
     d = _dt.strptime(valid_date, "%Y-%m-%d")
-    expires = (d + _td(days=1)).replace(hour=5, minute=0, second=0, tzinfo=_JST)
+    expires = (d + _td(days=1)).replace(hour=DAY_CODE_EXPIRE_HOUR, minute=0,
+                                        second=0, tzinfo=_JST)
     core.get_client().table("p1_day_codes").insert({
         "code_hash": _hash_day_code(code),
         "label": (label or "")[:60],
