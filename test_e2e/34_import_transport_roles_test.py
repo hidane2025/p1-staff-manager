@@ -129,6 +129,12 @@ amt, why = payment_amount(RULES, None, 5, None)
 _check("地域未登録 → 0円＋理由", amt == 0 and why, f"{amt} / {why}")
 amt, why = payment_amount({}, "東海", 5, None)
 _check("ルール未設定 → None（旧ロジックへ委譲）", amt is None, f"{amt} / {why}")
+amt, why = payment_amount(RULES, None, 5, {"has_receipt": 1, "approved_amount": 11900})
+_check("住所未登録でも手入力があれば支給（受付の実費経路）", amt == 11900, f"{amt} / {why}")
+amt, why = payment_amount(RULES, "近畿", 5, {"has_receipt": 1, "approved_amount": 8000})
+_check("開催地でも手入力が優先（新幹線等の都度相談の上書き）", amt == 8000, f"{amt} / {why}")
+amt, why = payment_amount(RULES, None, 5, {"has_receipt": 0, "approved_amount": 9999})
+_check("手入力でも「領収書あり」フラグなしは支給しない", amt == 0, f"{amt} / {why}")
 
 # ============================================================
 # C. calculator — 日当の対象役職

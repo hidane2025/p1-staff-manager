@@ -241,24 +241,28 @@ if venue_staff:
             col2.write(f"日額: ¥{rule['max_amount']:,} × {_d}日")
             col3.success(f"¥{_auto:,} 自動支給")
 
-# 住所未登録者
+# 住所未登録者も手入力の対象に含める（上限なし・実費をそのまま支給）。
+# 2026-08-13: 受付スタッフ等、地域ルールに乗らない人に実費を払う経路。
 if unregistered_staff:
-    with st.expander(f"⚠️ 住所未登録（{len(unregistered_staff)}名）"):
-        for staff in unregistered_staff:
-            st.warning(f"{staff['name_jp']}（NO.{staff.get('no', '-')}） — スタッフ管理で住所を登録してください")
+    st.info(
+        f"ℹ️ 住所未登録 {len(unregistered_staff)}名は下の表で**手入力**できます"
+        "（上限なし・入れた額をそのまま支給）。地域ルールで払う場合は"
+        "スタッフ管理で住所を登録してください。"
+    )
 
-# 領収書入力
-if receipt_staff:
-    st.markdown(f"**領収書入力（{len(receipt_staff)}名）:**")
+# 領収書入力（圏外＋住所未登録）
+_input_staff = receipt_staff + [(s, None) for s in unregistered_staff]
+if _input_staff:
+    st.markdown(f"**領収書・手入力（{len(_input_staff)}名）:**")
     rows = []
-    for staff, rule in receipt_staff:
+    for staff, rule in _input_staff:
         claim = existing_claims.get(staff["id"], {})
         rows.append({
             "_staff_id": staff["id"],
             "NO.": staff.get("no", ""),
             "名前": staff["name_jp"],
-            "地域": staff.get("region", ""),
-            "上限額": rule["max_amount"],
+            "地域": staff.get("region", "") or "（未登録）",
+            "上限額": rule["max_amount"] if rule else 0,
             "領収書金額(円)": int(claim.get("receipt_amount") or 0),
             "領収書あり": bool(claim.get("has_receipt", 0)),
             "備考": claim.get("note", "") or "",
@@ -272,7 +276,8 @@ if receipt_staff:
         disabled=["_staff_id", "NO.", "名前", "地域", "上限額"],
         column_config={
             "_staff_id": None,
-            "上限額": st.column_config.NumberColumn("上限額", format="¥%d"),
+            "上限額": st.column_config.NumberColumn(
+                "上限額", format="¥%d", help="0=上限なし（手入力額をそのまま支給）"),
             "領収書金額(円)": st.column_config.NumberColumn(
                 "領収書金額(円)", min_value=0, step=100,
                 help="上限超過時は自動で上限額に調整されます",

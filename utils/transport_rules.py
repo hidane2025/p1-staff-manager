@@ -56,15 +56,20 @@ def payment_amount(rules_by_region: dict, region, days_worked: int,
     Returns: (amount or None, reason)
         None = 交通費ルール未設定 → 旧ロジック（イベントレートの日額）に委ねる
     """
+    # 手入力（領収書/承認額の登録）は地域ルールより優先する。
+    # 2026-08-13: 住所未登録の受付スタッフに実費を払う手段が無かった
+    # （地域なし→無条件0円で、claimを入れても無視されていた）。
+    # 開催地在住者への手入力も「新幹線等の実費大は都度相談」（TAKA案7/22）の
+    # 上書き経路として機能する。
+    if claim and claim.get("has_receipt"):
+        return int(claim.get("approved_amount") or 0), "領収書/手入力額"
     if not rules_by_region:
         return None, ""
     rule = rules_by_region.get(region)
     if not rule:
-        return 0, "住所未登録または圏外のため交通費0"
+        return 0, "住所未登録または圏外のため交通費0（手入力で支給可）"
     if rule.get("is_venue_region"):
         per_day = int(rule.get("max_amount") or 0)
         return (venue_amount(per_day, days_worked),
                 f"開催地一律（¥{per_day:,}/日 × {days_worked}日）")
-    if claim and claim.get("has_receipt"):
-        return int(claim.get("approved_amount") or 0), "領収書確定"
     return 0, "領収書が未提出のため0（提出後に精算）"
