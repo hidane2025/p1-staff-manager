@@ -15,7 +15,7 @@
 #   nginxは /staff/ の前置詞だけを認証免除にすればよく、管理側の /_stcore/ は
 #   認証の内側に残る。スタッフ用プロセスには管理ページのファイルが存在しない。
 #
-# ${PORT} ${ADMIN_PORT} ${STAFF_PORT} は起動時に envsubst で実値へ置換される。
+# ${PORT} ${ADMIN_PORT} ${STAFF_PORT} ${API_PORT} は起動時に envsubst で実値へ置換される。
 # （$host や $remote_addr など nginx 自身の変数は proxy_params.conf 側に置き、
 #   envsubst の置換対象から外している。混ぜると空文字に潰されるため。）
 
@@ -31,6 +31,7 @@ map $http_upgrade $connection_upgrade {
 #   ・スタッフ用は認証免除なので、1つのIPから接続を大量に張られると
 #     単一コンテナの資源を枯渇させられる。同時接続数も制限する。
 limit_req_zone  $binary_remote_addr zone=p1_admin_req:10m rate=30r/m;
+limit_req_zone  $binary_remote_addr zone=p1_api_req:10m   rate=120r/m;
 limit_conn_zone $binary_remote_addr zone=p1_staff_conn:10m;
 limit_req_status 429;
 limit_conn_status 429;
@@ -69,6 +70,18 @@ server {
         # 1IPあたりの同時接続を制限（スタッフは1人1〜2接続。20あれば実運用に支障はない）
         limit_conn p1_staff_conn 20;
         proxy_pass http://127.0.0.1:${STAFF_PORT};
+        include /etc/nginx/p1_proxy_params.conf;
+    }
+
+    # ------------------------------------------------------------
+    # 勤怠受信API（P1会員アプリ→本システム。2026-08-13）
+    #   認証はアプリ内で検証する（Basic＋X-API-Key の二重）。nginx層のBasicを
+    #   かけると Authorization ヘッダが人間用の資格情報を要求してしまうため off。
+    # ------------------------------------------------------------
+    location ^~ /api/ {
+        auth_basic off;
+        limit_req zone=p1_api_req burst=40 nodelay;
+        proxy_pass http://127.0.0.1:${API_PORT};
         include /etc/nginx/p1_proxy_params.conf;
     }
 

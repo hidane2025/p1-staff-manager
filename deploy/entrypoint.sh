@@ -7,6 +7,7 @@ set -euo pipefail
 : "${PORT:=8080}"          # ホスティングが割り当てる公開ポート
 : "${ADMIN_PORT:=8501}"    # 管理アプリ（内部のみ）
 : "${STAFF_PORT:=8502}"    # スタッフ用アプリ（内部のみ）
+: "${API_PORT:=8503}"      # 勤怠受信API（内部のみ・P1会員アプリから）
 : "${MAX_UPLOAD_MB:=16}"   # nginx の client_max_body_size と揃えること
 
 # ------------------------------------------------------------
@@ -15,7 +16,8 @@ set -euo pipefail
 #   といった事故が“成功したデプロイ”として通ってしまう。
 # ------------------------------------------------------------
 _missing=()
-for _v in BASIC_AUTH_USER BASIC_AUTH_PASSWORD SUPABASE_URL SUPABASE_SERVICE_KEY; do
+for _v in BASIC_AUTH_USER BASIC_AUTH_PASSWORD SUPABASE_URL SUPABASE_SERVICE_KEY \
+          ATTENDANCE_API_USER ATTENDANCE_API_PASSWORD ATTENDANCE_API_KEY; do
   [[ -z "${!_v:-}" ]] && _missing+=("$_v")
 done
 # アプリのログインは「個人アカウント(AUTH_USERS)」か「共有パスワード(ADMIN_PASSWORD)」の
@@ -41,8 +43,8 @@ chown "root:${_nginx_user}" /etc/nginx/.htpasswd 2>/dev/null || true
 chmod 640 /etc/nginx/.htpasswd
 
 cp /app/deploy/proxy_params.conf /etc/nginx/p1_proxy_params.conf
-export PORT ADMIN_PORT STAFF_PORT
-envsubst '${PORT} ${ADMIN_PORT} ${STAFF_PORT}' \
+export PORT ADMIN_PORT STAFF_PORT API_PORT
+envsubst '${PORT} ${ADMIN_PORT} ${STAFF_PORT} ${API_PORT}' \
   < /app/deploy/nginx.conf.template > /etc/nginx/conf.d/default.conf
 
 _start_streamlit() {  # $1=script $2=port $3=baseUrlPath(空可) $4=showErrorDetails
@@ -73,6 +75,13 @@ ADMIN_PID=$!
 _start_streamlit staff_site/app.py "$STAFF_PORT" "staff" "none"
 STAFF_PID=$!
 
+# 勤怠受信API（P1会員アプリ→本システム）。Streamlit同様に非特権で動かす
+setpriv --reuid=p1app --regid=p1app --init-groups --inh-caps=-all \
+  env -u BASIC_AUTH_USER -u BASIC_AUTH_PASSWORD HOME=/home/p1app \
+  uvicorn api.attendance_api:app --host 127.0.0.1 --port "$API_PORT" \
+  --log-level warning &
+API_PID=$!
+
 # 両アプリの起動待ち（最大90秒）
 _wait_up() {  # $1=url $2=名前
   local i
@@ -85,13 +94,14 @@ _wait_up() {  # $1=url $2=名前
 }
 _wait_up "http://127.0.0.1:${ADMIN_PORT}/_stcore/health" "管理アプリ"
 _wait_up "http://127.0.0.1:${STAFF_PORT}/staff/_stcore/health" "スタッフ用アプリ"
+_wait_up "http://127.0.0.1:${API_PORT}/api/health" "勤怠受信API"
 
 nginx -g 'daemon off;' &
 NGINX_PID=$!
 
 # SIGTERM を受けたら子プロセスへ伝播させる（PID 1 の bash は既定では無視するため、
 # ハンドラを張らないと再デプロイのたびに強制終了になる）
-trap 'kill -TERM "$ADMIN_PID" "$STAFF_PID" "$NGINX_PID" 2>/dev/null || true' TERM INT
+trap 'kill -TERM "$ADMIN_PID" "$STAFF_PID" "$API_PID" "$NGINX_PID" 2>/dev/null || true' TERM INT
 
 # ------------------------------------------------------------
 # 起動セルフテスト
@@ -130,6 +140,9 @@ _expect "管理トップ 認証あり"        "$(_probe -u "${BASIC_AUTH_USER}:$
 _expect "スタッフ領収書 認証なし"    "$(_probe "http://127.0.0.1:${PORT}/staff/receipt_download?token=selftest")" "200"
 _expect "スタッフ静的資産 認証なし"  "$(_probe "http://127.0.0.1:${PORT}/staff/static/index.html")" "200"
 _expect "スタッフ死活 認証なし"      "$(_probe "http://127.0.0.1:${PORT}/staff/_stcore/health")" "200"
+# ⑦勤怠API: 死活は開き、書き込みは資格情報なしでは通らない
+_expect "勤怠API 死活"               "$(_probe "http://127.0.0.1:${PORT}/api/health")" "200"
+_expect "勤怠API 認証なしPOST拒否"   "$(_probe -X POST -H 'Content-Type: application/json' -d '{}' "http://127.0.0.1:${PORT}/api/attendance")" "401"
 
 # ⑥データベースに実際に到達できるか（ヘルスチェックは画面の応答しか見ないため、
 #   DBが落ちていても「正常」と判定されてしまう。ここで実接続を確認する）
@@ -151,11 +164,11 @@ unset BASIC_AUTH_PASSWORD  # このシェルの環境からは消す（既に起
 
 if (( _fail )); then
   echo "FATAL: 起動セルフテストに失敗しました。想定外の公開・全員締め出しを避けるため停止します。" >&2
-  kill -TERM "$ADMIN_PID" "$STAFF_PID" "$NGINX_PID" 2>/dev/null || true
+  kill -TERM "$ADMIN_PID" "$STAFF_PID" "$API_PID" "$NGINX_PID" 2>/dev/null || true
   exit 1
 fi
 echo "起動セルフテスト: 全項目パス"
 
 # いずれかが落ちたらコンテナごと終了（ホスティング側が再起動する）
-wait -n "$ADMIN_PID" "$STAFF_PID" "$NGINX_PID"
+wait -n "$ADMIN_PID" "$STAFF_PID" "$API_PID" "$NGINX_PID"
 exit $?
