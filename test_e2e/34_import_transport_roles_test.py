@@ -261,9 +261,14 @@ from utils.roles import CANONICAL_ROLES, DAY_ALLOWANCE_ROLES  # noqa: E402
 _check("役職の正準リストに Pit が含まれる", "Pit" in CANONICAL_ROLES, str(CANONICAL_ROLES))
 _check("役職の正準リストに 受付 が含まれる", "受付" in CANONICAL_ROLES, str(CANONICAL_ROLES))
 from utils.roles import role_dept, DEPT_CHOICES  # noqa: E402
-_check("部門判定: 受付→受付系・Dealer/TD→ディーラー系",
+_check("部門判定: 受付→受付系・ディーラーライン6役職→ディーラー系",
        role_dept("受付") == "受付系" and role_dept("Dealer") == "ディーラー系"
-       and role_dept("TD") == "ディーラー系" and role_dept(None) == "ディーラー系")
+       and role_dept("TD") == "ディーラー系" and role_dept("Pit") == "ディーラー系")
+_check("部門判定: 未知・空の役職は受付系に寄せる（少人数側で目立たせる）",
+       role_dept(None) == "受付系" and role_dept("") == "受付系"
+       and role_dept("謎役職") == "受付系")
+from utils.roles import DEALER_LINE_ROLES, ATTENDANCE_BONUS_ROLES as _ABR  # noqa: E402
+_check("精勤対象＝ディーラーライン（定義が同一オブジェクト）", _ABR is DEALER_LINE_ROLES)
 _check("出退勤に部門フィルタがあり一括操作より前に効く",
        "attend_dept" in (ROOT / "pages/5_attendance.py").read_text())
 _check("封筒に部門フィルタがある",
@@ -277,6 +282,56 @@ for pg in ("pages/1_staff.py", "pages/3_payment.py", "pages/5_attendance.py"):
     src = (ROOT / pg).read_text()
     _check(f"{pg} は役職リストをハードコードしない",
            '"Dealer", "Floor", "TD"' not in src and "CANONICAL_ROLES" in src)
+
+# ============================================================
+# F. 当日運用コード（翌朝7時失効）と画面文言の配線
+# ============================================================
+print("\n[F] 当日コード7時失効・画面配線")
+import dbx.auth as auth_mod  # noqa: E402
+
+_check("失効時刻の定数が7時", auth_mod.DAY_CODE_EXPIRE_HOUR == 7,
+       str(auth_mod.DAY_CODE_EXPIRE_HOUR))
+
+
+class _CapT:
+    def insert(self, payload):
+        _CapT.captured = payload
+        return self
+
+    def execute(self):
+        return SimpleNamespace(data=[])
+
+
+class _CapC:
+    def table(self, name):
+        return _CapT()
+
+
+_og, _ol = auth_mod.core.get_client, auth_mod.core.log_action
+auth_mod.core.get_client = lambda: _CapC()
+auth_mod.core.log_action = lambda *a, **k: None
+try:
+    auth_mod.issue_day_code("2026-08-14", "検証")
+    _check("8/14発行 → 失効 8/15 07:00 JST",
+           _CapT.captured["expires_at"] == "2026-08-15T07:00:00+09:00",
+           str(_CapT.captured["expires_at"]))
+finally:
+    auth_mod.core.get_client, auth_mod.core.log_action = _og, _ol
+
+_stray = []
+for f in list((ROOT / "pages").glob("*.py")) + list((ROOT / "utils").glob("*.py"))         + list((ROOT / "dbx").glob("*.py")):
+    if "翌朝5時" in f.read_text():
+        _stray.append(f.name)
+_check("「翌朝5時」の残存表記なし", not _stray, str(_stray))
+_att_src = (ROOT / "pages/5_attendance.py").read_text()
+_check("早入りの注記が状況一覧に出る", "早入り（" in _att_src)
+_check("タブ名が遅刻・早入り兼用", "⏰ 遅刻・早入り" in _att_src)
+_tr_src = (ROOT / "pages/8_transport.py").read_text()
+_check("交通費ページ: 住所未登録者が手入力表に入る", "_input_staff" in _tr_src
+       and "unregistered_staff" in _tr_src.split("_input_staff")[1][:200])
+_guide = (ROOT / "GUIDE.md").read_text()
+_check("GUIDEの本番URLがRailway", "p1-staff-manager-production.up.railway.app" in _guide
+       and "streamlit.app" not in _guide.split("本番URL")[1][:120])
 
 # ============================================================
 print()

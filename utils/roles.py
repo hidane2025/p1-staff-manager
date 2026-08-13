@@ -14,10 +14,13 @@
 # スタッフが取りうる役職（表示順もこの順で統一する）
 CANONICAL_ROLES = ["Dealer", "Floor", "TD", "DC", "Chip", "Pit", "受付"]
 
+# ディーラーライン（TAKAさん管理）の役職。精勤手当と部門判定の両方の土台
+DEALER_LINE_ROLES = ("Dealer", "Floor", "TD", "DC", "Chip", "Pit")
+
 # 精勤手当（全日1万/4日6千）の対象。ディーラーライン向けの制度のため、
 # 受付・会計等の運営スタッフには付けない（2026-08-13 受付シート統合時の既定。
 # 受付にも付ける判断になったらここに "受付" を足すだけで戻る）
-ATTENDANCE_BONUS_ROLES = ("Dealer", "Floor", "TD", "DC", "Chip", "Pit")
+ATTENDANCE_BONUS_ROLES = DEALER_LINE_ROLES
 
 # 日当（フロア手当）が付く役職。DC は単価ルールに記載がないため対象外
 DAY_ALLOWANCE_ROLES = ("Floor", "TD", "Pit", "Chip")
@@ -30,5 +33,10 @@ DEPT_CHOICES = ("全員", "ディーラー系", "受付系")
 
 
 def role_dept(role) -> str:
-    """役職 → 管理部門。受付だけが受付系、それ以外はディーラー系"""
-    return "受付系" if str(role or "") == "受付" else "ディーラー系"
+    """役職 → 管理部門。
+
+    ディーラーラインの6役職だけがディーラー系。それ以外（受付・未知・空）は
+    受付系に寄せる——未知の役職を125名のディーラー系に紛れさせるより、
+    24名の受付系で目立たせた方が入力ミスに気づけるため。
+    （手当の判定も未知役職には何も付けない設計と整合）"""
+    return "ディーラー系" if str(role or "") in DEALER_LINE_ROLES else "受付系"

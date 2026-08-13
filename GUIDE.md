@@ -4,8 +4,8 @@
 
 | 項目 | 値 |
 |---|---|
-| 最終更新 | 2026-06-15（git HEAD: `7391c95` / 機能上の最新コミット: `1dff1aa` / app.py フッター表記: v3.10） |
-| 本番URL | https://hidane2025-p1-staff-manager-app-fw8ggg.streamlit.app/ |
+| 最終更新 | 2026-08-13（Railway移行後。旧Streamlit Cloud版の記述を更新） |
+| 本番URL | https://p1-staff-manager-production.up.railway.app/ |
 | 想定読者 | 経理担当者（フル権限）、最終確認者（中野さん：閲覧） |
 | 仕様書 | [SPEC.md](SPEC.md) |
 
@@ -63,7 +63,7 @@
 | ロール | できること |
 |---|---|
 | **admin** | 全画面の閲覧と編集 |
-| **viewer** | 一部画面の閲覧のみ（編集不可） |
+| **viewer** | 出退勤の閲覧のみ（編集不可・共催先の進行確認用） |
 
 ### ログイン失敗・パスワード忘れ
 - 失敗は監査ログに記録されます（10回以上で要注意扱い）
