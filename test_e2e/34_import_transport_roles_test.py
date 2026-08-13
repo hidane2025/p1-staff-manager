@@ -299,8 +299,8 @@ _check("承認成功と同時に領収書を発行する",
        "issue_receipt" in _pit_src2)
 _att2 = (ROOT / "pages/5_attendance.py").read_text()
 _check("状況一覧: 実到着・実退勤が直接編集できる",
-       '"実到着": st.column_config.TextColumn' in _att2
-       and '"実退勤": st.column_config.TextColumn' in _att2
+       '"実到着": st.column_config.SelectboxColumn' in _att2
+       and '"実退勤": st.column_config.SelectboxColumn' in _att2
        and "attendance_edit" in _att2)
 _check("状況一覧: viewerは表ごと編集不可（差分適用もゲート）",
        "disabled=True if _READONLY else" in _att2

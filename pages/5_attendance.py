@@ -504,6 +504,13 @@ if st.button("➕ 当日シフトに追加", key="exec_add_staff", type="primary
 st.divider()
 st.subheader("③ 本日の状況一覧")
 
+# 直近の編集で弾いた理由を、再描画後も見えるように表示（st.warning+rerunだと消える）
+if st.session_state.get("_att_flash"):
+    st.warning(st.session_state.pop("_att_flash"))
+
+# 実到着・実退勤のプルダウン選択肢（5分刻み・「—」=未記録/取り消し）
+_TIME_OPTS = ["—"] + [f"{h:02d}:{m:02d}" for h in range(7, 30) for m in range(0, 60, 5)] + ["30:00"]
+
 # 再取得
 shifts = db.get_shifts_for_event(event_id, date=selected_date)
 
@@ -567,10 +574,12 @@ edited_df = st.data_editor(
             "✅出勤", default=False,
             help="チェック＝予定時刻どおり出勤として確定。外す＝未確定に戻す。",
         ),
-        "実到着": st.column_config.TextColumn(
-            "実到着", help="直接入力OK。例 10:00／空欄に戻すと取り消し"),
-        "実退勤": st.column_config.TextColumn(
-            "実退勤", help="直接入力OK。深夜は 25:30 のような24時超表記／空欄で取り消し"),
+        "実到着": st.column_config.SelectboxColumn(
+            "実到着", options=_TIME_OPTS,
+            help="プルダウンから選択（文字を打つと絞り込み）。「—」で取り消し"),
+        "実退勤": st.column_config.SelectboxColumn(
+            "実退勤", options=_TIME_OPTS,
+            help="プルダウンから選択。深夜は 25:30 等の24時超表記。「—」で取り消し"),
         "MIX": st.column_config.CheckboxColumn("MIX", default=False),
         "備考": st.column_config.TextColumn("備考", help="イレギュラー対応等を自由入力"),
         "_shift_id": None,
@@ -605,24 +614,23 @@ if (not _READONLY) and not df.empty and not edited_df.empty:
             if _old_v == _new_v:
                 continue
             srow = _shift_by_id.get(shift_id, {})
+            def _flash(msg):
+                st.session_state["_att_flash"] = msg
+                st.rerun()
+
             if srow.get("status") == "absent":
-                st.warning("欠勤の人は「②例外を記録→個別リセット」で戻してから入力してください。")
-                st.rerun()
+                _flash("⚠️ 欠勤の人は「②例外を記録→個別リセット」で戻してから入力してください。")
             if srow.get("staff_id") in _paid_staff:
-                st.warning(f"{srow.get('name_jp', '')} は支払い済みのため時刻を変更できません。")
-                st.rerun()
+                _flash(f"⚠️ {srow.get('name_jp', '')} は支払い済みのため時刻を変更できません。")
             _nt, _ok = _norm_edit_time(_new_v)
             if not _ok:
-                st.warning(f"時刻を読めません:「{_new_v}」。例 10:00、深夜は 25:30 の形式で。")
-                st.rerun()
+                _flash(f"⚠️ 時刻を読めません:「{_new_v}」")
             _ns = _nt if _col == "実到着" else _norm_edit_time(df.iloc[idx]["実到着"])[0]
             _ne = _nt if _col == "実退勤" else _norm_edit_time(df.iloc[idx]["実退勤"])[0]
             if _ne and not _ns:
-                st.warning("退勤だけは記録できません。先に実到着を入れてください。")
-                st.rerun()
+                _flash(f"⚠️ {srow.get('name_jp', '')}: 退勤だけは記録できません。先に実到着を選んでください。")
             if _ns and _ne and parse_time_to_minutes(_ne) < parse_time_to_minutes(_ns):
-                st.warning("退勤が到着より前です。深夜は 25:30 のような24時超表記で。")
-                st.rerun()
+                _flash(f"⚠️ {srow.get('name_jp', '')}: 退勤が到着より前です。深夜は 25:30 のような24時超表記で。")
             _new_status = ("checked_out" if _ne else
                            "checked_in" if _ns else "scheduled")
             db.get_client().table("p1_shifts").update({
