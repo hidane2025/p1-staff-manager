@@ -555,6 +555,7 @@ for s in shifts:
         "役職": s["role"],
         "予定": planned,
         "出勤": s["status"] in ("checked_in", "checked_out"),
+        "退勤": s["status"] == "checked_out",
         "実到着": actual_start,
         "実退勤": actual_end,
         "状態": STATUS_DISPLAY.get(s["status"], s["status"]),
@@ -594,6 +595,11 @@ edited_df = st.data_editor(
             "✅出勤", default=False,
             help="チェック＝予定時刻どおり出勤として確定。外す＝未確定に戻す。",
         ),
+        "退勤": st.column_config.CheckboxColumn(
+            "🔴退勤", default=False,
+            help="チェック＝予定時刻どおり退勤として確定（未出勤なら出勤も予定時刻で記録）。"
+                 "外す＝出勤中に戻す。時刻がズレた時は実退勤のプルダウンで。",
+        ),
         "実到着": st.column_config.SelectboxColumn(
             "実到着", options=_TIME_OPTS,
             help="プルダウンから選択（文字を打つと絞り込み）。「—」で取り消し"),
@@ -622,6 +628,12 @@ def _norm_edit_time(v):
     if m is None or not (0 <= m < 48 * 60):
         return None, False
     return f"{m // 60:02d}:{m % 60:02d}", True
+
+
+def _flash_and_rerun(msg):
+    """警告を再描画後も残す（st.warning+rerunだと消えるため session_state 経由）"""
+    st.session_state["_att_flash"] = msg
+    st.rerun()
 
 
 if (not _READONLY) and not df.empty and not edited_df.empty:
@@ -665,6 +677,39 @@ if (not _READONLY) and not df.empty and not edited_df.empty:
                         f"{selected_date} 一覧編集 {_col}: "
                         f"{_old_v or '—'} → {_nt or '—'}"),
                 event_id=event_id, performed_by=operator_name())
+            st.rerun()
+        # 退勤チェック変更（🔴=予定時刻で退勤確定 / 解除=出勤中に戻す）2026-08-13 中野さん要望
+        old_out = bool(df.iloc[idx]["退勤"])
+        new_out = bool(edited_df.iloc[idx]["退勤"])
+        if old_out != new_out:
+            srow = _shift_by_id.get(shift_id, {})
+            status = srow.get("status")
+            if srow.get("staff_id") in _paid_staff:
+                _flash_and_rerun(f"⚠️ {srow.get('name_jp', '')} は支払い済みのため変更できません。")
+            if status == "absent":
+                _flash_and_rerun("⚠️ 欠勤の人は「②例外を記録→個別リセット」で戻してから操作してください。")
+            if new_out:
+                # 未出勤なら出勤も予定時刻で記録してから退勤（退勤だけの記録を作らない）
+                if status == "scheduled":
+                    db.checkin_staff(shift_id, srow.get("planned_start"))
+                db.checkout_staff(shift_id, srow.get("planned_end"))
+                db.log_action(
+                    "attendance_edit", "shifts", shift_id,
+                    detail=(f"{srow.get('name_jp', '')} (NO.{srow.get('no', '—')}) "
+                            f"{selected_date} 退勤チェック＝予定時刻 "
+                            f"{srow.get('planned_end')} で退勤確定"),
+                    event_id=event_id, performed_by=operator_name())
+            else:
+                db.get_client().table("p1_shifts").update({
+                    "actual_end": None, "status": "checked_in",
+                }).eq("id", shift_id).execute()
+                _revert_payment_if_amount_affected(
+                    srow, reason="退勤チェック解除（出勤中に戻す・要再計算）")
+                db.log_action(
+                    "attendance_edit", "shifts", shift_id,
+                    detail=(f"{srow.get('name_jp', '')} (NO.{srow.get('no', '—')}) "
+                            f"{selected_date} 退勤チェック解除→出勤中に戻す"),
+                    event_id=event_id, performed_by=operator_name())
             st.rerun()
         # 出勤チェック変更（✅=予定時刻で出勤確定 / 解除=未確定に戻す）
         old_att = bool(df.iloc[idx]["出勤"])

@@ -89,8 +89,9 @@ def checkin_staff(shift_id, actual_start):
         client.table("p1_shifts").update({
             "actual_start": actual_start, "status": "checked_in"
         }).eq("id", shift_id).execute()
-    # 予定と違う到着時刻（遅刻等）は支払い額が変わるため、承認済みを差し戻す
-    if row and str(actual_start) != str(row[0].get("planned_start")):
+    # 2026-08-13 打刻済ルール移行: 予定どおりの打刻でも「¥0→満額」の変化になるため、
+    # 予定と同じ時刻かどうかに関わらず常に差し戻し＋再計算する
+    if row:
         _revert_payment_if_amount_affected(row[0], reason=f"到着実績 {actual_start} 記録（要再計算）")
 
 
@@ -102,8 +103,8 @@ def checkout_staff(shift_id, actual_end):
     client.table("p1_shifts").update({
         "actual_end": actual_end, "status": "checked_out"
     }).eq("id", shift_id).execute()
-    # 予定と違う退勤時刻（早退・延長）は支払い額が変わるため、承認済みを差し戻す
-    if row and str(actual_end) != str(row[0].get("planned_end")):
+    # 2026-08-13 打刻済ルール移行: 退勤が入った瞬間にその日が支払い対象になるため常に再計算
+    if row:
         _revert_payment_if_amount_affected(row[0], reason=f"退勤実績 {actual_end} 記録（要再計算）")
 
 
@@ -113,7 +114,7 @@ def bulk_checkout(shift_ids, actual_end, event_id=None):
     affected_staff_ids = []
     for sid in shift_ids:
         row = client.table("p1_shifts").select(
-            "planned_start, actual_start, staff_id"
+            "planned_start, actual_start, staff_id, event_id"
         ).eq("id", sid).execute().data
         if not row:
             continue
@@ -122,6 +123,9 @@ def bulk_checkout(shift_ids, actual_end, event_id=None):
         client.table("p1_shifts").update({
             "actual_end": actual_end, "actual_start": a_start, "status": "checked_out"
         }).eq("id", sid).execute()
+        # 2026-08-13 打刻済ルール移行: 一括退勤も1人ずつ金額を追随させる
+        _revert_payment_if_amount_affected(
+            row[0], reason=f"一括退勤 {actual_end} 記録（要再計算）")
     if event_id:
         core.log_action("bulk_checkout", "shifts",
                     detail=f"{len(shift_ids)}名を{actual_end}で一括退勤",
