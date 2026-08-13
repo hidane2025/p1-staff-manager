@@ -6,6 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
+from utils import payment_recalc
 from utils import transport_rules as transport_rules_mod
 from utils.region import REGIONS, default_regions_for_event, address_to_region
 from utils.event_selector import select_event
@@ -308,8 +309,13 @@ if _input_staff:
                 approved_amount=approved, has_receipt=has_receipt,
                 note=row["備考"] or "",
             )
+            # 2026-08-13: 交通費が変わったら金額もその場で追随させる
+            # （差し戻しだけだと古い封筒額が清算デスクに出る）
+            db.reset_payment_to_pending(
+                event_id, staff_id, reason="交通費（領収書金額）変更")
+            payment_recalc.recalc_staff_payment(event_id, staff_id)
             saved += 1
-        st.success(f"{saved}件の領収書金額を保存しました")
+        st.success(f"{saved}件の領収書金額を保存しました（支払い額も再計算済み）")
         if errors:
             with st.expander(f"⚠️ 上限超過 {len(errors)}件を自動調整"):
                 for e in errors:

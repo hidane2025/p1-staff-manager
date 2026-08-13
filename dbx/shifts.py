@@ -58,10 +58,13 @@ def get_shifts_for_event(event_id, date=None, staff_id=None):
 
 
 def _revert_payment_if_amount_affected(shift_row, reason: str) -> None:
-    """出退勤の実績変更が支払い額に影響し得るとき、計算済みの支払いを未承認に戻す。
+    """出退勤の実績変更が支払い額に影響し得るとき、支払いを差し戻して即再計算する。
 
     凍結退勤と同じ内部統制（reset_payment_to_pending。支払済みは保護）を
     欠勤・遅刻・早退・延長にも適用する（2026-07-06 追加）。
+    2026-08-13: 差し戻しだけでは金額が古いまま清算デスクに出てしまう
+    （NO.496 欠勤マーク後も2日分の封筒額が表示された）ため、
+    その場でこの1人だけを再計算・保存するところまで行う。
     支払い未計算・列欠損などの失敗は握りつぶし、本処理（打刻）は壊さない。
     """
     try:
@@ -69,6 +72,8 @@ def _revert_payment_if_amount_affected(shift_row, reason: str) -> None:
         sid = shift_row.get("staff_id")
         if ev and sid:
             reset_payment_to_pending(ev, sid, reason=reason)
+            from utils.payment_recalc import recalc_staff_payment
+            recalc_staff_payment(ev, sid)
     except Exception:
         pass
 

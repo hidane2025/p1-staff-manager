@@ -24,6 +24,7 @@ import pandas as pd
 import streamlit as st
 
 import db
+from utils import payment_recalc
 from utils.event_selector import select_event
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import (
@@ -206,14 +207,18 @@ with st.form("add_allowance_form", clear_on_submit=True):
                     f"{ALLOWANCE_TYPES[sel_type]} ¥{int(sel_amount):,} を追加しました"
                     + (" 🔒 (オフレコ)" if sel_off_record else "")
                 )
-                # 該当する支払いがあれば未承認に戻す（再計算が必要）
+                # 該当する支払いがあれば未承認に戻し、その場で再計算する
+                # （2026-08-13: 差し戻しだけだと古い封筒額が清算デスクに出る）
                 db.reset_payment_to_pending(
                     event_id, sel_staff_id, reason=f"個別手当追加: {sel_type}"
                 )
-                st.info(
-                    "💡 該当スタッフの支払いがあれば未承認に戻しました。"
-                    "「💰 支払い計算」で再計算してください。"
-                )
+                if payment_recalc.recalc_staff_payment(event_id, sel_staff_id):
+                    st.info("💡 該当スタッフの支払い額を再計算しました。")
+                else:
+                    st.info(
+                        "💡 支払いが未計算のスタッフです。"
+                        "「💰 支払い計算」で計算すると手当が含まれます。"
+                    )
                 st.rerun()
 
 
@@ -244,12 +249,13 @@ if all_allowances:
         db.remove_individual_allowance(
             target["id"], event_id=event_id, performed_by=operator_name()
         )
-        # 該当の支払いがあれば未承認に戻す（再計算が必要）
+        # 該当の支払いがあれば未承認に戻し、その場で再計算する（2026-08-13）
         db.reset_payment_to_pending(
             event_id, target.get("staff_id"),
             reason=f"個別手当取消: {target.get('allowance_type')}",
         )
-        st.success("🗑 手当を取消しました。該当の支払いを未承認に戻しました。")
+        payment_recalc.recalc_staff_payment(event_id, target.get("staff_id"))
+        st.success("🗑 手当を取消し、該当の支払い額を再計算しました。")
         st.rerun()
 
 
