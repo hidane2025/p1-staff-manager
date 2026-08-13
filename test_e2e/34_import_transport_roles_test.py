@@ -308,6 +308,8 @@ _check("状況一覧: viewerは表ごと編集不可（差分適用もゲート�
 _check("状況一覧: 支払い済みは時刻変更を弾く", "_paid_staff" in _att2)
 _check("状況一覧: 実績編集で支払いを差し戻す",
        "_revert_payment_if_amount_affected" in _att2)
+_check("状況一覧: 並び順がサーバー側で固定（保存後も維持）",
+       'key="att_sort"' in _att2 and "未確定を上に" in _att2)
 _check("領収書の発行失敗でも支払い確定は壊さない（例外を握って警告）",
        "支払いは確定済み" in _pit_src2)
 

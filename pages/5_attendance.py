@@ -511,6 +511,13 @@ if st.session_state.get("_att_flash"):
 # 実到着・実退勤のプルダウン選択肢（5分刻み・「—」=未記録/取り消し）
 _TIME_OPTS = ["—"] + [f"{h:02d}:{m:02d}" for h in range(7, 30) for m in range(0, 60, 5)] + ["30:00"]
 
+# 並び順はサーバー側で固定する。表ヘッダのクリック並び替えはブラウザ側の
+# 一時状態のため、時刻を保存するたびの再描画で消えてしまう（2026-08-14 指摘）。
+# ここで選んだ並び順は session_state に残り、保存後も維持される。
+_sort = st.radio(
+    "並び順", ["NO.順", "予定時刻順", "未確定を上に"],
+    horizontal=True, key="att_sort")
+
 # 再取得
 shifts = db.get_shifts_for_event(event_id, date=selected_date)
 
@@ -556,6 +563,19 @@ for s in shifts:
         "備考": s.get("notes") or "",
         "_shift_id": s["id"],
     })
+
+def _sort_key_planned(row):
+    m = parse_time_to_minutes((row["予定"] or "").split("〜")[0])
+    return (m if m is not None else 9999, row["NO."] or 9999)
+
+
+if _sort == "予定時刻順":
+    display.sort(key=_sort_key_planned)
+elif _sort == "未確定を上に":
+    _order = {"⬜ 未確定": 0, "🟢 出勤中": 1, "✅ 退勤済": 2, "❌ 欠勤": 3}
+    display.sort(key=lambda r: (_order.get(r["状態"], 9), _sort_key_planned(r)))
+else:
+    display.sort(key=lambda r: (r["NO."] or 9999))
 
 df = pd.DataFrame(display)
 
