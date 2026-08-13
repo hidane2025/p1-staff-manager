@@ -254,6 +254,14 @@ _check("支払い計算の交通費も payment_amount 経由",
 from utils.roles import CANONICAL_ROLES, DAY_ALLOWANCE_ROLES  # noqa: E402
 _check("役職の正準リストに Pit が含まれる", "Pit" in CANONICAL_ROLES, str(CANONICAL_ROLES))
 _check("役職の正準リストに 受付 が含まれる", "受付" in CANONICAL_ROLES, str(CANONICAL_ROLES))
+from utils.roles import role_dept, DEPT_CHOICES  # noqa: E402
+_check("部門判定: 受付→受付系・Dealer/TD→ディーラー系",
+       role_dept("受付") == "受付系" and role_dept("Dealer") == "ディーラー系"
+       and role_dept("TD") == "ディーラー系" and role_dept(None) == "ディーラー系")
+_check("出退勤に部門フィルタがあり一括操作より前に効く",
+       "attend_dept" in (ROOT / "pages/5_attendance.py").read_text())
+_check("封筒に部門フィルタがある",
+       "env_dept" in (ROOT / "pages/4_envelope.py").read_text())
 _check("日当対象は Floor/TD/Pit/Chip",
        set(DAY_ALLOWANCE_ROLES) == {"Floor", "TD", "Pit", "Chip"}, str(DAY_ALLOWANCE_ROLES))
 import utils.calculator as _calc  # noqa: E402

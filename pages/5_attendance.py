@@ -18,7 +18,7 @@ from utils.time_input import MINUTE_CHOICES  # 分の刻みは1箇所で決め�
 st.set_page_config(page_title="出退勤", page_icon="🕐", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header, flow_bar
-from utils.roles import CANONICAL_ROLES
+from utils.roles import CANONICAL_ROLES, DEPT_CHOICES, role_dept
 from utils.admin_guard import require_admin, admin_logout_button, current_role
 apply_global_style()
 hide_staff_only_pages()
@@ -52,6 +52,16 @@ shifts = db.get_shifts_for_event(event_id, date=selected_date)
 if not shifts:
     st.info(f"{selected_date} のシフトはありません。")
     st.stop()
+
+# 部門フィルタ（ディーラー系=TAKAさん管理／受付系=豊浦さん・伊藤さん管理）。
+# 一括操作・例外記録・一覧のすべてがこの絞り込みの対象になる
+# （「全員出勤」を押しても、選んでいない部門には影響しない）。
+_dept = st.radio("部門", list(DEPT_CHOICES), horizontal=True, key="attend_dept")
+if _dept != "全員":
+    shifts = [s for s in shifts if role_dept(s.get("role")) == _dept]
+    if not shifts:
+        st.info(f"{selected_date} の{_dept}のシフトはありません。")
+        st.stop()
 
 # --- サマリー ---
 total = len(shifts)

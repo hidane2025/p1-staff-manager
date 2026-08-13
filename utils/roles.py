@@ -21,3 +21,14 @@ ATTENDANCE_BONUS_ROLES = ("Dealer", "Floor", "TD", "DC", "Chip", "Pit")
 
 # 日当（フロア手当）が付く役職。DC は単価ルールに記載がないため対象外
 DAY_ALLOWANCE_ROLES = ("Floor", "TD", "Pit", "Chip")
+
+
+# 管理部門の区分（2026-08-13 中野さん指示「混ざって良いが分けられるといい」）。
+# ディーラー系=TAKAさん管理／受付系=豊浦さん・伊藤さん管理で、
+# 出退勤・封筒の画面はこの区分で絞り込める。
+DEPT_CHOICES = ("全員", "ディーラー系", "受付系")
+
+
+def role_dept(role) -> str:
+    """役職 → 管理部門。受付だけが受付系、それ以外はディーラー系"""
+    return "受付系" if str(role or "") == "受付" else "ディーラー系"

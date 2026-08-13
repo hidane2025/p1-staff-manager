@@ -18,6 +18,7 @@ from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import (
     apply_global_style, page_header, flow_bar, section_header, kpi_row, pill,
 )
+from utils.roles import DEPT_CHOICES, role_dept
 from utils.admin_guard import require_admin, admin_logout_button, operator_name
 apply_global_style()
 hide_staff_only_pages()
@@ -105,6 +106,14 @@ payments = db.get_payments_for_event(event_id)
 if not payments:
     st.warning("支払いデータがありません。先に「支払い計算」ページで計算を実行してください。")
     st.stop()
+
+# 部門フィルタ（管理部門が違うため封筒・現金準備を分けて出せる。2026-08-13）
+_dept = st.radio("部門", list(DEPT_CHOICES), horizontal=True, key="env_dept")
+if _dept != "全員":
+    payments = [p for p in payments if role_dept(p.get("role")) == _dept]
+    if not payments:
+        st.info(f"{_dept}の支払いデータがありません。")
+        st.stop()
 
 # A-6: 表示額は保存済みの確定額(payable_amount)。紙幣内訳もこの確定額から算出する。
 envelope_data = []
