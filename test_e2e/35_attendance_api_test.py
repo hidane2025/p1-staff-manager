@@ -1,9 +1,9 @@
-"""勤怠受信API（api/attendance_api.py）の単体テスト — DB・ネットワーク非依存
+"""勤怠受信API（api/attendance_api.py v2）の単体テスト — DB・ネットワーク非依存
 
-P1会員アプリ（TAKAさん側）との連携仕様を固定する:
-  認証二重（Basic＋X-API-Key）／attendance_keyフィールドの受理／
-  深夜跨ぎの日付解決／24時超表記への変換／順不同再送の破棄（updated_at）／
-  実績変更時の支払い差し戻し
+P1会員アプリ（TAKAさん 2026-08-13 15時版仕様）との契約を固定する:
+  認証がすべてに先行（ミドルウェア）／p1_shifts語彙のペイロード／
+  (event,staff,date) upsert／null戻し／24時超表記／順不同再送の破棄／
+  実績変更時の支払い差し戻し／一意制約なしDBでの重複行の扱い
 """
 from __future__ import annotations
 
@@ -70,13 +70,12 @@ class _FakeClient:
 
 
 def _run(payload, staff=None, rows=None, event=None):
-    """1リクエスト実行し (response, 書き込みログ, revert回数) を返す"""
     writes: list = []
     reverts: list = []
     olds = (m._staff_by_no, m._shift_rows, m._event_for_date,
             m.db.get_client, m.db.log_action, m._revert_payment_if_amount_affected)
     m._staff_by_no = lambda no: staff
-    m._shift_rows = lambda sid, dates: [r for r in (rows or []) if r["date"] in dates]
+    m._shift_rows = lambda sid, date: list(rows or [])
     m._event_for_date = lambda d: event
     m.db.get_client = lambda: _FakeClient(writes)
     m.db.log_action = lambda *a, **k: None
@@ -91,90 +90,101 @@ def _run(payload, staff=None, rows=None, event=None):
          m._revert_payment_if_amount_affected) = olds
 
 
-BASE = {"attendance_key": "p1-5-23-123", "dealer_number": "0055",
-        "clock_in_at": "2026-08-13T12:03:00+09:00",
-        "clock_out_at": "2026-08-13T22:17:00+09:00",
-        "updated_at": "2026-08-13T22:17:10+09:00"}
+BASE = {"event_id": 11, "dealer_number": "0055", "date": "2026-08-12",
+        "actual_start": "12:03", "actual_end": "25:17"}
 STAFF = {"id": 501, "no": 55, "name_jp": "テスト55"}
+ROW = {"id": 9, "event_id": 11, "staff_id": 501, "date": "2026-08-12",
+       "actual_start": None, "actual_end": None, "status": "scheduled",
+       "planned_start": "12:00", "planned_end": "25:00", "notes": ""}
 
-print("\n[認証]")
+print("\n[認証が本文検証より先に走る（v1バグの再発防止）]")
 c = TestClient(m.app, raise_server_exceptions=False)
 _check("死活は認証なしで200", c.get("/api/health").status_code == 200)
-r = c.post("/api/attendance", json=BASE)
-_check("認証なしPOSTは401＋retry:false", r.status_code == 401
-       and r.json()["detail"]["retry"] is False, str(r.json()))
+r = c.post("/api/attendance", json={})
+_check("認証なし＋壊れた本文でも 401（422にならない）", r.status_code == 401,
+       str(r.status_code))
 r = c.post("/api/attendance", json=BASE, headers=_auth(key="wrong"))
 _check("APIキー誤りは403", r.status_code == 403, str(r.status_code))
 r = c.post("/api/attendance", json=BASE, headers=_auth(pw="wrong"))
 _check("Basic誤りは401", r.status_code == 401, str(r.status_code))
 
-print("\n[入力検証]")
-bad = dict(BASE, clock_in_at="2026-08-13T12:03:00")  # タイムゾーンなし
-res, w, _ = _run(bad, staff=STAFF)
-_check("タイムゾーンなしは422", res.status_code == 422, str(res.status_code))
-res, w, _ = _run(dict(BASE, dealer_number="abc"), staff=STAFF)
-_check("数値でない番号は422", res.status_code == 422, str(res.status_code))
+print("\n[入力検証（先方仕様の形式）]")
+res, w, _ = _run(dict(BASE, date="2026/08/12"), staff=STAFF)
+_check("dateの形式違いは422", res.status_code == 422, str(res.status_code))
+res, w, _ = _run(dict(BASE, actual_end="9:99"), staff=STAFF)
+_check("時刻の形式違いは422", res.status_code == 422, str(res.status_code))
+res, w, _ = _run(dict(BASE, actual_start=None), staff=STAFF, rows=[ROW])
+_check("退勤だけの送信は422（end_without_start）", res.status_code == 422,
+       str(res.status_code))
+res, w, _ = _run(dict(BASE, actual_start="20:00", actual_end="19:00"), staff=STAFF)
+_check("退勤<出勤は422（24時超表記の案内つき）", res.status_code == 422
+       and "25:17" in str(res.json()), str(res.json()))
 res, w, _ = _run(BASE, staff=None)
 _check("未知のディーラー番号は404＋retry:false", res.status_code == 404
        and res.json()["detail"]["retry"] is False, str(res.json()))
 
-print("\n[新規作成（シフト行なし＝当日追加）]")
-res, w, rv = _run(dict(BASE, clock_out_at=None), staff=STAFF,
-                  event={"id": 11, "start_date": "2026-08-12", "end_date": "2026-08-16"})
-_check("200＋action=created", res.status_code == 200
-       and res.json()["action"] == "created", str(res.json()))
-ins = w[0][1]
-_check("出勤のみ→actual_end無し・checked_in", w[0][0] == "insert"
-       and ins["actual_start"] == "12:03" and ins["actual_end"] is None
-       and ins["status"] == "checked_in", str(ins))
-_check("予定が空にならない（支払い計算の対象に入る）",
-       ins["planned_start"] == "12:03" and ins["planned_end"] == "12:03", str(ins))
-_check("attendance_keyとupdated_atがnotesに残る",
-       "p1-5-23-123" in ins["notes"] and "updated=" in ins["notes"], str(ins))
-
-print("\n[更新（upsert）]")
-ROW = {"id": 9, "event_id": 11, "staff_id": 501, "date": "2026-08-13",
-       "actual_start": "12:03", "actual_end": None, "status": "checked_in",
-       "notes": "〔API連携 key=p1-5-23-123 updated=2026-08-13T12:03:05+09:00〕"}
+print("\n[upsert（既存行の更新）]")
+res, w, rv = _run(dict(BASE, actual_end=None), staff=STAFF, rows=[ROW])
+upd = w[0][1]
+_check("出勤のみ → checked_in・endはnull", res.json()["action"] == "updated"
+       and upd["actual_start"] == "12:03" and upd["actual_end"] is None
+       and upd["status"] == "checked_in", str(upd))
 res, w, rv = _run(BASE, staff=STAFF, rows=[ROW])
 upd = w[0][1]
-_check("退勤更新→actual_end=22:17・checked_out", res.json()["action"] == "updated"
-       and upd["actual_end"] == "22:17" and upd["status"] == "checked_out", str(upd))
-_check("実績が変わったので支払い差し戻しが呼ばれる", rv == 1, str(rv))
-_check("markerが新しいupdated_atへ置き換わる",
-       "updated=2026-08-13T22:17:10+09:00" in upd["notes"], str(upd["notes"]))
+_check("退勤つき → checked_out・25:17のまま保存", upd["actual_end"] == "25:17"
+       and upd["status"] == "checked_out", str(upd))
+_check("実績が変わったので支払い差し戻し", rv == 1, str(rv))
+_check("9:30 は 09:30 に正規化される",
+       _run(dict(BASE, actual_start="9:30", actual_end=None), staff=STAFF,
+            rows=[ROW])[1][0][1]["actual_start"] == "09:30")
 
-print("\n[順不同の再送]")
-newer = dict(ROW, notes="〔API連携 key=k updated=2026-08-13T23:00:00+09:00〕")
-res, w, rv = _run(BASE, staff=STAFF, rows=[newer])
-_check("古いupdated_atはskipped_stale（書き込みなし）",
-       res.json()["action"] == "skipped_stale" and not w and rv == 0,
-       f"{res.json()} writes={len(w)}")
-
-print("\n[深夜跨ぎ]")
-ov = dict(BASE, clock_in_at="2026-08-12T18:00:00+09:00",
-          clock_out_at="2026-08-13T06:00:00+09:00",
-          updated_at="2026-08-13T06:00:05+09:00")
-row12 = dict(ROW, date="2026-08-12", notes="")
-res, w, rv = _run(ov, staff=STAFF, rows=[row12])
-upd = w[0][1]
-_check("8/12 18:00〜翌6:00 → 18:00〜30:00（8/12の行）",
-       res.json()["date"] == "2026-08-12"
-       and upd["actual_start"] == "18:00" and upd["actual_end"] == "30:00", str(upd))
-late = dict(BASE, clock_in_at="2026-08-13T00:30:00+09:00", clock_out_at=None,
-            updated_at="2026-08-13T00:30:05+09:00")
-res, w, rv = _run(late, staff=STAFF, rows=[row12])
-_check("深夜0:30の出勤は前日(8/12)の行に 24:30 で入る",
-       res.json()["date"] == "2026-08-12" and w[0][1]["actual_start"] == "24:30",
-       str(w[0][1]))
-
-print("\n[再打刻（退勤の取り消し）]")
-done = dict(ROW, actual_end="22:17", status="checked_out", notes="")
-res, w, rv = _run(dict(BASE, clock_out_at=None,
-                       updated_at="2026-08-13T23:30:00+09:00"),
+print("\n[null戻し（Q8: 打刻の取り消し）]")
+done = dict(ROW, actual_start="12:03", actual_end="25:17", status="checked_out")
+res, w, rv = _run(dict(BASE, actual_start=None, actual_end=None),
                   staff=STAFF, rows=[done])
-_check("退勤nullの再送で checked_in に戻る",
-       w[0][1]["actual_end"] is None and w[0][1]["status"] == "checked_in", str(w[0][1]))
+upd = w[0][1]
+_check("両方nullで scheduled へ戻る", upd["actual_start"] is None
+       and upd["actual_end"] is None and upd["status"] == "scheduled", str(upd))
+_check("戻し操作も支払い差し戻しが走る", rv == 1, str(rv))
+res, w, rv = _run(dict(BASE, actual_start=None, actual_end=None),
+                  staff=STAFF, rows=[])
+_check("行が無い所への取り消しは skipped_noop（作成しない）",
+       res.json()["action"] == "skipped_noop" and not w, str(res.json()))
+
+print("\n[新規作成（シフト表に無い当日勤務）]")
+res, w, rv = _run(dict(BASE, event_id=None), staff=STAFF, rows=[],
+                  event={"id": 11, "start_date": "2026-08-12",
+                         "end_date": "2026-08-16"})
+ins = w[0][1]
+_check("event_id省略でも日付から大会を解決して作成",
+       res.json()["action"] == "created" and ins["event_id"] == 11, str(ins))
+_check("予定が空にならない（支払い計算の対象に入る）",
+       ins["planned_start"] == "12:03" and ins["planned_end"] == "25:17", str(ins))
+res, w, rv = _run(dict(BASE, event_id=None), staff=STAFF, rows=[], event=None)
+_check("該当大会なしは404", res.status_code == 404, str(res.status_code))
+
+print("\n[順不同の再送（updated_at任意）]")
+marked = dict(ROW, notes="〔API連携 key=k updated=2026-08-13T23:00:00+09:00〕")
+res, w, rv = _run(dict(BASE, updated_at="2026-08-13T22:00:00+09:00"),
+                  staff=STAFF, rows=[marked])
+_check("古いupdated_atはskipped_stale（書き込みなし）",
+       res.json()["action"] == "skipped_stale" and not w, str(res.json()))
+res, w, rv = _run(dict(BASE, updated_at="2026-08-13T23:30:00+09:00",
+                       attendance_key="p1-5-23-123"),
+                  staff=STAFF, rows=[marked])
+_check("新しいupdated_atは更新され、markerが置き換わる",
+       res.json()["action"] == "updated"
+       and "updated=2026-08-13T23:30:00+09:00" in w[0][1]["notes"],
+       str(w[0][1].get("notes")))
+res, w, rv = _run(BASE, staff=STAFF, rows=[marked])
+_check("updated_at無し送信はガードせず最新扱いで更新（後方互換）",
+       res.json()["action"] == "updated", str(res.json()))
+
+print("\n[一意制約なしDBの重複行]")
+dup2 = [dict(ROW), dict(ROW, id=10)]
+res, w, rv = _run(BASE, staff=STAFF, rows=dup2)
+_check("重複行があれば先頭を更新し warning を返す",
+       res.json().get("warning") and len(w) == 1, str(res.json()))
 
 print()
 print("=" * 60)

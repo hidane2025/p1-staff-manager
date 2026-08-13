@@ -1,19 +1,26 @@
-"""P1会員アプリ（TAKAさん側）からの勤怠実績を受けるAPI（2026-08-13）
+"""P1会員アプリ（TAKAさん側）からの勤怠実績を受けるAPI（2026-08-13 v2）
 
 背景:
-    大会当日の出退勤はTAKAさんのPIT勤怠ツールが一次入力面。そこから
-    実績（実出勤・実退勤）だけを本システムへプッシュしてもらい、
-    給与計算（深夜割増・休憩控除・精勤・封筒・領収書）はこちらが正を持つ。
-    先方仕様: attendance_key による upsert・再送あり・順不同あり。
+    大会当日の出退勤はTAKAさんのPIT勤怠ツールが一次入力面。実績（実出勤・実退勤）
+    だけを本システムへプッシュしてもらい、給与計算（深夜割増・休憩控除・精勤・
+    封筒・領収書）はこちらが正を持つ。
+
+v2（2026-08-13 15時・先方がschema.sqlを読んで更新した仕様に全面適合）:
+    ・ペイロードは p1_shifts の語彙そのもの:
+      dealer_number / date / actual_start / actual_end（"25:17" 等の24時超表記）
+    ・日付の解釈（深夜跨ぎでどの日の勤務か）は送信側の責務になった
+      → v1にあった朝9時境界の推測ロジックは廃止（解釈の二重化を避ける）
+    ・event_id は任意（省略時は date の属する大会をこちらで解決）
+    ・actual_start / actual_end を null に戻す更新に対応（打刻の取り消し）
+    ・updated_at（任意・推奨）が付いていれば順不同の再送を破棄できる
 
 設計:
-    ・nginx の /api/ 配下（Basic認証はnginx層ではなくアプリ内で検証。
-      Authorization ヘッダをBasicが占有するため、追加の鍵は X-API-Key）
-    ・冪等性: 同一 (スタッフ, 日付) のシフト行へ常に「送られてきた最新の真実」を
-      上書きする。順不同の再送は updated_at をシフト行 notes 内のマーカーと
-      比較して古い更新を捨てる（skipped_stale）
-    ・支払い保護: 実績が変わったら承認済み支払いを未承認へ差し戻す
-      （ピット端末・出退勤ページと同じ内部統制を通す）
+    ・認証はASGIミドルウェアで実施（Basic＋X-API-Key の二重）。
+      v1はハンドラ内検証だったため、本文の形式エラーが認証より先に
+      422を返していた（本番実測）。ミドルウェアなら常に 401/403 が先
+    ・冪等性: (event, スタッフ, 日付) のシフト行へ常に最新を上書き。
+      p1_shifts に一意制約が無いため、重複行があれば先頭を更新し件数を返す
+    ・実績が変わったら承認済み支払いを未承認へ差し戻す（既存の内部統制を再利用）
     ・リトライ規約: 4xx=payload起因（再送しない）／5xx=こちら起因（再送する）
 """
 from __future__ import annotations
@@ -21,48 +28,25 @@ from __future__ import annotations
 import hmac
 import os
 import re
+import sys
 from base64 import b64decode
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 
-import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import db  # noqa: E402
 from dbx.shifts import _revert_payment_if_amount_affected  # noqa: E402
 
-JST = timezone(timedelta(hours=9))
-# 深夜跨ぎ判定: この時刻より前の実出勤は「前日のシフトの続き」を先に探す
-OVERNIGHT_BOUNDARY_HOUR = 9
-_MARKER = re.compile(r"〔API連携 key=(?P<key>[^ 〕]+) updated=(?P<upd>[^〕]+)〕")
+_MARKER = re.compile(r"〔API連携( key=(?P<key>[^ 〕]+))? updated=(?P<upd>[^〕]+)〕")
+_TIME = re.compile(r"^(\d{1,2}):([0-5]\d)$")
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 app = FastAPI(title="P1 Staff Manager 勤怠受信API", docs_url=None, redoc_url=None,
               openapi_url=None)
-
-
-class AttendancePayload(BaseModel):
-    attendance_key: str
-    dealer_number: str
-    clock_in_at: datetime
-    clock_out_at: Optional[datetime] = None
-    updated_at: datetime
-
-    @field_validator("attendance_key", "dealer_number")
-    @classmethod
-    def _non_empty(cls, v: str) -> str:
-        v = str(v).strip()
-        if not v:
-            raise ValueError("空にできません")
-        return v
-
-    @field_validator("clock_in_at", "clock_out_at", "updated_at")
-    @classmethod
-    def _tz_required(cls, v):
-        if v is not None and v.tzinfo is None:
-            raise ValueError("タイムゾーン付きISO 8601（+09:00）で送ってください")
-        return v
 
 
 def _check_auth(authorization: Optional[str], api_key: Optional[str]) -> None:
@@ -90,6 +74,62 @@ def _check_auth(authorization: Optional[str], api_key: Optional[str]) -> None:
                                   "retry": False})
 
 
+@app.middleware("http")
+async def _auth_middleware(request, call_next):
+    """認証は本文の検証より必ず先に行う（v1の 422 が先に出る問題の修正）"""
+    if request.url.path.startswith("/api/") and request.url.path != "/api/health":
+        try:
+            _check_auth(request.headers.get("authorization"),
+                        request.headers.get("x-api-key"))
+        except HTTPException as e:
+            return JSONResponse({"detail": e.detail}, status_code=e.status_code,
+                                headers=getattr(e, "headers", None))
+    return await call_next(request)
+
+
+class AttendancePayload(BaseModel):
+    """先方仕様（2026-08-13 15時版）の項目名そのまま＋任意の拡張2つ"""
+    dealer_number: str
+    date: str
+    actual_start: Optional[str] = None
+    actual_end: Optional[str] = None
+    event_id: Optional[int] = None
+    updated_at: Optional[datetime] = None      # 任意・推奨（順不同再送の破棄に使用）
+    attendance_key: Optional[str] = None       # 任意（監査ログに記録）
+
+    @field_validator("dealer_number")
+    @classmethod
+    def _dealer(cls, v: str) -> str:
+        v = str(v).strip()
+        if not v:
+            raise ValueError("dealer_number は空にできません")
+        return v
+
+    @field_validator("date")
+    @classmethod
+    def _date(cls, v: str) -> str:
+        if not _DATE.match(str(v).strip()):
+            raise ValueError("date は YYYY-MM-DD 形式で送ってください")
+        return str(v).strip()
+
+    @field_validator("actual_start", "actual_end")
+    @classmethod
+    def _time(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or str(v).strip() == "":
+            return None
+        m = _TIME.match(str(v).strip())
+        if not m or not (0 <= int(m.group(1)) < 48):
+            raise ValueError("時刻は HH:MM（深夜は 25:17 のような24時超表記）で送ってください")
+        return f"{int(m.group(1)):02d}:{m.group(2)}"   # 09:30 に正規化
+
+    @field_validator("updated_at")
+    @classmethod
+    def _tz(cls, v):
+        if v is not None and v.tzinfo is None:
+            raise ValueError("updated_at はタイムゾーン付きISO 8601で送ってください")
+        return v
+
+
 def _staff_by_no(no: int) -> Optional[dict]:
     r = db.get_client().table("p1_staff").select("id, no, name_jp").eq(
         "no", no).limit(1).execute().data
@@ -103,20 +143,16 @@ def _event_for_date(d: str) -> Optional[dict]:
     return None
 
 
-def _shift_rows(staff_id: int, dates: list) -> list:
+def _shift_rows(staff_id: int, date: str) -> list:
     return db.get_client().table("p1_shifts").select("*").eq(
-        "staff_id", staff_id).in_("date", dates).execute().data or []
+        "staff_id", staff_id).eq("date", date).execute().data or []
 
 
-def _clock_str(dt: datetime, base_date: str) -> str:
-    """シフト日付基準の 'HH:MM'（24時超は 25:00 式）へ変換する"""
-    base = datetime.fromisoformat(base_date + "T00:00:00+09:00")
-    minutes = int((dt.astimezone(JST) - base).total_seconds() // 60)
-    if not (0 <= minutes < 48 * 60):
-        raise HTTPException(422, {"status": "error", "error": "time_out_of_range",
-                                  "detail": f"{dt.isoformat()} は {base_date} の勤務として解釈できません",
-                                  "retry": False})
-    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+def _minutes(t: Optional[str]) -> Optional[int]:
+    if t is None:
+        return None
+    h, m = t.split(":")
+    return int(h) * 60 + int(m)
 
 
 @app.get("/api/health")
@@ -125,89 +161,108 @@ def health() -> dict:
 
 
 @app.post("/api/attendance")
-def upsert_attendance(payload: AttendancePayload,
-                      authorization: Optional[str] = Header(None),
-                      x_api_key: Optional[str] = Header(None)) -> dict:
-    _check_auth(authorization, x_api_key)
-
+def upsert_attendance(payload: AttendancePayload) -> dict:
     try:
         no = int(payload.dealer_number)
     except ValueError:
         raise HTTPException(422, {"status": "error", "error": "bad_dealer_number",
                                   "retry": False})
+    # 整合性: 退勤だけ・退勤が出勤より前、は受理しない
+    if payload.actual_end is not None and payload.actual_start is None:
+        raise HTTPException(422, {"status": "error", "error": "end_without_start",
+                                  "retry": False})
+    if (payload.actual_start is not None and payload.actual_end is not None
+            and _minutes(payload.actual_end) < _minutes(payload.actual_start)):
+        raise HTTPException(422, {
+            "status": "error", "error": "end_before_start",
+            "detail": "退勤は出勤以降にしてください（深夜は 25:17 のような24時超表記）",
+            "retry": False})
+
     staff = _staff_by_no(no)
     if not staff:
         raise HTTPException(404, {"status": "error", "error": "unknown_dealer",
                                   "dealer_number": payload.dealer_number,
                                   "retry": False})
 
-    jst_in = payload.clock_in_at.astimezone(JST)
-    d0 = jst_in.strftime("%Y-%m-%d")
-    candidates = [d0]
-    if jst_in.hour < OVERNIGHT_BOUNDARY_HOUR:
-        candidates.append((jst_in - timedelta(days=1)).strftime("%Y-%m-%d"))
-    rows = {r["date"]: r for r in _shift_rows(staff["id"], candidates)}
-    # 当日行を優先。無ければ「前日の深夜跨ぎシフトの続き」とみなす
-    row = rows.get(d0) or (rows.get(candidates[1]) if len(candidates) > 1 else None)
+    rows = _shift_rows(staff["id"], payload.date)
+    if payload.event_id is not None:
+        scoped = [r for r in rows if r.get("event_id") == payload.event_id]
+        rows = scoped or rows
+    duplicates = max(0, len(rows) - 1)
+
+    status = ("checked_out" if payload.actual_end is not None
+              else "checked_in" if payload.actual_start is not None
+              else "scheduled")
+    jst_updated = (payload.updated_at.isoformat()
+                   if payload.updated_at is not None else None)
+    marker = (f"〔API連携 key={payload.attendance_key or '-'} "
+              f"updated={jst_updated}〕" if jst_updated else "")
 
     client = db.get_client()
-    if row is None:
-        ev = _event_for_date(d0)
-        if not ev:
-            raise HTTPException(404, {"status": "error", "error": "no_event_for_date",
-                                      "date": d0, "retry": False})
-        target_date = d0
-        cin = _clock_str(payload.clock_in_at, target_date)
-        cout = (_clock_str(payload.clock_out_at, target_date)
-                if payload.clock_out_at else None)
+    if not rows:
+        if status == "scheduled":
+            # 行が無いところへ「取り消し」だけ来た＝何もすることがない
+            return {"status": "ok", "action": "skipped_noop",
+                    "dealer_number": payload.dealer_number, "date": payload.date}
+        ev_id = payload.event_id
+        if ev_id is None:
+            ev = _event_for_date(payload.date)
+            if not ev:
+                raise HTTPException(404, {"status": "error",
+                                          "error": "no_event_for_date",
+                                          "date": payload.date, "retry": False})
+            ev_id = ev["id"]
         client.table("p1_shifts").insert({
-            "event_id": ev["id"], "staff_id": staff["id"], "date": target_date,
+            "event_id": ev_id, "staff_id": staff["id"], "date": payload.date,
             # 予定なしの当日勤務。支払い計算は planned が空だと対象外になるため
-            # 実績と同値を入れる（実績優先で計算されるので金額への影響はない）
-            "planned_start": cin, "planned_end": cout or cin,
-            "actual_start": cin, "actual_end": cout,
-            "status": "checked_out" if cout else "checked_in",
-            "notes": f"〔API当日追加〕〔API連携 key={payload.attendance_key} "
-                     f"updated={payload.updated_at.astimezone(JST).isoformat()}〕",
+            # 実績と同値を入れる（計算は実績優先なので金額への影響はない）
+            "planned_start": payload.actual_start,
+            "planned_end": payload.actual_end or payload.actual_start,
+            "actual_start": payload.actual_start,
+            "actual_end": payload.actual_end,
+            "status": status,
+            "notes": ("〔API当日追加〕" + marker).strip(),
         }).execute()
         action = "created"
     else:
-        target_date = row["date"]
-        # 順不同の再送対策: 记録済みの updated より古い更新は捨てる
+        row = rows[0]
         m = _MARKER.search(row.get("notes") or "")
-        if m:
+        if m and jst_updated:
             try:
                 stored = datetime.fromisoformat(m.group("upd"))
-                if payload.updated_at.astimezone(JST) <= stored:
+                if payload.updated_at <= stored:
                     return {"status": "ok", "action": "skipped_stale",
-                            "attendance_key": payload.attendance_key}
+                            "dealer_number": payload.dealer_number,
+                            "date": payload.date}
             except ValueError:
                 pass
-        cin = _clock_str(payload.clock_in_at, target_date)
-        cout = (_clock_str(payload.clock_out_at, target_date)
-                if payload.clock_out_at else None)
-        changed = (row.get("actual_start") != cin or row.get("actual_end") != cout)
+        changed = (row.get("actual_start") != payload.actual_start
+                   or row.get("actual_end") != payload.actual_end)
         base_notes = _MARKER.sub("", row.get("notes") or "").strip()
-        marker = (f"〔API連携 key={payload.attendance_key} "
-                  f"updated={payload.updated_at.astimezone(JST).isoformat()}〕")
         client.table("p1_shifts").update({
-            "actual_start": cin, "actual_end": cout,
-            "status": "checked_out" if cout else "checked_in",
-            "notes": (base_notes + " " + marker).strip(),
+            "actual_start": payload.actual_start,
+            "actual_end": payload.actual_end,
+            "status": status,
+            "notes": (base_notes + (" " + marker if marker else "")).strip(),
         }).eq("id", row["id"]).execute()
         if changed:
-            # 実績が変わったら承認済み支払いを未承認へ（支払済みは内部で保護される）
+            # 実績が変わったら承認済み支払いを未承認へ（支払済みは内部で保護）
             _revert_payment_if_amount_affected(
-                row, reason=f"API勤怠更新 {cin}〜{cout or '—'}（要再計算）")
+                row, reason=(f"API勤怠更新 {payload.actual_start or '—'}〜"
+                             f"{payload.actual_end or '—'}（要再計算）"))
         action = "updated"
 
     db.log_action(
         "api_attendance_upsert", "shifts",
-        detail=(f"key={payload.attendance_key} NO.{no} {staff['name_jp']} "
-                f"{target_date} {payload.clock_in_at.astimezone(JST).strftime('%H:%M')}"
-                f"〜{payload.clock_out_at.astimezone(JST).strftime('%H:%M') if payload.clock_out_at else '—'}"
-                f" [{action}]"),
+        detail=(f"key={payload.attendance_key or '-'} NO.{no} {staff['name_jp']} "
+                f"{payload.date} {payload.actual_start or '—'}〜"
+                f"{payload.actual_end or '—'} [{action}]"
+                + (f" 重複行{duplicates}" if duplicates else "")),
         performed_by="api:P1会員アプリ")
-    return {"status": "ok", "action": action,
-            "attendance_key": payload.attendance_key,
-            "dealer_number": payload.dealer_number, "date": target_date}
+    res = {"status": "ok", "action": action,
+           "dealer_number": payload.dealer_number, "date": payload.date}
+    if payload.attendance_key:
+        res["attendance_key"] = payload.attendance_key
+    if duplicates:
+        res["warning"] = f"同一キーのシフト行が{duplicates + 1}件あり先頭を更新しました"
+    return res
