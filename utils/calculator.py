@@ -7,9 +7,9 @@ from typing import Optional
 # 日当（フロア手当）の対象役職。正準は utils/roles.py（画面と共有）。
 # 2026-08-09 まで Floor だけに付いており、TD・PIT・CHIP に付いていなかった。
 try:
-    from utils.roles import DAY_ALLOWANCE_ROLES
+    from utils.roles import DAY_ALLOWANCE_ROLES, ATTENDANCE_BONUS_ROLES
 except ImportError:  # utils/ 直下がパスに載る実行形態（テスト等）
-    from roles import DAY_ALLOWANCE_ROLES
+    from roles import DAY_ALLOWANCE_ROLES, ATTENDANCE_BONUS_ROLES
 
 NIGHT_START_HOUR = 22  # 深夜割増の開始時刻
 NIGHT_END_HOUR = 29    # 深夜割増の終了時刻（翌5:00 = 24+5）
@@ -378,8 +378,8 @@ def calculate_staff_payment(
         daily_results.append(daily)
 
     days_worked = len(daily_results)
-    # タイミーは精勤手当対象外
-    if is_timee:
+    # タイミーと、対象外役職（受付・会計等の運営スタッフ）は精勤手当なし
+    if is_timee or role not in ATTENDANCE_BONUS_ROLES:
         att_bonus_override = 0
     else:
         att_bonus_override = None

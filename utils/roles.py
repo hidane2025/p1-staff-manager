@@ -12,7 +12,12 @@
 """
 
 # スタッフが取りうる役職（表示順もこの順で統一する）
-CANONICAL_ROLES = ["Dealer", "Floor", "TD", "DC", "Chip", "Pit"]
+CANONICAL_ROLES = ["Dealer", "Floor", "TD", "DC", "Chip", "Pit", "受付"]
+
+# 精勤手当（全日1万/4日6千）の対象。ディーラーライン向けの制度のため、
+# 受付・会計等の運営スタッフには付けない（2026-08-13 受付シート統合時の既定。
+# 受付にも付ける判断になったらここに "受付" を足すだけで戻る）
+ATTENDANCE_BONUS_ROLES = ("Dealer", "Floor", "TD", "DC", "Chip", "Pit")
 
 # 日当（フロア手当）が付く役職。DC は単価ルールに記載がないため対象外
 DAY_ALLOWANCE_ROLES = ("Floor", "TD", "Pit", "Chip")

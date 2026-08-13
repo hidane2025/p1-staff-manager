@@ -142,6 +142,38 @@ for role, expect in (("Floor", 3000), ("TD", 3000), ("Pit", 3000), ("Chip", 3000
     d = calculate_daily_pay(sh, 1500, 1875, transport=0, role=role, floor_bonus=3000)
     _check(f"{role} の日当 = ¥{expect:,}", d.floor_bonus == expect, str(d.floor_bonus))
 
+print("\n[C2] 精勤手当の対象役職（受付には付けない）")
+from utils.calculator import calculate_staff_payment  # noqa: E402
+
+_rates = {f"2026-08-{d}": {"hourly": 1500, "night": 1875, "transport": 0,
+                           "floor_bonus": 3000, "mix_bonus": 1500} for d in range(12, 17)}
+_shifts5 = [{"date": f"2026-08-{d}", "start": "10:00", "end": "18:00", "is_mix": False}
+            for d in range(12, 17)]
+_pd = calculate_staff_payment(staff_id=1, name="D", role="Dealer", shifts=_shifts5,
+                              rates_by_date=_rates, total_event_days=5,
+                              break_6h=45, break_8h=60, transport_override=0)
+_pr = calculate_staff_payment(staff_id=2, name="R", role="受付", shifts=_shifts5,
+                              rates_by_date=_rates, total_event_days=5,
+                              break_6h=45, break_8h=60, transport_override=0)
+_check("Dealer 全日出勤 → 精勤手当 ¥10,000", _pd.attendance_bonus == 10000,
+       str(_pd.attendance_bonus))
+_check("受付 全日出勤 → 精勤手当 ¥0（対象外役職）", _pr.attendance_bonus == 0,
+       str(_pr.attendance_bonus))
+_check("受付に日当も付かない", _pr.floor_bonus_total == 0, str(_pr.floor_bonus_total))
+_pc = calculate_staff_payment(staff_id=3, name="C", role="受付", shifts=_shifts5,
+                              rates_by_date=_rates, total_event_days=5,
+                              break_6h=45, break_8h=60, transport_override=0,
+                              custom_hourly_rate=1350)
+# 10:00-18:00 = 拘束8h → 休憩45分 → 実働7.25h。日次で丸めて 9,788×5
+_check("個別時給1,350の基本給（7.25h×1350を日次丸め×5日）",
+       _pc.base_pay == round(7.25 * 1350) * 5, str(_pc.base_pay))
+_shift_n = [{"date": "2026-08-12", "start": "22:00", "end": "23:00", "is_mix": False}]
+_pn = calculate_staff_payment(staff_id=4, name="N", role="受付", shifts=_shift_n,
+                              rates_by_date=_rates, total_event_days=5,
+                              break_6h=45, break_8h=60, transport_override=0,
+                              custom_hourly_rate=1350)
+_check("個別時給の深夜は×1.25を整数化（1350→1688/h）", _pn.night_pay == 1688, str(_pn.night_pay))
+
 # ============================================================
 # D. find_or_create_staff — NO. 優先の同定
 # ============================================================
@@ -221,6 +253,7 @@ _check("支払い計算の交通費も payment_amount 経由",
        "transport_rules_mod.payment_amount" in (ROOT / "pages/3_payment.py").read_text())
 from utils.roles import CANONICAL_ROLES, DAY_ALLOWANCE_ROLES  # noqa: E402
 _check("役職の正準リストに Pit が含まれる", "Pit" in CANONICAL_ROLES, str(CANONICAL_ROLES))
+_check("役職の正準リストに 受付 が含まれる", "受付" in CANONICAL_ROLES, str(CANONICAL_ROLES))
 _check("日当対象は Floor/TD/Pit/Chip",
        set(DAY_ALLOWANCE_ROLES) == {"Floor", "TD", "Pit", "Chip"}, str(DAY_ALLOWANCE_ROLES))
 import utils.calculator as _calc  # noqa: E402
