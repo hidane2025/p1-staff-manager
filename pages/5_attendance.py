@@ -19,7 +19,9 @@ st.set_page_config(page_title="出退勤", page_icon="🕐", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import apply_global_style, page_header, flow_bar
 from utils.roles import CANONICAL_ROLES, DEPT_CHOICES, role_dept
-from utils.admin_guard import require_admin, admin_logout_button, current_role
+from utils.calculator import parse_time_to_minutes
+from dbx.shifts import _revert_payment_if_amount_affected
+from utils.admin_guard import require_admin, admin_logout_button, current_role, operator_name
 apply_global_style()
 hide_staff_only_pages()
 require_admin(page_name="出退勤管理", roles=("admin", "viewer"),
@@ -556,13 +558,19 @@ edited_df = st.data_editor(
     use_container_width=True,
     hide_index=True,
     height=600,
-    disabled=["NO.", "名前", "役職", "予定", "実到着", "実退勤", "状態", "例外", "_shift_id"],
+    # 2026-08-14 中野さん指示「一覧に直接記入する運用が一番」:
+    # 実到着・実退勤を直接編集可能にする。viewer（閲覧用）は表ごと編集不可
+    disabled=True if _READONLY else
+    ["NO.", "名前", "役職", "予定", "状態", "例外", "_shift_id"],
     column_config={
         "出勤": st.column_config.CheckboxColumn(
             "✅出勤", default=False,
-            help="チェック＝予定時刻どおり出勤として確定。外す＝未確定に戻す。"
-                 "遅刻・早入りなど時間が違う人は「②例外を記録」で。退勤済・欠勤はここでは変更できません。",
+            help="チェック＝予定時刻どおり出勤として確定。外す＝未確定に戻す。",
         ),
+        "実到着": st.column_config.TextColumn(
+            "実到着", help="直接入力OK。例 10:00／空欄に戻すと取り消し"),
+        "実退勤": st.column_config.TextColumn(
+            "実退勤", help="直接入力OK。深夜は 25:30 のような24時超表記／空欄で取り消し"),
         "MIX": st.column_config.CheckboxColumn("MIX", default=False),
         "備考": st.column_config.TextColumn("備考", help="イレギュラー対応等を自由入力"),
         "_shift_id": None,
@@ -570,11 +578,66 @@ edited_df = st.data_editor(
     key="shift_table",
 )
 
-# 変更検出・保存（出勤・MIX・備考）
+# 変更検出・保存（出勤・実到着・実退勤・MIX・備考）。viewerは適用しない
 _shift_by_id = {s["id"]: s for s in shifts}
-if not df.empty and not edited_df.empty:
+_paid_staff = {p["staff_id"] for p in (db.get_payments_for_event(event_id) or [])
+               if p.get("status") == "paid"}
+
+
+def _norm_edit_time(v):
+    """一覧に打ち込まれた時刻を正規化。(値 or None, 妥当か) を返す"""
+    v = str(v or "").strip()
+    if v in ("", "—", "-", "ー", "None"):
+        return None, True
+    m = parse_time_to_minutes(v)
+    if m is None or not (0 <= m < 48 * 60):
+        return None, False
+    return f"{m // 60:02d}:{m % 60:02d}", True
+
+
+if (not _READONLY) and not df.empty and not edited_df.empty:
     for idx in range(len(df)):
         shift_id = int(df.iloc[idx]["_shift_id"])
+        # 実到着・実退勤の直接編集（リスト記入運用が正・2026-08-14）
+        for _col in ("実到着", "実退勤"):
+            _old_v = str(df.iloc[idx][_col]).strip()
+            _new_v = str(edited_df.iloc[idx][_col]).strip()
+            if _old_v == _new_v:
+                continue
+            srow = _shift_by_id.get(shift_id, {})
+            if srow.get("status") == "absent":
+                st.warning("欠勤の人は「②例外を記録→個別リセット」で戻してから入力してください。")
+                st.rerun()
+            if srow.get("staff_id") in _paid_staff:
+                st.warning(f"{srow.get('name_jp', '')} は支払い済みのため時刻を変更できません。")
+                st.rerun()
+            _nt, _ok = _norm_edit_time(_new_v)
+            if not _ok:
+                st.warning(f"時刻を読めません:「{_new_v}」。例 10:00、深夜は 25:30 の形式で。")
+                st.rerun()
+            _ns = _nt if _col == "実到着" else _norm_edit_time(df.iloc[idx]["実到着"])[0]
+            _ne = _nt if _col == "実退勤" else _norm_edit_time(df.iloc[idx]["実退勤"])[0]
+            if _ne and not _ns:
+                st.warning("退勤だけは記録できません。先に実到着を入れてください。")
+                st.rerun()
+            if _ns and _ne and parse_time_to_minutes(_ne) < parse_time_to_minutes(_ns):
+                st.warning("退勤が到着より前です。深夜は 25:30 のような24時超表記で。")
+                st.rerun()
+            _new_status = ("checked_out" if _ne else
+                           "checked_in" if _ns else "scheduled")
+            db.get_client().table("p1_shifts").update({
+                "actual_start": _ns, "actual_end": _ne, "status": _new_status,
+            }).eq("id", shift_id).execute()
+            # 実績が変わったら計算済みの支払いを未承認へ（支払済みは上で弾いている）
+            _revert_payment_if_amount_affected(
+                srow, reason=f"一覧で実績を編集 {_ns or '—'}〜{_ne or '—'}（要再計算）")
+            db.log_action(
+                "attendance_edit", "shifts", shift_id,
+                detail=(f"{srow.get('name_jp', '')} (NO.{srow.get('no', '—')}) "
+                        f"{selected_date} 一覧編集 {_col}: "
+                        f"{_old_v or '—'} → {_nt or '—'}"),
+                event_id=event_id, performed_by=operator_name())
+            st.rerun()
         # 出勤チェック変更（✅=予定時刻で出勤確定 / 解除=未確定に戻す）
         old_att = bool(df.iloc[idx]["出勤"])
         new_att = bool(edited_df.iloc[idx]["出勤"])

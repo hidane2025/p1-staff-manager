@@ -297,6 +297,17 @@ _check("ガードは『予定日も計算対象になる』理由を明記",
        "過払い" in _pit_src2)
 _check("承認成功と同時に領収書を発行する",
        "issue_receipt" in _pit_src2)
+_att2 = (ROOT / "pages/5_attendance.py").read_text()
+_check("状況一覧: 実到着・実退勤が直接編集できる",
+       '"実到着": st.column_config.TextColumn' in _att2
+       and '"実退勤": st.column_config.TextColumn' in _att2
+       and "attendance_edit" in _att2)
+_check("状況一覧: viewerは表ごと編集不可（差分適用もゲート）",
+       "disabled=True if _READONLY else" in _att2
+       and "(not _READONLY) and not df.empty" in _att2)
+_check("状況一覧: 支払い済みは時刻変更を弾く", "_paid_staff" in _att2)
+_check("状況一覧: 実績編集で支払いを差し戻す",
+       "_revert_payment_if_amount_affected" in _att2)
 _check("領収書の発行失敗でも支払い確定は壊さない（例外を握って警告）",
        "支払いは確定済み" in _pit_src2)
 
