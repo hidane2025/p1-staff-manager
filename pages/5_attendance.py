@@ -513,10 +513,24 @@ _TIME_OPTS = ["—"] + [f"{h:02d}:{m:02d}" for h in range(7, 30) for m in range(
 
 # 並び順はサーバー側で固定する。表ヘッダのクリック並び替えはブラウザ側の
 # 一時状態のため、時刻を保存するたびの再描画で消えてしまう（2026-08-14 指摘）。
-# ここで選んだ並び順は session_state に残り、保存後も維持される。
-_sort = st.radio(
-    "並び順", ["NO.順", "予定時刻順", "未確定を上に"],
-    horizontal=True, key="att_sort")
+# 選んだ並び順は別ページへ移動しても残す（widgetのstateはページ切替で消えるため別キーに写す）
+_SORT_OPTS = ["NO.順", "予定時刻順", "未確定を上に"]
+_sort_default = st.session_state.get("_att_sort_persist", "NO.順")
+_col_sort, _col_re = st.columns([4, 1])
+with _col_sort:
+    _sort = st.radio(
+        "並び順", _SORT_OPTS, horizontal=True,
+        index=_SORT_OPTS.index(_sort_default) if _sort_default in _SORT_OPTS else 0,
+        key="att_sort")
+st.session_state["_att_sort_persist"] = _sort
+with _col_re:
+    # 2026-08-13 中野さん指示「ボタン押したら並び替え変わるのやめて」:
+    # 行の順序は一度決めたら固定し、チェックや時刻入力で行が飛ばないようにする。
+    # 最新の状態で並べ直したい時だけこのボタンを押す。
+    if st.button("🔄 並び直す", disabled=_READONLY,
+                 help="現在の出退勤状況で並びを作り直します（普段は行が動かないよう固定）"):
+        st.session_state.pop("_att_order_sig", None)
+        st.rerun()
 
 # 再取得
 shifts = db.get_shifts_for_event(event_id, date=selected_date)
@@ -570,13 +584,32 @@ def _sort_key_planned(row):
     return (m if m is not None else 9999, row["NO."] or 9999)
 
 
-if _sort == "予定時刻順":
-    display.sort(key=_sort_key_planned)
-elif _sort == "未確定を上に":
-    _order = {"⬜ 未確定": 0, "🟢 出勤中": 1, "✅ 退勤済": 2, "❌ 欠勤": 3}
-    display.sort(key=lambda r: (_order.get(r["状態"], 9), _sort_key_planned(r)))
+def _apply_sort(rows):
+    rows = list(rows)
+    if _sort == "予定時刻順":
+        rows.sort(key=_sort_key_planned)
+    elif _sort == "未確定を上に":
+        _order = {"⬜ 未確定": 0, "🟢 出勤中": 1, "✅ 退勤済": 2, "❌ 欠勤": 3}
+        rows.sort(key=lambda r: (_order.get(r["状態"], 9), _sort_key_planned(r)))
+    else:
+        rows.sort(key=lambda r: (r["NO."] or 9999))
+    return rows
+
+
+# 行順の固定（2026-08-13）: チェックや時刻保存のたびに行が飛ぶと押し間違いの元。
+# 並び順・日付・部門を変えた時と「🔄 並び直す」の時だけ順序を作り直し、
+# それ以外は最初に決めた順序を維持する（途中で状態が変わっても行は動かない）。
+_order_sig = (f"{event_id}|{selected_date}|{_sort}|"
+              f"{st.session_state.get('attend_dept', '全員')}")
+if (st.session_state.get("_att_order_sig") != _order_sig
+        or not st.session_state.get("_att_order")):
+    display = _apply_sort(display)
+    st.session_state["_att_order"] = [r["_shift_id"] for r in display]
+    st.session_state["_att_order_sig"] = _order_sig
 else:
-    display.sort(key=lambda r: (r["NO."] or 9999))
+    _pos = {sid: i for i, sid in enumerate(st.session_state["_att_order"])}
+    # 固定後に追加された行（当日シフト追加）は末尾へ
+    display.sort(key=lambda r: (_pos.get(r["_shift_id"], 10 ** 9), r["NO."] or 9999))
 
 df = pd.DataFrame(display)
 
