@@ -169,6 +169,7 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
 
     # スタッフごとにグループ化
     staff_shifts = {}
+    unpunched_days = 0  # 打刻未完了で対象外にした日数（可視化用）
     for s in shifts:
         key = s["staff_id"]
         if key not in staff_shifts:
@@ -183,15 +184,18 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
             }
         if s["status"] == "absent":
             continue
-        if s["planned_start"] and s["planned_end"]:
-            start = s.get("actual_start") or s["planned_start"]
-            end = s.get("actual_end") or s["planned_end"]
-            staff_shifts[key]["shifts"].append({
-                "date": s["date"],
-                "start": start,
-                "end": end,
-                "is_mix": bool(s.get("is_mix", 0)),
-            })
+        # 2026-08-13 中野さん方針: 打刻（実到着・実退勤）が揃った日だけを支払いに入れる。
+        # 予定シフトのままの日・出勤中の日は¥0（退勤を記録した瞬間に自動再計算で反映）。
+        # 以前は予定時刻へフォールバックしており、未打刻の将来日まで金額に入っていた。
+        if not (s.get("actual_start") and s.get("actual_end")):
+            unpunched_days += 1
+            continue
+        staff_shifts[key]["shifts"].append({
+            "date": s["date"],
+            "start": s["actual_start"],
+            "end": s["actual_end"],
+            "is_mix": bool(s.get("is_mix", 0)),
+        })
 
     # 2026-08-13: 個別手当を1人ずつ取得していた（144名＝144クエリ）のを
     # イベント全体1クエリに変更。現場から「計算が止まって見える」との訴えの主因。
@@ -255,6 +259,12 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
     if skipped:
         msg += f"（承認/支払済み{skipped}名はスキップ）"
     st.success(msg)
+    if unpunched_days:
+        st.info(
+            f"⏳ 打刻（実到着・実退勤）が揃っていない **{unpunched_days}日分** は"
+            "支払いに入れていません（予定のみ・出勤中の日）。"
+            "出退勤に退勤を記録すると、その人の金額は自動で再計算されます。"
+        )
 
     # 2026-08-02: 「0円で確定した理由」を必ず可視化する。
     # 以前はこれらが画面に出ず、未払いに気づく手段が無かった。
@@ -597,13 +607,12 @@ if staff_opts:
         # 金額行と混ざって合計検算を壊さないよう、時間は h 表記で別行にする。
         _tot_min = _brk_min = _wdays = 0
         for _s in db.get_shifts_for_event(event_id):
+            # 支払いと同じルール: 打刻（実到着・実退勤）が揃った日だけを数える
             if (_s["staff_id"] != p["staff_id"] or _s["status"] == "absent"
-                    or not (_s.get("planned_start") and _s.get("planned_end"))):
+                    or not (_s.get("actual_start") and _s.get("actual_end"))):
                 continue
-            _sm = calculator.parse_time_to_minutes(
-                _s.get("actual_start") or _s["planned_start"])
-            _em = calculator.parse_time_to_minutes(
-                _s.get("actual_end") or _s["planned_end"])
+            _sm = calculator.parse_time_to_minutes(_s["actual_start"])
+            _em = calculator.parse_time_to_minutes(_s["actual_end"])
             if _sm is None or _em is None:
                 continue
             try:
@@ -619,8 +628,8 @@ if staff_opts:
             return f"{_m / 60:.2f}".rstrip("0").rstrip(".") + "h"
 
         _hours_rows = (
-            f"| 総勤務時間（支給対象） | {_fmt_h(_tot_min - _brk_min)}"
-            f"（{_wdays}日・拘束 {_fmt_h(_tot_min)}） |\n"
+            f"| 総勤務時間（打刻済 {_wdays}日） | {_fmt_h(_tot_min - _brk_min)}"
+            f"（拘束 {_fmt_h(_tot_min)}） |\n"
             f"| 休憩控除 | −{_fmt_h(_brk_min)} |\n"
         ) if _tot_min else ""
         st.markdown(f"""

@@ -51,13 +51,15 @@ def recalc_staff_payment(event_id, staff_id) -> bool:
         }
         shifts = []
         for s in db.get_shifts_for_event(event_id):
+            # 2026-08-13 中野さん方針: 打刻（実到着・実退勤）が揃った日だけを
+            # 支払いに入れる。予定のみ・出勤中の日は¥0（pages/3 の一括計算と同一ルール）
             if (s["staff_id"] != staff_id or s["status"] == "absent"
-                    or not (s["planned_start"] and s["planned_end"])):
+                    or not (s.get("actual_start") and s.get("actual_end"))):
                 continue
             shifts.append({
                 "date": s["date"],
-                "start": s.get("actual_start") or s["planned_start"],
-                "end": s.get("actual_end") or s["planned_end"],
+                "start": s["actual_start"],
+                "end": s["actual_end"],
                 "is_mix": bool(s.get("is_mix", 0)),
             })
         shifts.sort(key=lambda x: x["date"])
