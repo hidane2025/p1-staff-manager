@@ -739,7 +739,34 @@ else:
     except Exception:
         _pay_status = ""
 
+    # 2026-08-13: 途中離脱ガード。以降の日に予定シフトが残ったまま清算すると、
+    # 支払い計算が予定日ぶんまで合算して過払いになる（計算は予定も対象のため）。
+    # 最終清算の前に残日程を欠勤化できる導線をここに置く。
+    _future = [s for s in db.get_shifts_for_event(event_id, staff_id=target["id"])
+               if str(s.get("date")) > today and s.get("status") == "scheduled"]
+    if _future:
+        _fdays = "・".join(str(s["date"])[5:] for s in _future)
+        st.warning(
+            f"⚠️ この方は **{_fdays} にも予定シフトがあります**（{len(_future)}日）。"
+            "今日で最後（途中離脱）なら、先に残り日程を欠勤にしてから確定してください。"
+            "残したまま確定すると **将来の予定日を含んだ金額** になります。"
+        )
+        if st.button(f"❌ 残り{len(_future)}日を欠勤にする（最終清算のため）",
+                     key="pit_absent_future"):
+            for s in _future:
+                db.mark_absent(s["id"])
+            db.log_action(
+                "pit_absent_future", "shifts",
+                detail=f"{target['name_jp']} (NO.{target.get('no')}) 途中離脱: "
+                       f"{_fdays} を欠勤化", event_id=event_id,
+                performed_by=operator_name())
+            st.success(f"{len(_future)}日を欠勤にしました。このまま確定してください。")
+            st.rerun()
+
     _is_fix = cur_status == "checked_out"
+    # 2026-08-13: TAKA側API・出退勤ページが先に退勤を書いた人は、
+    # 時刻の再入力なしで支払いだけ確定できるようにする（清算デスク運用）。
+    _confirm_mode = _is_fix and _pay_status in ("", "pending")
     if _is_fix and _pay_status == "paid":
         st.info(
             "💴 このスタッフは **支払い済み** です。"
@@ -747,15 +774,18 @@ else:
         )
     elif cur_status in ("scheduled", "checked_in") or _is_fix:
         # 退勤打刻フォーム（退勤済みのときは「修正」として折りたたみで出す）
-        _form_box = (st.expander("🔧 退勤時刻を修正する（打ち間違えたとき）")
-                     if _is_fix else st.container())
+        _form_box = (
+            st.expander("💴 この実績で支払いを確定する（退勤記録済み）", expanded=True)
+            if _confirm_mode else
+            st.expander("🔧 退勤時刻を修正する（打ち間違えたとき）")
+            if _is_fix else st.container())
         with _form_box, st.form("pit_checkout_form"):
             now_jst = datetime.now(_JST)
             # 分の刻みは utils/time_input.py で一元管理（画面ごとの食い違い防止）
             default_hour = now_jst.hour
             default_min = snap_minute(now_jst.minute)
             if _is_fix and today_shift.get("actual_end"):
-                # 修正時は今の記録値を初期値にする（押し間違いで別時刻に飛ばさない）
+                # 修正・確定時は今の記録値を初期値にする（そのまま押せば無変更で確定）
                 default_hour, default_min = split_hhmm(
                     today_shift["actual_end"], default_hour, default_min)
             col_h, col_m = st.columns(2)
@@ -794,7 +824,9 @@ else:
                     "このまま実行すると打刻と支払い計算のみ行います。"
                 )
             submitted = st.form_submit_button(
-                "🔧 この時刻に修正する" if _is_fix else "🔴 退勤＋支払い確定",
+                "🔴 この実績で支払い確定" if _confirm_mode
+                else "🔧 この時刻に修正する" if _is_fix
+                else "🔴 退勤＋支払い確定",
                 type="primary")
 
             if submitted:
@@ -997,6 +1029,25 @@ else:
                                             "🟡 ピット側で承認まで完了しました。"
                                             "給与窓口は「支払いボタンを押すだけ」で OK です。"
                                         )
+                                        # 2026-08-13: 清算デスク一停止化。承認と同時に
+                                        # 領収書PDFを発行し、下の領収書QRで即渡せるようにする
+                                        try:
+                                            from utils import receipt_issuer as _ri
+                                            _rres = _ri.issue_receipt(payment_id)
+                                            if _rres.get("ok"):
+                                                st.info(
+                                                    "🧾 領収書も発行しました。下の"
+                                                    "「領収書QR」を開けばこの場で渡せます。")
+                                            else:
+                                                st.warning(
+                                                    "⚠️ 領収書の自動発行に失敗しました"
+                                                    "（支払いは確定済み）。『領収書発行』"
+                                                    "ページから発行してください。")
+                                        except Exception:
+                                            st.warning(
+                                                "⚠️ 領収書の自動発行に失敗しました"
+                                                "（支払いは確定済み）。『領収書発行』"
+                                                "ページから発行してください。")
                                         # UX B: 確定カードに承認済みフラグを反映
                                         if _LAST_CONFIRMED_KEY in st.session_state:
                                             st.session_state[_LAST_CONFIRMED_KEY]["approved"] = True

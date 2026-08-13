@@ -284,6 +284,23 @@ for pg in ("pages/1_staff.py", "pages/3_payment.py", "pages/5_attendance.py"):
            '"Dealer", "Floor", "TD"' not in src and "CANONICAL_ROLES" in src)
 
 # ============================================================
+# G. 清算デスク改修（2026-08-13夜）の配線
+# ============================================================
+print("\n[G] 清算デスク（ピット端末）")
+_pit_src2 = (ROOT / "pages/10_pit_terminal.py").read_text()
+_check("退勤記録済みの人はワンタップ確定モードになる",
+       "この実績で支払い確定" in _pit_src2 and "_confirm_mode" in _pit_src2)
+_check("途中離脱ガード（残り日程の欠勤化導線）がある",
+       "残り" in _pit_src2 and "pit_absent_future" in _pit_src2
+       and "mark_absent" in _pit_src2)
+_check("ガードは『予定日も計算対象になる』理由を明記",
+       "過払い" in _pit_src2)
+_check("承認成功と同時に領収書を発行する",
+       "issue_receipt" in _pit_src2)
+_check("領収書の発行失敗でも支払い確定は壊さない（例外を握って警告）",
+       "支払いは確定済み" in _pit_src2)
+
+# ============================================================
 # F. 当日運用コード（翌朝7時失効）と画面文言の配線
 # ============================================================
 print("\n[F] 当日コード7時失効・画面配線")
