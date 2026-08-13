@@ -15,6 +15,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
+from utils import calculator
 from utils import transport_rules as transport_rules_mod
 from utils.calculator import calculate_staff_payment
 from utils.event_selector import select_event
@@ -192,6 +193,12 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
                 "is_mix": bool(s.get("is_mix", 0)),
             })
 
+    # 2026-08-13: 個別手当を1人ずつ取得していた（144名＝144クエリ）のを
+    # イベント全体1クエリに変更。現場から「計算が止まって見える」との訴えの主因。
+    allowances_by_staff: dict = {}
+    for _a in db.get_individual_allowances(event_id):
+        allowances_by_staff.setdefault(_a["staff_id"], []).append(_a)
+
     results = []
     skipped = 0
     # 2026-08-02: 黙って0円にしないための収集。
@@ -199,7 +206,10 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
     # 住所未登録・領収書未提出のスタッフが無警告で0円確定していた。
     transport_zero: list = []      # 交通費が0になった人と理由
     invalid_shift_notes: list = []  # 打刻ミスで計算対象外にした日
-    for staff_id, data in staff_shifts.items():
+    _prog = st.progress(0.0, text="計算を開始します…")
+    for _idx, (staff_id, data) in enumerate(staff_shifts.items()):
+        _prog.progress((_idx + 1) / max(len(staff_shifts), 1),
+                       text=f"計算・保存中… {_idx + 1}/{len(staff_shifts)}名（{data['name']}）")
         if staff_id in protected_ids:
             skipped += 1
             continue
@@ -209,7 +219,7 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
         if transport_override == 0 and _msg:
             transport_zero.append(f"{data['name']}: {_msg}")
         # Phase 3-I (2026-05-08): 個別手当を計算に含める
-        indiv_allowances = db.get_individual_allowances(event_id, staff_id)
+        indiv_allowances = allowances_by_staff.get(staff_id, [])
         payment = calculate_staff_payment(
             staff_id=staff_id, name=data["name"], role=data["role"],
             shifts=data["shifts"], rates_by_date=rates_by_date,
@@ -240,6 +250,7 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
             individual_allowance_total=_allowance_subtotal,
         )
 
+    _prog.empty()
     msg = f"{len(results)}名の支払い額を計算・保存しました"
     if skipped:
         msg += f"（承認/支払済み{skipped}名はスキップ）"
@@ -581,12 +592,43 @@ if staff_opts:
         )
         _break = int(p.get("break_deduction") or 0)
         _base_label = "基本給（休憩控除後）" if _break else "基本給"
+        # 2026-08-13 中野さん要望: 総勤務時間と休憩控除も内訳に出す。
+        # 時間は「現在の出退勤データ」（実績優先）から計算関数と同じロジックで算出。
+        # 金額行と混ざって合計検算を壊さないよう、時間は h 表記で別行にする。
+        _tot_min = _brk_min = _wdays = 0
+        for _s in db.get_shifts_for_event(event_id):
+            if (_s["staff_id"] != p["staff_id"] or _s["status"] == "absent"
+                    or not (_s.get("planned_start") and _s.get("planned_end"))):
+                continue
+            _sm = calculator.parse_time_to_minutes(
+                _s.get("actual_start") or _s["planned_start"])
+            _em = calculator.parse_time_to_minutes(
+                _s.get("actual_end") or _s["planned_end"])
+            if _sm is None or _em is None:
+                continue
+            try:
+                _sh = calculator.calculate_shift_hours(
+                    _sm, _em, _s["date"], break_6h, break_8h)
+            except calculator.InvalidShiftError:
+                continue
+            _tot_min += _sh.total_minutes
+            _brk_min += _sh.break_minutes
+            _wdays += 1
+
+        def _fmt_h(_m: int) -> str:
+            return f"{_m / 60:.2f}".rstrip("0").rstrip(".") + "h"
+
+        _hours_rows = (
+            f"| 総勤務時間（支給対象） | {_fmt_h(_tot_min - _brk_min)}"
+            f"（{_wdays}日・拘束 {_fmt_h(_tot_min)}） |\n"
+            f"| 休憩控除 | −{_fmt_h(_brk_min)} |\n"
+        ) if _tot_min else ""
         st.markdown(f"""
 **{p['name_jp']}** (NO.{p['no']}) — {p['role']}
 
 | 項目 | 金額 |
 |------|------|
-| {_base_label} | ¥{p['base_pay']:,} |
+{_hours_rows}| {_base_label} | ¥{p['base_pay']:,} |
 | 深夜手当 | ¥{p['night_pay']:,} |
 | 交通費 | ¥{p['transport_total']:,} |
 | フロア手当 | ¥{p['floor_bonus_total']:,} |
@@ -599,7 +641,9 @@ if staff_opts:
         if _break:
             st.caption(
                 f"⏱️ 休憩控除 −¥{_break:,} は基本給等の勤務時間から控除済みです"
-                f"（6h超{break_6h}分／8h超{break_8h}分）。表の行の合計＝支給合計になります。"
+                f"（6h超{break_6h}分／8h超{break_8h}分）。金額行の合計＝支給合計になります。"
+                "時間の行は現在の出退勤データから算出しているため、"
+                "出退勤を直した後は再計算するまで金額と食い違うことがあります。"
             )
 
     with col_d2:

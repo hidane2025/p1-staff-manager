@@ -53,8 +53,10 @@ _LAST_SEEN_KEY = "p1_admin_last_seen"
 
 # 2026-07-29: 管理セッションに期限を設ける。
 # 共有端末を開いたまま離席・紛失した場合に、無期限で操作できてしまうのを防ぐ。
+# 2026-08-13: 大会現場から「すぐログアウトされる」との訴えで無操作60分→240分へ緩和。
+#   外側にnginx Basic認証があり端末も運営者私物のため、絶対期限12hを主防壁とする。
 _SESSION_ABSOLUTE_HOURS = 12   # ログインから12時間で強制ログアウト（大会1日の運用を想定）
-_SESSION_IDLE_MINUTES = 60     # 60分操作がなければログアウト
+_SESSION_IDLE_MINUTES = 240    # 240分操作がなければログアウト
 _TOTP_PENDING_KEY = "p1_totp_pending"   # {"user":..., "role":...} パスワード通過後のTOTP待ち
 
 _PBKDF2_ALGO = "sha256"
@@ -322,6 +324,155 @@ def _clear_session() -> None:
         st.session_state.pop(_k, None)
 
 
+# ============================================================
+# セッション復元クッキー（2026-08-13 追加）
+#
+# 背景: Streamlitのセッションは WebSocket 1本と同寿命。回線断・タブ復帰・
+#   再デプロイのたびに session_state が消え、大会現場では数分おきに
+#   ログイン画面へ戻される事故が続いた（8/13 中野さん報告）。
+# 方式: ログイン確定時に HMAC 署名付きトークンをブラウザの Cookie に置き、
+#   新しいセッションの最初の require_admin() で検証・復元する。
+#   - 有効期限はログイン時刻から絶対12時間（トークン内の時刻で強制）
+#   - dayロールは当日コードの失効・取り消しも毎回DBで確認
+#   - 多ユーザー時はユーザーの実在を確認し、ロールはDBの現在値を使う
+#     （復元でロール昇格が固定化されないように）
+# 割り切り: JSで書くCookieなので HttpOnly は付けられない（XSSに対しては
+#   Streamlitの描画がエスケープ済みであることと、外側のnginx Basic認証を防壁とする）。
+#   無操作期限はWebSocket継続中のみ有効（トークンは最終操作時刻を持たない）。
+# ============================================================
+_COOKIE_NAME = "p1sm_session"
+_COOKIE_ISSUE_FLAG = "_p1_cookie_issue_pending"
+_COOKIE_CLEAR_FLAG = "_p1_cookie_clear_pending"
+_LOGGED_OUT_FLAG = "_p1_logged_out"
+
+
+def _session_secret() -> bytes:
+    """Cookie署名鍵。SESSION_SECRET > 既存認証情報からの導出 > 無効(空)。"""
+    raw = (_os.environ.get("SESSION_SECRET") or "").strip()
+    if not raw:
+        base = ((_os.environ.get("ADMIN_PASSWORD") or "") + "|" +
+                (_os.environ.get("AUTH_USERS") or "")).strip("|").strip()
+        if not base:
+            return b""
+        # ADMIN_PASSWORD 等を変えると既存トークンは全て無効になる（仕様）
+        raw = "derived|" + base
+    return hashlib.sha256(("p1sm-cookie-v1|" + raw).encode("utf-8")).digest()
+
+
+def _cookie_sign(payload: str, secret: bytes) -> str:
+    return hmac.new(secret, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _write_cookie_js(value: str, max_age: int) -> None:
+    """Cookieをブラウザに書く。componentsのiframeはsrcdoc＝同一オリジンなので
+    parent.document.cookie がホストのCookieになる。"""
+    import streamlit.components.v1 as _components
+    _components.html(
+        f"""<script>(function() {{
+  var c = "{_COOKIE_NAME}={value}; Path=/; Max-Age={max_age}; SameSite=Lax" +
+          (window.parent.location.protocol === "https:" ? "; Secure" : "");
+  try {{ window.parent.document.cookie = c; }} catch (e) {{ document.cookie = c; }}
+}})();</script>""",
+        height=0,
+    )
+
+
+def _issue_session_cookie() -> None:
+    """ログイン後の再描画で呼ぶ（st.rerun()直前に書くと描画が捨てられるため、
+    _finish_login はフラグだけ立て、require_admin 側でここを呼ぶ）。"""
+    secret = _session_secret()
+    if not secret:
+        return
+    import base64 as _b64
+    import json as _json
+    data = {
+        "u": str(st.session_state.get(_LOGIN_AS_KEY) or "")[:40],
+        "r": str(st.session_state.get(_ROLE_KEY) or ""),
+        "t": str(st.session_state.get(_LOGIN_AT_KEY) or ""),
+        "de": str(st.session_state.get(_DAY_EXPIRES_KEY) or ""),
+        "di": str(st.session_state.get(_DAY_CODE_ID_KEY) or ""),
+    }
+    payload = _b64.urlsafe_b64encode(
+        _json.dumps(data, ensure_ascii=False).encode("utf-8")).decode().rstrip("=")
+    token = payload + "." + _cookie_sign(payload, secret)
+    _write_cookie_js(token, _SESSION_ABSOLUTE_HOURS * 3600)
+
+
+def _clear_session_cookie() -> None:
+    _write_cookie_js("", 0)
+
+
+def _try_restore_session_from_cookie() -> None:
+    """新セッションの認証前に1回だけ試す。失敗はすべて「復元しない」に倒す。"""
+    if st.session_state.get(_SESSION_KEY) or st.session_state.get(_LOGGED_OUT_FLAG):
+        return
+    secret = _session_secret()
+    if not secret:
+        return
+    try:
+        raw = str(st.context.cookies.get(_COOKIE_NAME) or "")
+    except Exception:
+        return
+    if not raw or "." not in raw:
+        return
+    payload, sig = raw.rsplit(".", 1)
+    if not hmac.compare_digest(_cookie_sign(payload, secret), sig):
+        return
+    import base64 as _b64
+    import json as _json
+    try:
+        data = _json.loads(_b64.urlsafe_b64decode(
+            payload + "=" * (-len(payload) % 4)).decode("utf-8"))
+    except Exception:
+        return
+    user = str(data.get("u") or "")[:40]
+    role = str(data.get("r") or "")
+    login_at = str(data.get("t") or "")
+    from datetime import datetime as _dt, timedelta as _td
+    try:
+        t = _dt.strptime(login_at, "%Y-%m-%d %H:%M:%S").replace(tzinfo=_JST)
+        if _dt.now(_JST) - t > _td(hours=_SESSION_ABSOLUTE_HOURS):
+            return
+    except Exception:
+        return
+    if role == "day":
+        de = str(data.get("de") or "")
+        try:
+            if _dt.now(_JST) >= _dt.fromisoformat(de):
+                return
+        except Exception:
+            return
+        di = data.get("di")
+        try:
+            import db as _db
+            if not _db.is_day_code_active(di):
+                return
+        except Exception:
+            return
+        st.session_state[_DAY_EXPIRES_KEY] = de
+        st.session_state[_DAY_CODE_ID_KEY] = di
+    else:
+        users = _load_app_users()
+        if users:
+            meta = users.get(user)
+            if not meta:
+                return
+            role = str(meta.get("role") or "viewer")
+        elif role != "admin":
+            # 単一パスワードモードで存在しえないロールは復元しない
+            return
+    if not user or not role:
+        return
+    st.session_state[_SESSION_KEY] = True
+    st.session_state[_LOGIN_AT_KEY] = login_at
+    st.session_state[_LOGIN_AS_KEY] = user
+    st.session_state[_ROLE_KEY] = role
+    _touch_session()
+    _log_safe("session_restore", "auth",
+              detail=f"user={user}, role={role}, login_at={login_at}",
+              performed_by=user or "unknown")
+
+
 
 _PWCHANGE_PENDING_KEY = "p1_pwchange_pending"
 
@@ -391,12 +542,31 @@ def require_admin(*, page_name: str = "", roles=("admin",),
         allow_day_code: True の場合「当日運用コード」でも入室可（ピット端末・出退勤用。
                2026-07-28 追加。コードは管理者が発行・翌朝7時JSTに自動失効）。
     """
+    # クッキーからのセッション復元（WebSocket切断・再デプロイ・リロード対応。2026-08-13）
+    if st.session_state.pop(_COOKIE_CLEAR_FLAG, False):
+        _clear_session_cookie()
+    if not is_admin():
+        _try_restore_session_from_cookie()
+
     # 既に認証済み → ロールを確認
     if is_admin():
+        # ログイン直後の再描画でクッキーを発行（st.rerun()前に書くと描画ごと捨てられる）。
+        # さらに10分ごとに再発行する（回線異常などでクッキーが消えた場合の自己修復。
+        # 有効期限はトークン内の login_at で強制されるため、再発行で延命はしない）
+        import time as _time
+        if st.session_state.pop(_COOKIE_ISSUE_FLAG, False):
+            _issue_session_cookie()
+            st.session_state["_p1_cookie_issued_at"] = _time.time()
+        elif _time.time() - float(st.session_state.get("_p1_cookie_issued_at") or 0) > 600:
+            _issue_session_cookie()
+            st.session_state["_p1_cookie_issued_at"] = _time.time()
         # 当日運用コードセッション: 有効期限と対象ページを毎回確認
         # 管理セッションの期限判定（day ロールは別途 expires で管理）
         if current_role() != "day" and _session_expired():
             _clear_session()
+            # クッキーも消す（消さないと直後の復元で無操作期限が骨抜きになる）
+            st.session_state[_LOGGED_OUT_FLAG] = True
+            _clear_session_cookie()
             st.warning("⏰ セッションの有効期限が切れました。もう一度ログインしてください。")
             st.stop()
         _touch_session()
@@ -420,6 +590,8 @@ def require_admin(*, page_name: str = "", roles=("admin",),
                 for _k in (_SESSION_KEY, _LOGIN_AT_KEY, _LOGIN_AS_KEY, _ROLE_KEY,
                            _DAY_EXPIRES_KEY, _DAY_CODE_ID_KEY):
                     st.session_state.pop(_k, None)
+                st.session_state[_LOGGED_OUT_FLAG] = True
+                st.session_state[_COOKIE_CLEAR_FLAG] = True
                 st.warning("⏰ 当日運用コードの有効期限が切れました。再ログインしてください。")
                 st.rerun()
             if allow_day_code:
@@ -566,6 +738,8 @@ def _finish_login(user: str, role: str, page_name: str, note: str = "") -> None:
     st.session_state[_LOGIN_AT_KEY] = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
     st.session_state[_LOGIN_AS_KEY] = (user or "anonymous_admin")[:40]
     st.session_state[_ROLE_KEY] = role
+    st.session_state[_COOKIE_ISSUE_FLAG] = True
+    st.session_state.pop(_LOGGED_OUT_FLAG, None)
     try:
         import db as _db
         _db.touch_app_user_login(user or "")
@@ -683,6 +857,8 @@ def _render_day_code_form(page_name: str) -> None:
                 st.session_state[_DAY_EXPIRES_KEY] = str(info.get("expires_at") or "")
                 st.session_state[_DAY_CODE_ID_KEY] = info.get("id")
                 st.session_state.pop(_DAY_FAILS_KEY, None)
+                st.session_state[_COOKIE_ISSUE_FLAG] = True
+                st.session_state.pop(_LOGGED_OUT_FLAG, None)
                 _log_safe("day_code_login", "auth",
                           detail=f"page={page_name}, by={(op or '').strip()[:40]}, "
                                  f"valid_date={info.get('valid_date')}",
@@ -708,8 +884,10 @@ def admin_logout_button() -> None:
             if st.button("🔓 ログアウト", use_container_width=True):
                 _log_safe("admin_logout", "auth",
                           detail=f"by={operator}", performed_by=operator)
-                for k in (_SESSION_KEY, _LOGIN_AT_KEY, _LOGIN_AS_KEY, _ROLE_KEY):
-                    st.session_state[k] = "" if k != _SESSION_KEY else False
+                _clear_session()
+                # 復元クッキーも無効化（クリアJSは次の描画で require_admin が出す）
+                st.session_state[_LOGGED_OUT_FLAG] = True
+                st.session_state[_COOKIE_CLEAR_FLAG] = True
                 st.rerun()
 
 
