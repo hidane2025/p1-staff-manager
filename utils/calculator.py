@@ -79,7 +79,9 @@ def parse_time_to_minutes(time_str: str) -> Optional[int]:
     """時刻文字列を0:00からの分数に変換。26:00 = 1560分"""
     if not time_str or time_str.strip() in ("", "×", "x", "X", "-"):
         return None
-    clean = time_str.strip().replace("~", "~").replace("〜", "~").replace("-", "~")
+    # 「~を~に置換」という無意味な行が2026-08まで残っていた（区切り文字バグ
+    # 修正時の名残）。単一時刻トークンに区切りは来ないため置換自体を撤去。
+    clean = time_str.strip()
     parts = clean.split(":")
     if len(parts) != 2:
         return None
