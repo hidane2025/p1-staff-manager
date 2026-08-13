@@ -1,4 +1,4 @@
-"""P1 Staff Manager DBスキーマ資料 PDF生成（2026-08-06）
+"""P1 Staff Manager DBスキーマ資料 PDF生成（更新日は GENERATED を参照）
 
 docs/schema.sql（本番DBの内省から自動生成したDDL）を人が読める資料にする。
 外部エンジニアへの提出・社内の引き継ぎ資料として使う。
@@ -28,7 +28,7 @@ from reportlab.lib.units import mm  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = ROOT / "docs/schema.sql"
-GENERATED = "2026-08-06"
+GENERATED = "2026-08-13"
 
 # 列に日本語の意味を与える（DDLだけでは業務的な意味が伝わらないため）
 COL_NOTE = {

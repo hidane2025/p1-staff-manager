@@ -2,7 +2,7 @@
 -- P1 Staff Manager — データベース スキーマ定義（DDL）
 -- ======================================================================
 -- 生成日時   : 2026-08-06 (JST)
--- 対象コード : p1-staff-manager @ 3a9373d
+-- 対象コード : p1-staff-manager @ 245b1b1
 -- データベース : PostgreSQL（Supabase・他事業と同居のため p1_ 接頭辞のみ収録）
 --
 -- 生成方法   : 本番データベースの PostgREST スキーマ内省から自動生成
@@ -34,7 +34,7 @@ CREATE POLICY "p1_admin_totp_service_role_all" ON p1_admin_totp FOR ALL TO servi
 
 -- ---------------------------------------------------------------------
 -- p1_app_users  … ログインアカウント（個人アカウント方式）
---   行数(概算): 0 ／ 機微度: T3（パスワードハッシュ＝認証情報）
+--   行数(概算): 2 ／ 機微度: T3（パスワードハッシュ＝認証情報）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_app_users (
     id bigint DEFAULT nextval('p1_app_users_id_seq'::regclass) NOT NULL,
@@ -57,7 +57,7 @@ CREATE POLICY "p1_app_users_service_role_all" ON p1_app_users FOR ALL TO service
 
 -- ---------------------------------------------------------------------
 -- p1_audit_log  … 監査ログ（誰が・いつ・何をしたか）
---   行数(概算): 2247 ／ 機微度: T1（操作者名を含む）
+--   行数(概算): 2453 ／ 機微度: T1（操作者名を含む）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_audit_log (
     id integer DEFAULT nextval('p1_audit_log_id_seq'::regclass) NOT NULL,
@@ -97,7 +97,7 @@ CREATE POLICY "p1_contract_templates_service_role_all" ON p1_contract_templates 
 
 -- ---------------------------------------------------------------------
 -- p1_contracts  … 発行済み契約書と電子署名の記録
---   行数(概算): 3 ／ 機微度: T2（署名画像・IP・UA＝個人情報）
+--   行数(概算): 0 ／ 機微度: T2（署名画像・IP・UA＝個人情報）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_contracts (
     id integer DEFAULT nextval('p1_contracts_id_seq'::regclass) NOT NULL,
@@ -140,7 +140,7 @@ CREATE POLICY "p1_contracts_service_role_all" ON p1_contracts FOR ALL TO service
 
 -- ---------------------------------------------------------------------
 -- p1_day_codes  … 当日運用コード（現場端末の入場コード）
---   行数(概算): 4 ／ 機微度: T3（当日運用コード＝認証情報）
+--   行数(概算): 10 ／ 機微度: T3（当日運用コード＝認証情報）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_day_codes (
     id bigint DEFAULT nextval('p1_day_codes_id_seq'::regclass) NOT NULL,
@@ -160,7 +160,7 @@ CREATE POLICY "p1_day_codes_service_role_all" ON p1_day_codes FOR ALL TO service
 
 -- ---------------------------------------------------------------------
 -- p1_event_rates  … 日別の単価（時給・深夜・手当）
---   行数(概算): 21
+--   行数(概算): 5
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_event_rates (
     id integer DEFAULT nextval('p1_event_rates_id_seq'::regclass) NOT NULL,
@@ -182,7 +182,7 @@ CREATE POLICY "p1_event_rates_service_role_all" ON p1_event_rates FOR ALL TO ser
 
 -- ---------------------------------------------------------------------
 -- p1_event_transport_rules  … 地域別の交通費ルール（11地域）
---   行数(概算): 44
+--   行数(概算): 12
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_event_transport_rules (
     id integer DEFAULT nextval('p1_event_transport_rules_id_seq'::regclass) NOT NULL,
@@ -201,7 +201,7 @@ CREATE POLICY "p1_event_transport_rules_service_role_all" ON p1_event_transport_
 
 -- ---------------------------------------------------------------------
 -- p1_events  … 大会（イベント）マスター。すべての金額計算の起点
---   行数(概算): 4
+--   行数(概算): 1
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_events (
     id integer DEFAULT nextval('p1_events_id_seq'::regclass) NOT NULL,
@@ -230,7 +230,7 @@ CREATE POLICY "p1_events_service_role_all" ON p1_events FOR ALL TO service_role 
 
 -- ---------------------------------------------------------------------
 -- p1_payments  … 支払い（確定額・承認状態・領収書トークン）
---   行数(概算): 125 ／ 機微度: T2（報酬額＝給与情報。領収書トークンを含む）
+--   行数(概算): 0 ／ 機微度: T2（報酬額＝給与情報。領収書トークンを含む）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_payments (
     id integer DEFAULT nextval('p1_payments_id_seq'::regclass) NOT NULL,
@@ -296,7 +296,7 @@ CREATE POLICY "p1_petty_cash_service_role_all" ON p1_petty_cash FOR ALL TO servi
 
 -- ---------------------------------------------------------------------
 -- p1_shifts  … シフトと出退勤実績（予定/実績/欠勤・食事配布状況）
---   行数(概算): 463
+--   行数(概算): 641
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_shifts (
     id integer DEFAULT nextval('p1_shifts_id_seq'::regclass) NOT NULL,
@@ -332,7 +332,7 @@ CREATE POLICY "p1_shifts_service_role_all" ON p1_shifts FOR ALL TO service_role 
 
 -- ---------------------------------------------------------------------
 -- p1_staff  … スタッフ台帳。氏名・住所・地域・雇用区分
---   行数(概算): 125 ／ 機微度: T2（本名・住所・メール・電話＝個人情報）
+--   行数(概算): 149 ／ 機微度: T2（本名・住所・メール・電話＝個人情報）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_staff (
     id integer DEFAULT nextval('p1_staff_id_seq'::regclass) NOT NULL,
@@ -385,7 +385,7 @@ CREATE POLICY "p1_allowances_service_role_all" ON p1_staff_event_allowances FOR 
 
 -- ---------------------------------------------------------------------
 -- p1_transport_claims  … 交通費の領収書と精算額
---   行数(概算): 0 ／ 機微度: T1（金額）
+--   行数(概算): 5 ／ 機微度: T1（金額）
 -- ---------------------------------------------------------------------
 CREATE TABLE p1_transport_claims (
     id integer DEFAULT nextval('p1_transport_claims_id_seq'::regclass) NOT NULL,
