@@ -243,9 +243,12 @@ finally:
 print("\n[E] ソース配線（viewer 開放・役職一元化・交通費一元化）")
 _att = (ROOT / "pages/5_attendance.py").read_text()
 _check("出退勤は viewer を許可", 'roles=("admin", "viewer")' in _att)
-_check("出退勤の更新ボタンは全て viewer で無効化（button数=disabled数）",
-       _att.count("st.button(") == _att.count("disabled=_READONLY"),
-       f"button={_att.count('st.button(')} disabled={_att.count('disabled=_READONLY')}")
+# 2026-08-14: file_uploader も viewer 無効化対象に含める（CSV取込UI追加のため
+# 「更新系widget数 = disabled数」に拡張。数えるのは st.button と st.file_uploader）
+_widgets = _att.count("st.button(") + _att.count("st.file_uploader(")
+_check("出退勤の更新widgetは全て viewer で無効化（widget数=disabled数）",
+       _widgets == _att.count("disabled=_READONLY"),
+       f"widgets={_widgets} disabled={_att.count('disabled=_READONLY')}")
 # 「viewer が入室できる」＝ require_admin の roles= に viewer を含む場合のみ。
 # （95_users.py は権限選択肢の文言として "viewer" を含むが入室許可ではない）
 _viewer_pages = sorted(f.name for f in (ROOT / "pages").glob("*.py")

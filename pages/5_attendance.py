@@ -772,3 +772,46 @@ if (not _READONLY) and not df.empty and not edited_df.empty:
         if old_note != new_note:
             db.get_client().table("p1_shifts").update({"notes": new_note}).eq("id", shift_id).execute()
             st.rerun()
+
+# ============================================================
+# セクション4: 勤怠CSV取込（TAKAツール連携・2026-08-14 中野さん指示）
+#   Claude/CLIを介さず、TAKAツールが出すCSVをそのまま画面から反映する。
+#   ロジックの正は utils/attendance_csv.py（冪等・支払い済み保護・自動再計算）。
+# ============================================================
+st.divider()
+st.subheader("④ 勤怠CSV取込（TAKAツール）")
+st.caption(
+    "形式: `dealer_number,date,actual_start,actual_end,is_absent`（ヘッダ必須・24時超は 25:30 表記・欠勤は is_absent=1）。"
+    "CSV内の日付で反映されるため、上の日付選択とは無関係です。"
+    "同じファイルを2回入れても安全（変化のない行は何もしません）。"
+    "支払い済み・承認済みの人は変更されず、差分だけ表示されます。"
+)
+_csv_file = st.file_uploader(
+    "p1_attendance_*.csv を選択", type=["csv"],
+    key="att_csv_upload", disabled=_READONLY)
+if _csv_file is not None and st.button(
+        "📥 このCSVを反映する", type="primary", disabled=_READONLY,
+        key="att_csv_import_btn"):
+    from utils.attendance_csv import import_attendance_csv
+    try:
+        with st.spinner("取込・再計算中…（人数分の再計算が走るため1〜3分かかります）"):
+            _rep = import_attendance_csv(
+                _csv_file.getvalue(), event_id, performed_by=operator_name())
+    except Exception as _e:
+        st.error(f"❌ 取込できませんでした: {_e}")
+    else:
+        st.success(
+            f"✅ {_rep['total']}行を処理: 実績更新 {len(_rep['updated'])}名 / "
+            f"行新規作成 {len(_rep['created'])}名 / 欠勤 {len(_rep['absent'])}名 / "
+            f"変化なし {_rep['noop']}名（金額は自動再計算済み）")
+        if _rep["invalid"]:
+            st.error("⛔ 形式不正で反映しなかった行:\n- " + "\n- ".join(_rep["invalid"]))
+        if _rep["unknown"]:
+            st.warning(
+                "❓ NO.がスタッフ台帳に無く反映できなかった行: "
+                + ", ".join(_rep["unknown"])
+                + "（スタッフ管理で登録後にもう一度アップロードしてください）")
+        if _rep["protected_diff"]:
+            st.warning(
+                "🛡 支払い済み/承認済みのため変更しなかった差分（要確認）:\n- "
+                + "\n- ".join(_rep["protected_diff"]))
