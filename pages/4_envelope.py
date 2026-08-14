@@ -90,14 +90,19 @@ def _sum(cond):
     return sum(r["確定額"] for r in rows if cond(r))
 
 kpi_row([
-    ("✅ 現金支払い済み", f"¥{_sum(lambda r: r['_status'] == 'paid' and not r['後日振込']):,}",
-     f"{sum(1 for r in rows if r['_status'] == 'paid' and not r['後日振込'])}名"),
-    ("✅ 振込済み", f"¥{_sum(lambda r: r['_status'] == 'paid' and r['後日振込']):,}",
-     f"{sum(1 for r in rows if r['_status'] == 'paid' and r['後日振込'])}名"),
-    ("🏦 振込待ち（確定）", f"¥{_sum(lambda r: r['_status'] == 'approved' and r['後日振込']):,}",
-     f"{sum(1 for r in rows if r['_status'] == 'approved' and r['後日振込'])}名"),
-    ("⏳ 金額変動中", f"¥{_sum(lambda r: r['_status'] == 'pending'):,}",
-     f"{sum(1 for r in rows if r['_status'] == 'pending')}名"),
+    {"label": "✅ 現金支払い済み",
+     "value": f"¥{_sum(lambda r: r['_status'] == 'paid' and not r['後日振込']):,}",
+     "detail": f"{sum(1 for r in rows if r['_status'] == 'paid' and not r['後日振込'])}名"},
+    {"label": "✅ 振込済み",
+     "value": f"¥{_sum(lambda r: r['_status'] == 'paid' and r['後日振込']):,}",
+     "detail": f"{sum(1 for r in rows if r['_status'] == 'paid' and r['後日振込'])}名"},
+    {"label": "🏦 振込待ち（確定）",
+     "value": f"¥{_sum(lambda r: r['_status'] == 'approved' and r['後日振込']):,}",
+     "detail": f"{sum(1 for r in rows if r['_status'] == 'approved' and r['後日振込'])}名",
+     "warning": any(r['_status'] == 'approved' and r['後日振込'] for r in rows)},
+    {"label": "⏳ 金額変動中",
+     "value": f"¥{_sum(lambda r: r['_status'] == 'pending'):,}",
+     "detail": f"{sum(1 for r in rows if r['_status'] == 'pending')}名"},
 ])
 
 # ============================================================
