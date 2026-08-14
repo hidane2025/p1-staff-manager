@@ -72,3 +72,27 @@
 - 保存・修正のたびの送信でOK（毎分120回まで）
 - 受信は全件監査ログに記録（NO.・時刻・attendance_key・操作主体=API）
 - 障害時は蓄積→復旧後に自動再送で問題ない設計（4xxだけは再送せず内容修正）
+
+
+## 7. CSV一括エンドポイント（2026-08-15 追加・自動連動用）
+
+`POST /api/attendance/csv` — 「勤怠CSV出力」で作るCSVを**そのまま**ボディに入れて送るだけ。
+
+| 項目 | 値 |
+|---|---|
+| Body | CSVテキスト（UTF-8/BOM可。列は `dealer_number,date,actual_start,actual_end,is_absent[,is_mix]`） |
+| 認証 | §2と同じ（Basic + X-API-Key） |
+| クエリ | `overwrite=1`=手入力上書き（省略時は手入力保護＝打刻済み行を変更しない） / `event_id`=明示指定（省略時はCSV先頭行の日付から解決） |
+| 冪等 | 同じCSVを何度送っても安全。支払い済み・承認済みは常に保護 |
+
+**成功（200）**
+```json
+{"status":"ok","mode":"protect","event_id":11,
+ "counts":{"total":120,"updated":12,"created":1,"absent":0,"noop":98,
+           "kept_manual":5,"mix_only":2,"unknown":0,"invalid":0,"external":9,"recalced":15},
+ "kept_manual":["NO.55 ○○ 8/14 手入力=…-… / CSV=…-…"],
+ "protected_diff":[], "unknown":[], "invalid":[]}
+```
+
+**推奨運用**: 15分ごと（または打刻保存のたび）に当日分を送信。
+障害時は従来どおりCSVファイルを画面（出退勤ページ④）へ手動アップロードすればよい。

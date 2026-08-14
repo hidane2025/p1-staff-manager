@@ -33,7 +33,8 @@ from base64 import b64decode
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 
@@ -266,3 +267,60 @@ def upsert_attendance(payload: AttendancePayload) -> dict:
     if duplicates:
         res["warning"] = f"同一キーのシフト行が{duplicates + 1}件あり先頭を更新しました"
     return res
+
+
+@app.post("/api/attendance/csv")
+async def upsert_attendance_csv(request: Request) -> dict:
+    """勤怠CSVをそのまま受け取る一括エンドポイント（2026-08-15 自動連動用）。
+
+    TAKAツールが「勤怠CSV出力」で作る文字列を、ダウンロードの代わりに
+    ここへPOSTするだけで取り込まれる（画面アップロードと同一ロジック）。
+
+    - Body: CSVそのもの（UTF-8/BOM可・列は画面取込と同じ。is_mix任意）
+    - クエリ overwrite=1: 手入力上書きモード（既定は手入力保護）
+    - クエリ event_id: 明示指定（省略時はCSV先頭行の日付から解決）
+    - 認証はミドルウェア（Basic + X-API-Key）が本文検証より先に効く
+    - 冪等: 同じCSVを何度送っても安全。支払い済み・承認済みは常に保護
+    """
+    body = await request.body()
+    if not body or not body.strip():
+        raise HTTPException(422, detail={
+            "status": "error", "error": "empty_body", "retry": False})
+    overwrite = request.query_params.get("overwrite") == "1"
+    event_q = request.query_params.get("event_id")
+    if event_q is not None:
+        try:
+            event_id = int(event_q)
+        except ValueError:
+            raise HTTPException(422, detail={
+                "status": "error", "error": "bad_event_id", "retry": False})
+    else:
+        import csv as _csv
+        import io as _io
+        try:
+            _first = next(iter(_csv.DictReader(_io.StringIO(
+                body.decode("utf-8-sig", errors="replace")))))
+        except StopIteration:
+            _first = {}
+        ev = _event_for_date(str((_first or {}).get("date") or "").strip())
+        if not ev:
+            raise HTTPException(404, detail={
+                "status": "error", "error": "no_event_for_date", "retry": False})
+        event_id = ev["id"]
+    from utils.attendance_csv import import_attendance_csv
+    try:
+        rep = await run_in_threadpool(
+            import_attendance_csv, bytes(body), event_id,
+            "TAKAツール自動連携", overwrite)
+    except ValueError as e:
+        raise HTTPException(422, detail={
+            "status": "error", "error": str(e), "retry": False})
+    return {"status": "ok",
+            "mode": "overwrite" if overwrite else "protect",
+            "event_id": event_id,
+            "counts": {k: (v if isinstance(v, int) else len(v))
+                       for k, v in rep.items()},
+            "kept_manual": rep["kept_manual"],
+            "protected_diff": rep["protected_diff"],
+            "unknown": rep["unknown"],
+            "invalid": rep["invalid"]}

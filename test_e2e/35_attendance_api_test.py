@@ -187,6 +187,48 @@ _check("重複行があれば先頭を更新し warning を返す",
        res.json().get("warning") and len(w) == 1, str(res.json()))
 
 print()
+print("\n[CSV一括エンドポイント（2026-08-15 自動連動）]")
+# 認証はミドルウェアが先行（本文なしでも401）
+res = c.post("/api/attendance/csv", content=b"")
+_check("CSV: 認証なしは401", res.status_code == 401, str(res.status_code))
+res = c.post("/api/attendance/csv", content=b"", headers=_auth())
+_check("CSV: 空ボディは422", res.status_code == 422, str(res.status_code))
+_saved_evfn = m._event_for_date
+m._event_for_date = lambda d: None
+res = c.post("/api/attendance/csv", content="a,b\n1,2".encode(), headers=_auth())
+_check("CSV: イベント未解決は404", res.status_code == 404, str(res.status_code))
+m._event_for_date = _saved_evfn
+
+# 取込本体はモック（画面アップロードと同一ロジックはtest36で担保済み）
+import utils.attendance_csv as _acsv
+_calls = []
+def _fake_import(body, event_id, performed_by="", overwrite_manual=False):
+    _calls.append({"event_id": event_id, "overwrite": overwrite_manual})
+    return {"total": 2, "updated": ["NO.55 A太"], "created": [], "absent": [],
+            "noop": 1, "unknown": [], "protected_diff": [], "invalid": [],
+            "external": [], "kept_manual": ["NO.76 B子 保持"], "mix_only": [],
+            "recalced": 1}
+_orig_import = _acsv.import_attendance_csv
+_acsv.import_attendance_csv = _fake_import
+m._event_for_date = lambda d: {"id": 11}
+try:
+    _csv_body = ("dealer_number,date,actual_start,actual_end,is_absent\n"
+                 "0055,2026-08-12,12:00,25:00,0\n").encode()
+    res = c.post("/api/attendance/csv", content=_csv_body, headers=_auth())
+    _check("CSV: 200・既定は手入力保護モード",
+           res.status_code == 200 and res.json()["mode"] == "protect"
+           and _calls[-1]["overwrite"] is False, str(res.json())[:120])
+    _check("CSV: 日付からイベント解決", _calls[-1]["event_id"] == 11)
+    _check("CSV: 保持リストを返す",
+           res.json()["kept_manual"] == ["NO.76 B子 保持"])
+    res = c.post("/api/attendance/csv?overwrite=1&event_id=11",
+                 content=_csv_body, headers=_auth())
+    _check("CSV: overwrite=1で上書きモード",
+           res.json()["mode"] == "overwrite" and _calls[-1]["overwrite"] is True)
+finally:
+    _acsv.import_attendance_csv = _orig_import
+    m._event_for_date = _saved_evfn
+
 print("=" * 60)
 if failures:
     print(f"❌ 失敗 {len(failures)}件: {failures}")
