@@ -221,6 +221,71 @@ with col_bulk3:
             st.session_state["confirm_reset"] = False
             st.rerun()
 
+# --- 選んで退勤（2026-08-14 中野さん要望「一定の人だけまとめて退勤させたい」） ---
+with st.expander("🎯 選んで退勤（対象者だけまとめて退勤確定）", expanded=False):
+    _paid_ids = {p["staff_id"] for p in (db.get_payments_for_event(event_id) or [])
+                 if p.get("status") == "paid"}
+    _sel_pool = [s for s in shifts
+                 if s["status"] in ("checked_in", "scheduled")
+                 and s["staff_id"] not in _paid_ids]
+    if not _sel_pool:
+        st.info("退勤できる人（出勤中・未確定）がいません。")
+    else:
+        _sel_opts = {
+            f"NO.{s['no']} {s['name_jp']}（予定 {s['planned_start']}〜{s['planned_end']}）": s
+            for s in sorted(_sel_pool, key=lambda x: x.get("no") or 9999)}
+        _sel = st.multiselect(
+            "退勤させる人（複数選択）", list(_sel_opts.keys()),
+            key="sel_checkout_people",
+            placeholder="名前・NO.で絞り込みできます")
+        _mode = st.radio(
+            "退勤時刻", ["各自の予定時刻で確定", "時刻を指定して全員同時刻"],
+            horizontal=True, key="sel_checkout_mode")
+        _fixed_end = None
+        if _mode == "時刻を指定して全員同時刻":
+            _c1, _c2 = st.columns(2)
+            _now_h = int(datetime.now(_JST).strftime("%H"))
+            if _now_h < 7:
+                _now_h += 24  # 深夜帯は24時超表記（25:00等）に合わせる
+            _sc_h = _c1.selectbox("時", list(range(0, 31)), index=_now_h,
+                                  key="sel_checkout_h")
+            _sc_m = _c2.selectbox("分", MINUTE_CHOICES, key="sel_checkout_m")
+            _fixed_end = f"{int(_sc_h):02d}:{int(_sc_m):02d}"
+        if st.button(f"🔴 選択した {len(_sel)}名 を退勤確定", type="primary",
+                     disabled=_READONLY or not _sel, key="sel_checkout_btn"):
+            client = db.get_client()
+            ok_n, fails, _aff = 0, [], []
+            for _label in _sel:
+                s = _sel_opts[_label]
+                try:
+                    _end = _fixed_end or s.get("actual_end") or s["planned_end"]
+                    if not _end:
+                        fails.append(f"NO.{s.get('no')}(予定時刻なし)")
+                        continue
+                    client.table("p1_shifts").update({
+                        "actual_end": _end,
+                        "actual_start": s.get("actual_start") or s["planned_start"],
+                        "status": "checked_out",
+                    }).eq("id", s["id"]).execute()
+                    db.reset_payment_to_pending(
+                        event_id, s["staff_id"], reason=f"選択退勤 {_end}（要再計算）")
+                    _aff.append(s["staff_id"])
+                    ok_n += 1
+                except Exception:
+                    fails.append(str(s.get("no") or s["id"]))
+            from utils.payment_recalc import recalc_staff_payments as _recalc_sel
+            _recalc_sel(event_id, _aff)
+            db.log_action(
+                "bulk_checkout_selected", "shifts",
+                detail=f"{selected_date} 選択退勤 {ok_n}名"
+                       f"（{'指定 ' + _fixed_end if _fixed_end else '各自予定時刻'}）",
+                event_id=event_id, performed_by=operator_name())
+            if fails:
+                st.warning(f"⚠️ {ok_n}名を退勤確定、{len(fails)}名は失敗: {', '.join(fails)}")
+            else:
+                st.success(f"{ok_n}名を退勤確定しました（金額も再計算済み）")
+                st.rerun()
+
 # ============================================================
 # セクション2: 例外だけ記録
 # ============================================================
