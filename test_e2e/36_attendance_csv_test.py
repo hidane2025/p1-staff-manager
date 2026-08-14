@@ -79,7 +79,9 @@ def make_fake_db(store):
     return m
 
 
-def run_import(csv_text, store):
+def run_import(csv_text, store, overwrite=True):
+    """overwrite=True が既存テストの前提（従来の全上書き動作）。
+    既定Falseの手入力保護モードは [C4] で明示的に検証する。"""
     fake = make_fake_db(store)
     saved_db = sys.modules.get("db")
     sys.modules["db"] = fake
@@ -90,7 +92,8 @@ def run_import(csv_text, store):
     try:
         from utils.attendance_csv import import_attendance_csv
         return import_attendance_csv(csv_text.encode("utf-8-sig"), 11,
-                                     performed_by="test")
+                                     performed_by="test",
+                                     overwrite_manual=overwrite)
     finally:
         pr.recalc_staff_payments = saved_recalc
         if saved_db is not None:
@@ -211,6 +214,39 @@ rep = run_import(
 _check("APL側はexternalに分類", rep["external"] == ["NO.1001"], str(rep["external"]))
 _check("それ以外の未登録はunknownのまま", rep["unknown"] == ["NO.999"], str(rep["unknown"]))
 _check("どちらも書き込みなし", not st["updated"] and not st["inserted"])
+
+print("[C4] 手入力保護モード（既定・2026-08-15 中野さん指示）")
+st = base_store()
+rep = run_import(
+    "dealer_number,date,actual_start,actual_end,is_absent,is_mix\n"
+    "0055,2026-08-12,12:00,27:00,0,\n"     # 打刻済み行 → 保持（時刻変更しない）
+    "0090,2026-08-12,10:00,20:00,0,\n"     # 空の行 → 埋める
+    "0076,2026-08-12,20:00,29:00,0,\n",    # 行なし → 新規作成
+    st, overwrite=False)
+_check("打刻済み行は変更しない", len(rep["kept_manual"]) == 1
+       and "27:00" in rep["kept_manual"][0], str(rep["kept_manual"]))
+_check("時刻の上書きが発生していない",
+       all(u["data"].get("actual_end") != "27:00" for u in st["updated"]),
+       str(st["updated"]))
+_check("空の行は埋める", any(u["data"].get("actual_end") == "20:00" for u in st["updated"]))
+_check("行なしは新規作成", len(rep["created"]) == 1, str(rep["created"]))
+st = base_store()
+rep = run_import(
+    "dealer_number,date,actual_start,actual_end,is_absent,is_mix\n"
+    "0055,2026-08-12,12:00,27:00,0,1\n",   # 打刻済み＋MIX → 時刻保持・MIXだけ反映
+    st, overwrite=False)
+_check("保護モードでもMIXフラグは反映",
+       rep["mix_only"] == ["NO.55 A太"]
+       and st["updated"] and st["updated"][0]["data"] == {"is_mix": 1},
+       f"{rep['mix_only']} {st['updated']}")
+_check("MIX反映時も時刻差分は保持リストへ", len(rep["kept_manual"]) == 1)
+st = base_store()
+rep = run_import(
+    "dealer_number,date,actual_start,actual_end,is_absent,is_mix\n"
+    "0055,2026-08-12,10:00,20:00,0,\n",    # 打刻済み行への欠勤・時刻変更なしCSV
+    st, overwrite=True)
+_check("上書きモードは従来どおり更新", len(rep["updated"]) == 1
+       and st["updated"][0]["data"]["actual_end"] == "20:00")
 
 print("[D] 空行（出勤なし・欠勤でもない）は行を作らない")
 st = base_store()

@@ -872,6 +872,12 @@ st.caption(
 _csv_file = st.file_uploader(
     "p1_attendance_*.csv を選択", type=["csv"],
     key="att_csv_upload", disabled=_READONLY)
+# 2026-08-15 中野さん指示: 画面・ピットで打刻済みの記録をCSVが潰さないよう、
+# 既定は「手入力保護」。全上書きは明示的にチェックした時だけ。
+_csv_overwrite = st.checkbox(
+    "⚠️ 手入力済みの実績も上書きする（TAKAデータを正として一括修正したい時だけON）",
+    value=False, key="att_csv_overwrite")
+st.caption("OFF（推奨・既定）: 打刻済みの行は変更せず、空の行を埋める＋MIXフラグだけ反映します。")
 if _csv_file is not None and st.button(
         "📥 このCSVを反映する", type="primary", disabled=_READONLY,
         key="att_csv_import_btn"):
@@ -879,14 +885,26 @@ if _csv_file is not None and st.button(
     try:
         with st.spinner("取込・再計算中…（人数分の再計算が走るため1〜3分かかります）"):
             _rep = import_attendance_csv(
-                _csv_file.getvalue(), event_id, performed_by=operator_name())
+                _csv_file.getvalue(), event_id, performed_by=operator_name(),
+                overwrite_manual=_csv_overwrite)
     except Exception as _e:
         st.error(f"❌ 取込できませんでした: {_e}")
     else:
         st.success(
             f"✅ {_rep['total']}行を処理: 実績更新 {len(_rep['updated'])}名 / "
             f"行新規作成 {len(_rep['created'])}名 / 欠勤 {len(_rep['absent'])}名 / "
-            f"変化なし {_rep['noop']}名 / 金額再計算 {_rep.get('recalced', 0)}名")
+            f"変化なし {_rep['noop']}名 / 金額再計算 {_rep.get('recalced', 0)}名"
+            + (f" / MIXのみ反映 {len(_rep['mix_only'])}名"
+               if _rep.get("mix_only") else ""))
+        if _rep.get("kept_manual"):
+            with st.expander(
+                    f"✋ 手入力を優先して保持した行 {len(_rep['kept_manual'])}件"
+                    "（CSVと違いますが変更していません）"):
+                for _k in _rep["kept_manual"]:
+                    st.text(_k)
+                st.caption(
+                    "CSV側を正として直したい場合は、上の「⚠️ 上書き」にチェックを"
+                    "入れて再アップロードしてください。")
         st.caption("この画面の一覧・人数はページを再読み込みすると最新になります。")
         if _rep["invalid"]:
             st.error("⛔ 形式不正で反映しなかった行:\n- " + "\n- ".join(_rep["invalid"]))

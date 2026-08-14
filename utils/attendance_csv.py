@@ -34,8 +34,16 @@ APL_EXTERNAL_NOS = {1001, 1002, 1003, 1004, 1005, 1007, 1008, 1009, 1010}
 
 
 def import_attendance_csv(file_bytes: bytes, event_id: int,
-                          performed_by: str = "") -> dict:
-    """CSVバイト列を取り込み、結果レポートを返す。例外は呼び出し側で拾う。"""
+                          performed_by: str = "",
+                          overwrite_manual: bool = False) -> dict:
+    """CSVバイト列を取り込み、結果レポートを返す。例外は呼び出し側で拾う。
+
+    overwrite_manual（2026-08-15 中野さん指示で追加・既定False）:
+        False = 手入力保護モード。既に実績（実到着/実退勤）や欠勤が入っている行は
+                CSVが違う値を持っていても**変更しない**（差分は kept_manual に報告）。
+                空の行を埋める・行を新規作成する・MIXフラグを反映するだけ。
+        True  = 従来どおりCSVを正として上書き（TAKAデータで一括修正したい時だけ）。
+    """
     import db
     from utils.calculator import parse_time_to_minutes
     from utils.payment_recalc import recalc_staff_payments
@@ -68,7 +76,7 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
 
     rep = {"total": len(rows), "updated": [], "created": [], "absent": [],
            "noop": 0, "unknown": [], "protected_diff": [], "invalid": [],
-           "external": [], "recalced": 0}
+           "external": [], "kept_manual": [], "mix_only": [], "recalced": 0}
     affected_ids: list = []
     for r in rows:
         try:
@@ -121,6 +129,28 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
                 f" / CSV={a_start or '—'}-{a_end or '—'}{'(欠勤)' if is_abs else ''}")
             continue
         label = f"NO.{no} {st_['name_jp']}"
+        # 手入力保護モード（既定）: 実績や欠勤が既に入っている行は時刻・欠勤を変えない。
+        # 画面・ピットで打った記録をCSVが黙って潰す事故の防止（2026-08-15 中野さん指示）。
+        # MIXフラグだけはTAKAツールが唯一の情報源なので、保護モードでも反映する。
+        _has_manual = row is not None and (
+            row.get("actual_start") or row.get("actual_end")
+            or row.get("status") == "absent")
+        if not overwrite_manual and _has_manual:
+            if mix_changed:
+                c.table("p1_shifts").update(
+                    {"is_mix": want_mix}).eq("id", row["id"]).execute()
+                db.reset_payment_to_pending(
+                    event_id, st_["id"], reason="勤怠CSV取込・MIXフラグのみ反映")
+                affected_ids.append(st_["id"])
+                rep["mix_only"].append(label)
+            if cur != (a_start, a_end, is_abs):
+                rep["kept_manual"].append(
+                    f"{label} {date} 手入力={cur[0] or '—'}-{cur[1] or '—'}"
+                    f"{'(欠勤)' if cur[2] else ''}"
+                    f" / CSV={a_start or '—'}-{a_end or '—'}{'(欠勤)' if is_abs else ''}")
+            elif not mix_changed:
+                rep["noop"] += 1
+            continue
         # 金額の再計算は最後にまとめて行う（1人ずつだと人数×10クエリで数分かかる）
         if is_abs:
             if row is None:
@@ -163,8 +193,10 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
 
     db.log_action(
         "attendance_csv_import", "shifts",
-        detail=(f"勤怠CSV取込: 更新{len(rep['updated'])}・新規{len(rep['created'])}"
+        detail=(f"勤怠CSV取込({'上書き' if overwrite_manual else '手入力保護'}): "
+                f"更新{len(rep['updated'])}・新規{len(rep['created'])}"
                 f"・欠勤{len(rep['absent'])}・一致{rep['noop']}"
+                f"・手入力保持{len(rep['kept_manual'])}・MIXのみ{len(rep['mix_only'])}"
                 f"・保護差分{len(rep['protected_diff'])}"
                 f"・未登録{len(rep['unknown'])}・不正{len(rep['invalid'])}"
                 f"・APL対象外{len(rep['external'])}"),
