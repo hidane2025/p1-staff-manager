@@ -55,7 +55,11 @@ else:
             })
 
 # 並び順を統一
-rules_for_edit = sorted(rules_for_edit, key=lambda r: REGIONS.index(r["region"]))
+# 未知の地域名でも落とさない（DB先行追加やリネームへの防御）
+rules_for_edit = sorted(
+    rules_for_edit,
+    key=lambda r: (REGIONS.index(r["region"]) if r["region"] in REGIONS
+                   else len(REGIONS)))
 
 rules_df = pd.DataFrame([
     {

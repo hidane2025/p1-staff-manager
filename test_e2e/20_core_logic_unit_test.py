@@ -452,7 +452,7 @@ _check("京都府住所 → 京都府/近畿",
 
 # default_regions_for_event
 rules = default_regions_for_event("愛知県")
-_check("11地域分のルール生成", len(rules) == 11)
+_check("12地域分のルール生成（2026-08-14 海外を追加）", len(rules) == 12)
 tokai = next(r for r in rules if r["region"] == "東海")
 _check("愛知開催時、東海ルールはvenue扱い",
        tokai["is_venue_region"] == 1 and tokai["receipt_required"] == 0)

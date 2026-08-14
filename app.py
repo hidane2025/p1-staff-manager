@@ -69,6 +69,11 @@ def _build_status() -> dict:
         "payment_count": 0,
         # Codex P2 #14 fix: 期待される支払いスタッフ数（出勤シフトのある人数）
         "expected_paid_staff": 0,
+        # 2026-08-14: 支払い方法別（現金/後日振込）の進捗
+        "transfer_wait": 0,
+        "transfer_wait_total": 0,
+        "transfer_done": 0,
+        "cash_paid": 0,
     }
     try:
         events = db.get_all_events() or []
@@ -126,11 +131,13 @@ def _build_status() -> dict:
 
             payments = db.get_payments_for_event(event_id) or []
             out["payment_count"] = len(payments)
+            from utils import payment_method as _pm
             for p in payments:
                 status = p.get("status", "pending")
                 # A-6: ダッシュボードの金額も確定額(payable_amount)で集計し、
                 # 封筒・領収書・精算レポートと一致させる（端数処理ありで過小表示しない）。
                 _amt = db.get_payable(p)
+                _is_tr = _pm.method_of(p) == "transfer"
                 if status == "pending":
                     out["pending_count"] += 1
                     out["pending_total"] += _amt
@@ -139,8 +146,15 @@ def _build_status() -> dict:
                     out["approved_total"] += _amt
                     if not p.get("receipt_received"):
                         out["receipt_pending"] += 1
+                    if _is_tr:
+                        out["transfer_wait"] += 1
+                        out["transfer_wait_total"] += _amt
                 elif status == "paid":
                     out["paid_count"] += 1
+                    if _is_tr:
+                        out["transfer_done"] += 1
+                    else:
+                        out["cash_paid"] += 1
     except Exception:
         # DB接続失敗等でも画面は壊さない
         pass
@@ -154,8 +168,8 @@ ev = status["active_event"]
 # UX A: 今日のTo-Doリスト（最上部・一番大きい）
 # ============================================================
 st.markdown('<div class="p1-section"><h3>✅ 今日のTo-Do</h3>'
-            '<p class="p1-section-help">大会のセットアップから締めまでの進捗。'
-            'リストの上から順に進めれば締めまで届きます。</p></div>',
+            '<p class="p1-section-help">準備業務（大会前）→ 当日業務（毎日）→ '
+            '後日業務（大会後）の順に進めます。</p></div>',
             unsafe_allow_html=True)
 
 
@@ -171,21 +185,24 @@ def _todo_status(condition_done: bool, condition_warn: bool = False,
 
 
 if ev:
-    # 各タスクの状態判定
-    todo_items = [
+    # 2026-08-14 中野さん指示: 準備業務／当日業務／後日業務の3部構成に再編
+    # --- ① 準備業務（大会前） ---
+    st.markdown('**🛠 準備業務（大会前）**')
+    st.caption("※シフト・スタッフの取込は現在一部AI支援。ツール単独で完結できるよう改善余地あり")
+    progress_checklist([
         {
             "label": f"イベント作成: {ev.get('name', '—')}",
             "detail": f"{ev.get('start_date', '—')} 〜 {ev.get('end_date', '—')}  ／ 会場: {ev.get('venue', '')}",
             "status": "done",
         },
         {
-            "label": "レート設定（日別単価）",
-            "detail": f"{status['rates_count']}日分 設定済み"
-                      if status['rates_count'] else "未設定 — シフト取込で自動補完されます",
-            "status": _todo_status(
-                status['rates_count'] > 0,
-                False,
+            "label": "レート設定（時給・手当・交通費）",
+            "detail": (
+                f"{status['rates_count']}日分 設定済み（日別単価・MIX/フロア手当。"
+                "交通費ルールは 🚃 交通費ページ）"
+                if status['rates_count'] else "未設定 — シフト取込で自動補完されます"
             ),
+            "status": _todo_status(status['rates_count'] > 0, False),
             "page": "pages/0_event_setup.py",
             "page_label": "📋 イベント設定を開く",
         },
@@ -201,7 +218,7 @@ if ev:
             "page_label": "👥 スタッフ管理を開く",
         },
         {
-            "label": "シフト取込",
+            "label": "シフト登録",
             "detail": f"{status['shift_count']}件 取込済み"
                       if status['shift_count'] else "未取込",
             "status": _todo_status(
@@ -211,8 +228,13 @@ if ev:
             "page": "pages/2_shift_import.py",
             "page_label": "📅 シフト取込を開く",
         },
+    ])
+
+    # --- ② 当日業務（大会中・毎日） ---
+    st.markdown('**🔴 当日業務（大会中・毎日）**')
+    progress_checklist([
         {
-            "label": "出退勤の例外記録",
+            "label": "出退勤記録（打刻・CSV取込）",
             "detail": (
                 f"未確定 {status['exception_unconfirmed']}人 ／ 例外記録 {status['exception_count']}件"
                 if status['shift_count'] else "シフト取込後に確認できます"
@@ -225,9 +247,8 @@ if ev:
             "page_label": "🕐 出退勤を開く",
         },
         {
-            "label": "支払い計算",
+            "label": "支払い計算・本人承認",
             "detail": (
-                # Codex P2 #14 fix: 期待スタッフ数と比較
                 f"計算済み {status['payment_count']}/{status['expected_paid_staff']}人 ／ "
                 f"未承認 {status['pending_count']}人"
                 if status['payment_count'] else (
@@ -237,7 +258,6 @@ if ev:
                 )
             ),
             "status": _todo_status(
-                # 完了条件: 期待スタッフ全員分の計算 + 未承認ゼロ
                 (status['expected_paid_staff'] > 0
                  and status['payment_count'] >= status['expected_paid_staff']
                  and status['pending_count'] == 0),
@@ -249,7 +269,42 @@ if ev:
             "page_label": "💰 支払い計算を開く",
         },
         {
-            "label": "領収書受領",
+            "label": "当日支払い／後日振込チェック",
+            "detail": (
+                f"現金支払い済み {status['cash_paid']}人 ／ "
+                f"振込待ち {status['transfer_wait']}人 ／ 振込済み {status['transfer_done']}人"
+            ),
+            "status": _todo_status(
+                (status['expected_paid_staff'] > 0
+                 and status['paid_count'] >= status['expected_paid_staff']),
+                0 < status['paid_count'] < (status['expected_paid_staff']
+                                            or status['payment_count']),
+            ),
+            "page": "pages/4_envelope.py",
+            "page_label": "💴 支払い管理を開く",
+        },
+    ])
+
+    # --- ③ 後日業務（大会後） ---
+    st.markdown('**📮 後日業務（大会後）**')
+    progress_checklist([
+        {
+            "label": "振込対象者への振込",
+            "detail": (
+                f"振込待ち {status['transfer_wait']}人（¥{status['transfer_wait_total']:,}）"
+                if status['transfer_wait']
+                else (f"振込済み {status['transfer_done']}人・待ちなし"
+                      if status['transfer_done'] else "振込対象者はいません")
+            ),
+            "status": _todo_status(
+                status['transfer_wait'] == 0,
+                status['transfer_wait'] > 0,
+            ),
+            "page": "pages/4_envelope.py",
+            "page_label": "💴 支払い管理を開く",
+        },
+        {
+            "label": "領収書発行・受領",
             "detail": (
                 f"配布待ち {status['receipt_pending']}件" if status['receipt_pending']
                 else (f"全員受領済み（{status['approved_count']}人）"
@@ -263,27 +318,13 @@ if ev:
             "page_label": "📄 領収書発行を開く",
         },
         {
-            "label": "支払い完了",
-            "detail": (
-                # Codex P2 #14 fix: 期待数と比較
-                f"{status['paid_count']}/{status['expected_paid_staff']}人 支払済み"
-                if status['expected_paid_staff'] else (
-                    f"{status['paid_count']}人 支払済み"
-                    if status['payment_count'] else "計算後に表示されます"
-                )
-            ),
-            "status": _todo_status(
-                # 完了条件: 期待スタッフ全員分が paid 状態
-                (status['expected_paid_staff'] > 0
-                 and status['paid_count'] >= status['expected_paid_staff']),
-                0 < status['paid_count'] < (status['expected_paid_staff']
-                                            or status['payment_count']),
-            ),
-            "page": "pages/6_report.py",
-            "page_label": "📊 精算レポートを開く",
+            "label": "業務委託契約書の発行",
+            "detail": "未締結者への一括発行・メール署名依頼はこちらから",
+            "status": "todo",
+            "page": "pages/94_contract_issue.py",
+            "page_label": "✍️ 契約書発行を開く",
         },
-    ]
-    progress_checklist(todo_items)
+    ])
 else:
     st.warning(
         "⚠️ まだイベントが作成されていません。"
