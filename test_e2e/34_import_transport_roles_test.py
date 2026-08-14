@@ -274,8 +274,8 @@ from utils.roles import DEALER_LINE_ROLES, ATTENDANCE_BONUS_ROLES as _ABR  # noq
 _check("精勤対象＝ディーラーライン（定義が同一オブジェクト）", _ABR is DEALER_LINE_ROLES)
 _check("出退勤に部門フィルタがあり一括操作より前に効く",
        "attend_dept" in (ROOT / "pages/5_attendance.py").read_text())
-_check("封筒に部門フィルタがある",
-       "env_dept" in (ROOT / "pages/4_envelope.py").read_text())
+_check("支払い管理に部門フィルタがある",
+       "pay_admin_dept" in (ROOT / "pages/4_envelope.py").read_text())
 _check("日当対象は Floor/TD/Pit/Chip",
        set(DAY_ALLOWANCE_ROLES) == {"Floor", "TD", "Pit", "Chip"}, str(DAY_ALLOWANCE_ROLES))
 import utils.calculator as _calc  # noqa: E402

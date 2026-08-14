@@ -406,15 +406,19 @@ _check("基本給ラベルに控除後と明記", "休憩控除後" in _pay)
 _check("個別手当は実テーブルから集計",
        'db.get_individual_allowances(event_id, p["staff_id"])' in _pay,
        "存在しない列参照では手当行が永久に出ない")
-# 封筒リスト・精算レポートも同じ幻列（individual_allowance_total）を参照していた
+# 精算レポートは幻列（individual_allowance_total）を参照しない
+# （封筒リストは2026-08-14に「支払い管理」へ刷新。確定額は get_payable 一本）
 _env = (ROOT / "pages/4_envelope.py").read_text()
 _rep = (ROOT / "pages/6_report.py").read_text()
-for _nm, _src in (("封筒リスト", _env), ("精算レポート", _rep)):
-    _check(f"{_nm}: 個別手当を実テーブルから集計",
-           "_allow_by_staff" in _src
-           and 'e.get("individual_allowance_total")' not in _src
-           and 'p.get("individual_allowance_total")' not in _src,
-           "DBに無い列の参照が残ると手当が常に¥0表示になる")
+_check("精算レポート: 個別手当を実テーブルから集計",
+       "_allow_by_staff" in _rep
+       and 'e.get("individual_allowance_total")' not in _rep
+       and 'p.get("individual_allowance_total")' not in _rep,
+       "DBに無い列の参照が残ると手当が常に¥0表示になる")
+_check("支払い管理: 確定額は get_payable 一本・幻列参照なし",
+       "db.get_payable(" in _env
+       and "individual_allowance_total" not in _env,
+       "確定額の二重定義・幻列参照の再発防止")
 
 # ピット端末の現場操作（2026-08-07 説明書のファクトチェックで発見した3件）
 print("\n[13e] ピット端末の現場操作")

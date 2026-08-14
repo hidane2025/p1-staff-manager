@@ -732,10 +732,13 @@ else:
     # またぐ必要があった（実地検証で判明。現場では必ず起きる操作）。
     # 支払済みだけは画面から触らせない（経理の確定を後から動かさないため）。
     _pay_status = ""
+    _pay_method = "cash"
     try:
-        _pr = db.get_client().table("p1_payments").select("status").eq(
+        _pr = db.get_client().table("p1_payments").select("status, notes").eq(
             "event_id", event_id).eq("staff_id", target["id"]).execute().data
         _pay_status = (_pr[0].get("status") or "") if _pr else ""
+        from utils import payment_method as _pm
+        _pay_method = _pm.method_of(_pr[0]) if _pr else "cash"
     except Exception:
         _pay_status = ""
 
@@ -768,6 +771,13 @@ else:
     # 2026-08-13: TAKA側API・出退勤ページが先に退勤を書いた人は、
     # 時刻の再入力なしで支払いだけ確定できるようにする（清算デスク運用）。
     _confirm_mode = _is_fix and _pay_status in ("", "pending")
+    # 2026-08-14: 後日振込の人には現金を渡さない（経理が支払い管理で管理）
+    if _pay_method == "transfer" and _pay_status != "paid":
+        st.warning(
+            "🏦 **この方は後日振込です。現金は渡さないでください。**"
+            "実績の確定（退勤＋計算・承認）だけ行えば、経理が「💴 支払い管理」で"
+            "振込を記録します。"
+        )
     if _is_fix and _pay_status == "paid":
         st.info(
             "💴 このスタッフは **支払い済み** です。"
@@ -1026,29 +1036,38 @@ else:
                                         event_id=event_id,
                                     )
                                     if _approved_ok:
-                                        st.success(
-                                            "🟡 ピット側で承認まで完了しました。"
-                                            "給与窓口は「支払いボタンを押すだけ」で OK です。"
-                                        )
+                                        if _pay_method == "transfer":
+                                            st.success(
+                                                "🏦 実績を確定しました（後日振込）。"
+                                                "**現金は渡さないでください。** "
+                                                "振込の実行記録と領収書は経理側で行います。"
+                                            )
+                                        else:
+                                            st.success(
+                                                "🟡 ピット側で承認まで完了しました。"
+                                                "給与窓口は「支払いボタンを押すだけ」で OK です。"
+                                            )
                                         # 2026-08-13: 清算デスク一停止化。承認と同時に
                                         # 領収書PDFを発行し、下の領収書QRで即渡せるようにする
-                                        try:
-                                            from utils import receipt_issuer as _ri
-                                            _rres = _ri.issue_receipt(payment_id)
-                                            if _rres.get("ok"):
-                                                st.info(
-                                                    "🧾 領収書も発行しました。下の"
-                                                    "「領収書QR」を開けばこの場で渡せます。")
-                                            else:
+                                        # （後日振込の人は現金授受が無いため発行しない）
+                                        if _pay_method != "transfer":
+                                            try:
+                                                from utils import receipt_issuer as _ri
+                                                _rres = _ri.issue_receipt(payment_id)
+                                                if _rres.get("ok"):
+                                                    st.info(
+                                                        "🧾 領収書も発行しました。下の"
+                                                        "「領収書QR」を開けばこの場で渡せます。")
+                                                else:
+                                                    st.warning(
+                                                        "⚠️ 領収書の自動発行に失敗しました"
+                                                        "（支払いは確定済み）。『領収書発行』"
+                                                        "ページから発行してください。")
+                                            except Exception:
                                                 st.warning(
                                                     "⚠️ 領収書の自動発行に失敗しました"
                                                     "（支払いは確定済み）。『領収書発行』"
                                                     "ページから発行してください。")
-                                        except Exception:
-                                            st.warning(
-                                                "⚠️ 領収書の自動発行に失敗しました"
-                                                "（支払いは確定済み）。『領収書発行』"
-                                                "ページから発行してください。")
                                         # UX B: 確定カードに承認済みフラグを反映
                                         if _LAST_CONFIRMED_KEY in st.session_state:
                                             st.session_state[_LAST_CONFIRMED_KEY]["approved"] = True
@@ -1145,5 +1164,5 @@ with st.expander("💡 ピット運用のヒント"):
 - 退勤時刻を確定するときに「支払い計算も同時に実行」（チェック ON）を推奨
 - 開始時刻（actual_start）が未記録の場合、予定時刻（planned_start）が自動で入る
 - 個別時給があるスタッフは、その時給で計算される（v3.8〜）
-- 給与支払い側のオペレーターは「📊 精算レポート」「✉️ 封筒リスト」で「確認だけ」して支払う
+- 給与支払い側のオペレーターは「📊 精算レポート」「💴 支払い管理」で「確認だけ」して支払う
 """)

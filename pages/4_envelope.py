@@ -1,348 +1,194 @@
-"""P1 Staff Manager — 封筒リスト＋紙幣内訳ページ"""
+"""P1 Staff Manager — 支払い管理（経理）
+
+2026-08-14 中野さん指示で「封筒リスト」を全面刷新:
+    早入り・残業で金額が予定と違うため封筒の事前準備は成立しない（廃止）。
+    代わりに「誰にいくら・現金か後日振込か・支払い済みか」を経理が管理する。
+
+支払い方法は utils/payment_method（p1_payments.notes の先頭マーカー方式）。
+状態遷移は従来のまま: pending（打刻で変動）→ approved（金額確定）→ paid。
+paid を「現金支払い済み」と「振込済み」に分けるのは方法マーカーで行う。
+"""
+
+import io
 
 import streamlit as st
 import pandas as pd
 import sys
 import os
-from html import escape as _esc
+from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
-from utils.denomination import (
-    calculate_denomination, calculate_total_denomination,
-    round_amount, format_denomination, DENOM_LABELS, DENOMINATIONS,
-)
 from utils.event_selector import select_event
 
-st.set_page_config(page_title="封筒リスト", page_icon="✉️", layout="wide")
+st.set_page_config(page_title="支払い管理", page_icon="💴", layout="wide")
 from utils.ui_helpers import hide_staff_only_pages
 from utils.page_layout import (
-    apply_global_style, page_header, flow_bar, section_header, kpi_row, pill,
+    apply_global_style, page_header, flow_bar, section_header, kpi_row,
 )
 from utils.roles import DEPT_CHOICES, role_dept
+from utils import payment_method as pm
 from utils.admin_guard import require_admin, admin_logout_button, operator_name
 apply_global_style()
 hide_staff_only_pages()
-# Codex P2 fix #6 (2026-05-09): 封筒明細にオフレコ手当を含む個別手当の合計が
-# 印字されるため、給与窓口担当の管理者ログインを必須化。
-require_admin(page_name="封筒リスト")
+require_admin(page_name="支払い管理")
 admin_logout_button()
 
-# Codex P2 #17/#18 fix (2026-05-09): 印刷モード判定を最上部で行う
-_print_mode_pre = st.session_state.get("envelope_print_mode", False)
+_JST = timezone(timedelta(hours=9))
 
-# 印刷モード時は @media print で印刷カード以外を強制非表示にする CSS を注入
-# （:has() で「印刷カードを含まないブロック」を狙って display:none）
-if _print_mode_pre:
-    st.markdown(
-        '<style>'
-        '@media print {'
-        '  /* Streamlit のメインコンテナ内、印刷カードを含まないブロックを非表示 */'
-        '  [data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] > div:not(:has(.p1-envelope-print)),'
-        '  [data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stToolbar"] {'
-        '    display: none !important;'
-        '  }'
-        '  /* 印刷カード自体は確実に表示 */'
-        '  .p1-envelope-print { display: block !important; visibility: visible !important; }'
-        '}'
-        '</style>',
-        unsafe_allow_html=True,
-    )
+page_header("💴 支払い管理（経理）",
+            "誰にいくら・現金か後日振込か・支払い済みかを一元管理します。"
+            "封筒の事前準備は廃止（早入り・残業で金額が動くため、清算はピット画面の確定額で行います）。")
+flow_bar(active="calc", done=["setup", "input"])
 
-# 印刷モード時はヘッダー・フローバー・監査ログUIをサーバ側でもスキップ
-if not _print_mode_pre:
-    page_header("✉️ 封筒リスト", "支払い計算の結果から、封筒ラベル・紙幣内訳を一括出力します。最終日の現金準備に使います。")
-    flow_bar(active="calc", done=["setup", "input"])
-
-# PII閲覧監査ログ（印刷モード切替に関わらず常に記録）
-db.log_action("view_envelope_list", "payments",
-              detail="page=封筒リスト" + (" [print_mode]" if _print_mode_pre else ""),
+db.log_action("view_payment_admin", "payments", detail="page=支払い管理",
               performed_by=operator_name())
 
-# --- イベント選択（印刷モード時もサーバ側で event_id 取得は必要だが UI は出さない） ---
-st.markdown('<div class="p1-no-print">', unsafe_allow_html=True)
-if _print_mode_pre:
-    # session_state から既存の event_id を取得。無ければ最新イベント
-    _events_list = db.get_all_events() or []
-    event_id = (
-        st.session_state.get("selected_event_id")
-        or (_events_list[0]["id"] if _events_list else None)
-    )
-    if not event_id:
-        st.error("印刷モードですが、対象イベントが特定できません。"
-                 "印刷モードをOFFにしてイベントを選び直してください。")
-        st.stop()
-else:
-    event_id = select_event(db.get_all_events(), "イベント選択")
+event_id = select_event(db.get_all_events(), "イベント")
 
-# --- 設定 ---
-# Codex P2 #17/#18 fix (2026-05-09): 印刷モード ON 時は、サーバ側でそもそも
-# 通常UI（出力設定・サマリ・テーブル等）を描画しない。これで visibility:hidden
-# で空白ページが残る問題を構造から解消する。
-# （_print_mode_pre は冒頭で定義済み）
-
-# A-6: 端数処理は「支払い計算」ページのイベント単位設定に一本化（payable_amount に保存済み）。
-# 封筒は保存済みの確定額(payable_amount)をそのまま使うため、ここに per-view 丸めUIは置かない。
-# （封筒で渡す現金＝領収書額面＝年間累計 を常に一致させるための単一の正。）
-_event_rounding = int((db.get_event_by_id(event_id) or {}).get("rounding_unit") or 0)
-_round_label_map = {0: "なし", 100: "100円切り上げ", 500: "500円切り上げ", 1000: "1000円切り上げ"}
-if not _print_mode_pre:
-    section_header("出力設定", "並び順を選んでください。端数処理は『支払い計算』ページで設定します。")
-    sort_by = st.selectbox("並び順", ["役職 → NO.", "名前順", "金額順（高い順）"])
-    st.caption(
-        f"現在の端数処理: **{_round_label_map.get(_event_rounding, _event_rounding)}**"
-        "（封筒の現金・領収書・年間累計に共通反映。変更は『支払い計算』ページから）"
-    )
-else:
-    sort_by = st.session_state.get("_envelope_sort", "役職 → NO.")
-    st.info(
-        "🖨 **印刷モード中** - 通常UIは非表示です。"
-        "Cmd+P で印刷／PDF保存。終了時はチェックボックスをOFFに。"
-    )
-st.session_state["_envelope_sort"] = sort_by
-st.markdown('</div>', unsafe_allow_html=True)
+# フラッシュ（st.success+rerunで消えるのを防ぐ）
+if st.session_state.get("_pay_admin_flash"):
+    st.success(st.session_state.pop("_pay_admin_flash"))
 
 # --- データ取得 ---
 payments = db.get_payments_for_event(event_id)
 if not payments:
-    st.warning("支払いデータがありません。先に「支払い計算」ページで計算を実行してください。")
+    st.info("支払いデータがありません。先に「💰 支払い計算」を実行してください。")
     st.stop()
+smap = {s["id"]: s for s in db.get_all_staff()}
 
-# 部門フィルタ（管理部門が違うため封筒・現金準備を分けて出せる。2026-08-13）
-_dept = st.radio("部門", list(DEPT_CHOICES), horizontal=True, key="env_dept")
-if _dept != "全員":
-    payments = [p for p in payments if role_dept(p.get("role")) == _dept]
-    if not payments:
-        st.info(f"{_dept}の支払いデータがありません。")
-        st.stop()
+_dept = st.radio("部門", list(DEPT_CHOICES), horizontal=True, key="pay_admin_dept")
+_method_f = st.radio("支払い方法で絞る", ["すべて", "現金", "後日振込"],
+                     horizontal=True, key="pay_admin_method")
 
-# A-6: 表示額は保存済みの確定額(payable_amount)。紙幣内訳もこの確定額から算出する。
-envelope_data = []
+rows = []
 for p in payments:
-    amount = db.get_payable(p)
-    breakdown = calculate_denomination(amount)
-    envelope_data.append({
-        **p,
-        "adjusted_amount": amount,        # 確定額（payable）。以降の表示・内訳の基準。
-        "denomination": breakdown,
+    stf = smap.get(p["staff_id"], {})
+    if _dept != "全員" and role_dept(stf.get("role")) != _dept:
+        continue
+    m = pm.method_of(p)
+    if _method_f == "現金" and m != "cash":
+        continue
+    if _method_f == "後日振込" and m != "transfer":
+        continue
+    rows.append({
+        "NO.": stf.get("no"),
+        "名前": stf.get("name_jp", "?"),
+        "役職": stf.get("role") or "—",
+        "確定額": db.get_payable(p),
+        "後日振込": m == "transfer",
+        "状態": pm.state_label(p),
+        "支払日時": (p.get("paid_at") or "")[:16].replace("T", " "),
+        "メモ": pm.free_note(p),
+        "_pid": p["id"],
+        "_status": p["status"],
+        "_staff_id": p["staff_id"],
     })
+rows.sort(key=lambda r: (r["NO."] or 9999))
 
-# 2026-08-06: individual_allowance_total 列はDBに存在しない（マイグレ未適用）ため
-# 常に¥0で、手当があっても明細に出ず内訳の和が合計と食い違って見えた。
-# 3_payment と同じく実テーブル（個別手当）から集計する。
-_allow_by_staff: dict = {}
-for _a in db.get_individual_allowances(event_id):
-    _allow_by_staff[_a["staff_id"]] = (
-        _allow_by_staff.get(_a["staff_id"], 0) + int(_a.get("amount") or 0))
+# --- サマリー ---
+def _sum(cond):
+    return sum(r["確定額"] for r in rows if cond(r))
 
-# 並び替え
-if sort_by == "名前順":
-    envelope_data.sort(key=lambda x: x["name_jp"])
-elif sort_by == "金額順（高い順）":
-    envelope_data.sort(key=lambda x: x["adjusted_amount"], reverse=True)
+kpi_row([
+    ("✅ 現金支払い済み", f"¥{_sum(lambda r: r['_status'] == 'paid' and not r['後日振込']):,}",
+     f"{sum(1 for r in rows if r['_status'] == 'paid' and not r['後日振込'])}名"),
+    ("✅ 振込済み", f"¥{_sum(lambda r: r['_status'] == 'paid' and r['後日振込']):,}",
+     f"{sum(1 for r in rows if r['_status'] == 'paid' and r['後日振込'])}名"),
+    ("🏦 振込待ち（確定）", f"¥{_sum(lambda r: r['_status'] == 'approved' and r['後日振込']):,}",
+     f"{sum(1 for r in rows if r['_status'] == 'approved' and r['後日振込'])}名"),
+    ("⏳ 金額変動中", f"¥{_sum(lambda r: r['_status'] == 'pending'):,}",
+     f"{sum(1 for r in rows if r['_status'] == 'pending')}名"),
+])
 
-# --- サマリー＋封筒リスト（印刷モード時は描画しない） ---
-total_amount = sum(e["adjusted_amount"] for e in envelope_data)
-all_amounts = [e["adjusted_amount"] for e in envelope_data]
-total_denoms = calculate_total_denomination(all_amounts)
+# ============================================================
+# ① 一覧＋方法の切り替え（「後日振込」チェックを直接編集）
+# ============================================================
+section_header("① 支払い一覧",
+               "「後日振込」列のチェックで方法を切り替えます（支払い済みの人は変更不可）。"
+               "金額は打刻・再計算に自動追随し、確定するとピット清算／この画面の記録対象になります。")
 
-if not _print_mode_pre:
-    section_header("銀行で用意する現金", "下記の金額・枚数を、最終日の朝までに準備します。")
-
-    summary_items = [
-        {"label": "総額（確定）", "value": f"¥{total_amount:,}", "accent": True},
-        {"label": "封筒数", "value": f"{len(envelope_data)}枚"},
-    ]
-    # A-6: 端数切り上げ分は「丸め前合計」と「確定額合計」の差。イベントの rounding_unit で表示。
-    if _event_rounding > 0:
-        original_total = sum(int(p.get("total_amount") or 0) for p in payments)
-        summary_items.append({
-            "label": "端数切り上げ分",
-            "value": f"¥{total_amount - original_total:,}",
-            "detail": f"単位: {_event_rounding}円",
-        })
-    kpi_row(summary_items)
-
-    # 紙幣内訳（compact行）
-    st.markdown("**紙幣・硬貨の必要数**")
-    denom_items = sorted(total_denoms.items(), reverse=True)
-    denom_cols = st.columns(min(len(denom_items), 6))
-    for i, (denom, count) in enumerate(denom_items):
-        with denom_cols[i % len(denom_cols)]:
-            st.metric(DENOM_LABELS.get(denom, f"¥{denom}"), f"{count}枚")
-
-    # --- 封筒リスト ---
-    section_header("封筒リスト", f"{len(envelope_data)}件分の封筒情報。CSVダウンロードで明細を社内共有可能。")
-
-    display_data = []
-    for e in envelope_data:
-        display_data.append({
-            "NO.": e["no"],
-            "名前": e["name_jp"],
-            "役職": e["role"],
-            "支払額": f"¥{e['adjusted_amount']:,}",
-            "紙幣内訳": format_denomination(e["denomination"].bills),
-            "支払状態": "支払済" if e["status"] == "paid" else "未払い",
-            "領収書": "受領済" if e["receipt_received"] else "未受領",
-        })
-
-    df = pd.DataFrame(display_data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
-
-# --- 封筒ラベル印刷用 ---
-if not _print_mode_pre:
-    section_header("封筒ラベル（印刷用）",
-                   "ブラウザの印刷機能（Cmd/Ctrl+P）で各明細をそのまま印刷できます。"
-                   "1人=1ページの縦長明細で出力されます。")
-
-# UX D2 (2026-05-09): 印刷モード切替トグル（OFF→ON で再描画して通常UIを除く）
-# Codex P2 #17 fix: トグル ON 時はトグル自体だけ常時描画、他はサーバ側で制御
-print_mode = st.checkbox(
-    "🖨 印刷モードを表示（1人=1ページ）",
-    value=_print_mode_pre,
-    key="envelope_print_mode",
-    help="ON にすると、画面上に印刷用の明細が全員分だけ表示されます。"
-    "そのまま Cmd+P → PDF保存 で配布資料が完成します。"
-    "通常UIに戻すにはチェックを外してください。",
+df = pd.DataFrame([{k: v for k, v in r.items() if not k.startswith("_")}
+                   | {"_pid": r["_pid"], "_status": r["_status"]} for r in rows])
+edited = st.data_editor(
+    df,
+    use_container_width=True, hide_index=True, height=560,
+    disabled=["NO.", "名前", "役職", "確定額", "状態", "支払日時", "メモ",
+              "_pid", "_status"],
+    column_config={
+        "確定額": st.column_config.NumberColumn("確定額", format="¥%d"),
+        "後日振込": st.column_config.CheckboxColumn(
+            "後日振込", help="チェック＝後日振込／外す＝現金（会場渡し）"),
+        "_pid": None, "_status": None,
+    },
+    key="pay_admin_table",
 )
+if not df.empty:
+    for i in range(len(df)):
+        if bool(df.iloc[i]["後日振込"]) != bool(edited.iloc[i]["後日振込"]):
+            if df.iloc[i]["_status"] == "paid":
+                st.session_state["_pay_admin_flash"] = (
+                    f"⚠️ {df.iloc[i]['名前']} は支払い済みのため方法を変更できません。")
+                st.rerun()
+            pm.set_method(int(df.iloc[i]["_pid"]),
+                          "transfer" if edited.iloc[i]["後日振込"] else "cash",
+                          performed_by=operator_name())
+            st.session_state["_pay_admin_flash"] = (
+                f"💾 {df.iloc[i]['名前']} を"
+                f"{'後日振込' if edited.iloc[i]['後日振込'] else '現金'}にしました。")
+            st.rerun()
 
-if _print_mode_pre:
-    # UX D2: 印刷専用レイアウト（1人=1ページ縦長）
-    # サーバ側で通常UIを描画していないため、Cmd+Pで純粋に印刷カードのみ印字される
-    # 2026-07-06: 領収書発行済みの人はDL用QRを明細に印刷（現金手渡し時に本人がスキャン→即受領）
-    from utils.receipt_qr import qr_data_uri
-    from utils.url_helper import get_base_host, receipt_download_url
-    _qr_base_host = get_base_host()
-    for e in envelope_data:
-        _allow_total = _allow_by_staff.get(e.get("staff_id"), 0)
-        _allow_row = (
-            f'<tr><td>個別手当</td><td>¥{_allow_total:,}</td></tr>'
-            if _allow_total else ""
-        )
-        # A-5: 臨時調整、A-6: 端数調整 を内訳に明示し、内訳和＋端数調整＝合計 を成立させる。
-        _adj = int(e.get("adjustment") or 0)
-        _adj_row = (
-            f'<tr><td>臨時調整</td><td>{"+" if _adj >= 0 else "-"}¥{abs(_adj):,}</td></tr>'
-            if _adj else ""
-        )
-        _tanchosei = int(e["adjusted_amount"]) - int(e.get("total_amount") or 0)
-        _tan_row = (
-            f'<tr><td>端数調整</td><td>+¥{_tanchosei:,}</td></tr>'
-            if _tanchosei else ""
-        )
-        # 領収書発行済みならDL用QRを載せる（トークンURLの印刷＝手渡し前提の運用）
-        _qr_block = ""
-        if e.get("receipt_token") and e.get("receipt_pdf_path"):
-            _dl_url = receipt_download_url(e["receipt_token"])
-            _qr_block = (
-                f'<div style="margin-top: 12pt; display: flex; align-items: center; gap: 10pt;">'
-                f'<img src="{qr_data_uri(_dl_url, box_size=4)}" '
-                f'style="width: 72pt; height: 72pt;" alt="領収書DL QR">'
-                f'<div style="font-size: 9pt; line-height: 1.5;">'
-                f'<strong>領収書ダウンロード</strong><br>'
-                f'スマホでQRを読み取り→PDF保存<br>'
-                f'（ダウンロード＝受領確認になります）'
-                f'</div></div>'
-            )
-        st.markdown(
-            f'<div class="p1-envelope-print">'
-            f'<h2>P1 支払明細</h2>'
-            f'<div>NO. {e["no"]}　／　{_esc(str(e["role"]))}</div>'
-            f'<div class="name-large">{_esc(str(e["name_jp"]))} 様</div>'
-            f'<div class="amount-huge">¥{e["adjusted_amount"]:,}</div>'
-            f'<table>'
-            f'<tr><td>基本給</td><td>¥{e["base_pay"]:,}</td></tr>'
-            f'<tr><td>深夜手当</td><td>¥{e["night_pay"]:,}</td></tr>'
-            f'<tr><td>交通費</td><td>¥{e["transport_total"]:,}</td></tr>'
-            f'<tr><td>フロア手当</td><td>¥{e["floor_bonus_total"]:,}</td></tr>'
-            f'<tr><td>MIX手当</td><td>¥{e["mix_bonus_total"]:,}</td></tr>'
-            f'<tr><td>精勤手当</td><td>¥{e["attendance_bonus"]:,}</td></tr>'
-            f'{_allow_row}'
-            f'{_adj_row}'
-            f'{_tan_row}'
-            f'<tr><td><strong>合計</strong></td>'
-            f'<td><strong>¥{e["adjusted_amount"]:,}</strong></td></tr>'
-            f'</table>'
-            f'<div style="margin-top: 16pt; font-size: 10pt;">'
-            f'紙幣内訳: {format_denomination(e["denomination"].bills)}'
-            f'</div>'
-            f'{_qr_block}'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+# ============================================================
+# ② 振込の実行記録（経理）
+# ============================================================
+section_header("② 振込済みにする",
+               "銀行で振込を実行したら、ここで記録します（対象＝金額確定済みの振込待ち）。")
+_wait = [r for r in rows if r["_status"] == "approved" and r["後日振込"]]
+if not _wait:
+    st.info("振込待ち（金額確定済み）の人はいません。"
+            "金額が変動中の人は、ピットでの実績確定または「💰 支払い計算」の承認後にここへ出ます。")
 else:
-    # 通常モード: 折りたたみ表示
-    for e in envelope_data:
-        with st.expander(f"NO.{e['no']} {e['name_jp']}（{e['role']}）— ¥{e['adjusted_amount']:,}"):
-            # Codex P2 fix #3: 個別手当を内訳に表示（合計との整合性）
-            _allow_total = _allow_by_staff.get(e.get("staff_id"), 0)
-            _allow_row = (
-                f"| 個別手当 | ¥{_allow_total:,} |\n" if _allow_total else ""
-            )
-            # A-5/A-6: 臨時調整・端数調整を内訳に明示（足し算が合計と一致する）
-            _adj = int(e.get("adjustment") or 0)
-            _adj_row = (
-                f"| 臨時調整 | {'+' if _adj >= 0 else '-'}¥{abs(_adj):,} |\n" if _adj else ""
-            )
-            _tanchosei = int(e["adjusted_amount"]) - int(e.get("total_amount") or 0)
-            _tan_row = (
-                f"| 端数調整 | +¥{_tanchosei:,} |\n" if _tanchosei else ""
-            )
-            st.markdown(f"""
-**━━━ P1 支払明細 ━━━**
+    _opts = {f"NO.{r['NO.']} {r['名前']} — ¥{r['確定額']:,}": r for r in _wait}
+    _sel = st.multiselect("振込を実行した人", list(_opts.keys()), key="transfer_done_sel")
+    if st.button(f"🏦 選択した {len(_sel)}名 を振込済みにする", type="primary",
+                 disabled=not _sel, key="transfer_done_btn"):
+        ok_n = 0
+        for k in _sel:
+            r = _opts[k]
+            if db.mark_paid(r["_pid"], event_id=event_id,
+                            performed_by=f"振込:{operator_name()}"):
+                ok_n += 1
+        st.session_state["_pay_admin_flash"] = (
+            f"✅ {ok_n}名を振込済みにしました。領収書が必要な場合は"
+            "「📄 領収書発行」ページからメール送付できます。")
+        st.rerun()
 
-| 項目 | 金額 |
-|------|------|
-| 基本給 | ¥{e['base_pay']:,} |
-| 深夜手当 | ¥{e['night_pay']:,} |
-| 交通費 | ¥{e['transport_total']:,} |
-| フロア手当 | ¥{e['floor_bonus_total']:,} |
-| MIX手当 | ¥{e['mix_bonus_total']:,} |
-| 精勤手当 | ¥{e['attendance_bonus']:,} |
-{_allow_row}{_adj_row}{_tan_row}| **合計** | **¥{e['adjusted_amount']:,}** |
-
-紙幣: {format_denomination(e['denomination'].bills)}
-""")
-
-# --- CSV出力（印刷モード時は描画しない） ---
-if not _print_mode_pre:
-    st.markdown('<div class="p1-no-print">', unsafe_allow_html=True)
-    section_header("CSV出力", "経理共有用のフル明細を1ファイルでダウンロードできます。")
-
-    csv_data = []
-    for e in envelope_data:
-        # A-5/A-6: 個別手当・臨時調整・端数調整も列に出し、内訳の和＝合計を CSV でも成立させる。
-        _tanchosei = int(e["adjusted_amount"]) - int(e.get("total_amount") or 0)
-        csv_data.append({
-            "NO": e["no"],
-            "名前_JP": e["name_jp"],
-            "名前_EN": e.get("name_en", ""),
-            "役職": e["role"],
-            "基本給": e["base_pay"],
-            "深夜手当": e["night_pay"],
-            "交通費": e["transport_total"],
-            "フロア手当": e["floor_bonus_total"],
-            "MIX手当": e["mix_bonus_total"],
-            "精勤手当": e["attendance_bonus"],
-            "個別手当": _allow_by_staff.get(e.get("staff_id"), 0),
-            "臨時調整": int(e.get("adjustment") or 0),
-            "端数調整": _tanchosei,
-            "合計": e["adjusted_amount"],
-            "支払状態": e["status"],
-            "領収書": "受領済" if e["receipt_received"] else "未受領",
+# ============================================================
+# ③ 振込リストのダウンロード（銀行手続き用）
+# ============================================================
+section_header("③ 振込リスト", "振込待ちの人をCSVで出せます（本名・金額入り。取扱注意）。")
+if _wait:
+    _csv_rows = []
+    for r in _wait:
+        stf = smap.get(r["_staff_id"], {})
+        _csv_rows.append({
+            "NO": r["NO."], "活動名義": r["名前"],
+            "本名": stf.get("real_name") or "",
+            "金額": r["確定額"], "メモ": r["メモ"],
         })
+    _buf = io.StringIO()
+    pd.DataFrame(_csv_rows).to_csv(_buf, index=False)
+    st.download_button(
+        f"⬇️ 振込リストCSV（{len(_csv_rows)}名・¥{sum(x['金額'] for x in _csv_rows):,}）",
+        _buf.getvalue().encode("utf-8-sig"),
+        file_name=f"transfer_list_{datetime.now(_JST).strftime('%Y%m%d_%H%M')}.csv",
+        mime="text/csv", key="transfer_csv_dl")
+else:
+    st.caption("振込待ちの人が出るとここからCSVを出せます。")
 
-    csv_df = pd.DataFrame(csv_data)
-    csv_bytes = csv_df.to_csv(index=False).encode("utf-8-sig")
-    st.warning(
-        "⚠️ このCSVには氏名・給与情報が含まれます（T2個人情報）。\n"
-        "送付前に受取人を必ず確認してください。"
-    )
-    if st.checkbox("受取先を確認しました", key="dl_confirm_envelope"):
-        st.download_button(
-            "📥 CSVダウンロード",
-            csv_bytes,
-            "p1_envelope_list.csv",
-            "text/csv",
-            key="dl_envelope_csv",
-        )
-    st.markdown('</div>', unsafe_allow_html=True)
+st.divider()
+st.caption(
+    "💡 運用メモ: 現金の人はピット画面で「支払い確定」→ その場で現金と領収書。"
+    "後日振込の人はピットで実績確定だけ行い（現金は渡さない）、"
+    "経理がこの画面で振込済みを記録します。旧・封筒リスト（紙幣内訳の事前準備）は"
+    "早入り・残業で金額が動くため廃止しました。"
+)

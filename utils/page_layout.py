@@ -68,7 +68,7 @@ _QUICK_NAV_GROUPS = [
         ("💰 支払い計算", "pages/3_payment.py"),
     ]),
     ("📦 締め・配布", [
-        ("✉️ 封筒リスト", "pages/4_envelope.py"),
+        ("💴 支払い管理", "pages/4_envelope.py"),
         ("📄 領収書発行", "pages/91_receipt_issue.py"),
         ("✍️ 契約書発行", "pages/94_contract_issue.py"),
         ("📊 精算レポート", "pages/6_report.py"),
@@ -212,7 +212,7 @@ FLOW_STEPS = [
     ("setup",  "STEP 1", "作る",   "イベント設定"),
     ("input",  "STEP 2", "入れる", "スタッフ＋シフト"),
     ("calc",   "STEP 3", "計算",   "支払い計算"),
-    ("payout", "STEP 4", "渡す",   "封筒・領収書・契約書"),
+    ("payout", "STEP 4", "渡す",   "支払い・領収書・契約書"),
 ]
 
 
