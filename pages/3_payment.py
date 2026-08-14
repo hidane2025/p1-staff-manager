@@ -668,6 +668,19 @@ if staff_opts:
             else:
                 st.caption("⚠️ 承認にはオペレーター名の設定（再ログイン）が必要です")
 
+        # 支払い方法の切替（2026-08-15 中野さん要望: この画面から後日振込にできるように）
+        from utils import payment_method as _pm
+        if _pm.method_of(p) == "transfer":
+            st.info("🏦 **後日振込** の方です（ピットで現金を渡さない）")
+            if p["status"] != "paid" and st.button(
+                    "💴 現金（会場渡し）に戻す", key=f"to_cash_{p['id']}"):
+                _pm.set_method(p["id"], "cash", performed_by=approver)
+                st.rerun()
+        elif p["status"] != "paid":
+            if st.button("🏦 後日振込にする", key=f"to_transfer_{p['id']}"):
+                _pm.set_method(p["id"], "transfer", performed_by=approver)
+                st.rerun()
+
         # 領収書
         if not p["receipt_received"]:
             if st.button("🧾 領収書受領済み", key=f"receipt_{p['id']}"):
