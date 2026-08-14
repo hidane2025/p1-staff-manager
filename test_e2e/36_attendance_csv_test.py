@@ -201,6 +201,17 @@ rep = run_import(
 _check("is_mix空欄は変更しない（no-op維持）", rep["noop"] == 1 and not st["updated"],
        str(rep))
 
+print("[C3] APL対象外NO（2026-08-14 中野さん確定）")
+st = base_store()
+rep = run_import(
+    "dealer_number,date,actual_start,actual_end,is_absent\n"
+    "1001,2026-08-12,12:00,22:00,0\n"      # APL側 → external
+    "0999,2026-08-12,12:00,22:00,0\n",     # 通常の未登録 → unknown
+    st)
+_check("APL側はexternalに分類", rep["external"] == ["NO.1001"], str(rep["external"]))
+_check("それ以外の未登録はunknownのまま", rep["unknown"] == ["NO.999"], str(rep["unknown"]))
+_check("どちらも書き込みなし", not st["updated"] and not st["inserted"])
+
 print("[D] 空行（出勤なし・欠勤でもない）は行を作らない")
 st = base_store()
 rep = run_import(

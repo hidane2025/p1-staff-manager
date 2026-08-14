@@ -890,6 +890,10 @@ if _csv_file is not None and st.button(
         st.caption("この画面の一覧・人数はページを再読み込みすると最新になります。")
         if _rep["invalid"]:
             st.error("⛔ 形式不正で反映しなかった行:\n- " + "\n- ".join(_rep["invalid"]))
+        if _rep.get("external"):
+            st.info(
+                "ℹ️ APL側管理のため対象外（支払いなし・正常です）: "
+                + ", ".join(_rep["external"]))
         if _rep["unknown"]:
             st.warning(
                 "❓ NO.がスタッフ台帳に無く反映できなかった行: "

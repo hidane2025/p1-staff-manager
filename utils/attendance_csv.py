@@ -26,6 +26,12 @@ import io
 
 REQUIRED_COLS = ("dealer_number", "date", "actual_start", "actual_end", "is_absent")
 
+# APL（韓国）側の運営スタッフ番号。支払いはAPL側管理のため当ツールの対象外
+# （2026-08-14 中野さん確定「A韓国側 B韓国側 払わない」）。
+# TAKAツールのCSVには混ざってくるため、警告ではなく「対象外」として静かに区別する。
+# ※Casper(1006)・台湾Dealer(1011-1014)は当方支払いのため含めない。
+APL_EXTERNAL_NOS = {1001, 1002, 1003, 1004, 1005, 1007, 1008, 1009, 1010}
+
 
 def import_attendance_csv(file_bytes: bytes, event_id: int,
                           performed_by: str = "") -> dict:
@@ -62,7 +68,7 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
 
     rep = {"total": len(rows), "updated": [], "created": [], "absent": [],
            "noop": 0, "unknown": [], "protected_diff": [], "invalid": [],
-           "recalced": 0}
+           "external": [], "recalced": 0}
     affected_ids: list = []
     for r in rows:
         try:
@@ -76,7 +82,10 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
             continue
         st_ = smap.get(no)
         if st_ is None:
-            rep["unknown"].append(f"NO.{no}")
+            if no in APL_EXTERNAL_NOS:
+                rep["external"].append(f"NO.{no}")
+            else:
+                rep["unknown"].append(f"NO.{no}")
             continue
         try:
             a_start, a_end = norm(r["actual_start"]), norm(r["actual_end"])
@@ -157,6 +166,7 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
         detail=(f"勤怠CSV取込: 更新{len(rep['updated'])}・新規{len(rep['created'])}"
                 f"・欠勤{len(rep['absent'])}・一致{rep['noop']}"
                 f"・保護差分{len(rep['protected_diff'])}"
-                f"・未登録{len(rep['unknown'])}・不正{len(rep['invalid'])}"),
+                f"・未登録{len(rep['unknown'])}・不正{len(rep['invalid'])}"
+                f"・APL対象外{len(rep['external'])}"),
         event_id=event_id, performed_by=performed_by or "csv_import")
     return rep
