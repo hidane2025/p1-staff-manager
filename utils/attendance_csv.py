@@ -28,8 +28,7 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
     """CSVバイト列を取り込み、結果レポートを返す。例外は呼び出し側で拾う。"""
     import db
     from utils.calculator import parse_time_to_minutes
-    from dbx.shifts import _revert_payment_if_amount_affected
-    from utils.payment_recalc import recalc_staff_payment
+    from utils.payment_recalc import recalc_staff_payments
 
     text = file_bytes.decode("utf-8-sig", errors="replace")
     rows = list(csv.DictReader(io.StringIO(text)))
@@ -58,7 +57,9 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
         return f"{m // 60:02d}:{m % 60:02d}"
 
     rep = {"total": len(rows), "updated": [], "created": [], "absent": [],
-           "noop": 0, "unknown": [], "protected_diff": [], "invalid": []}
+           "noop": 0, "unknown": [], "protected_diff": [], "invalid": [],
+           "recalced": 0}
+    affected_ids: list = []
     for r in rows:
         try:
             no = int(str(r["dealer_number"]).strip())
@@ -101,11 +102,12 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
                 f" / CSV={a_start or '—'}-{a_end or '—'}{'(欠勤)' if is_abs else ''}")
             continue
         label = f"NO.{no} {st_['name_jp']}"
+        # 金額の再計算は最後にまとめて行う（1人ずつだと人数×10クエリで数分かかる）
         if is_abs:
             if row is None:
                 rep["noop"] += 1
                 continue
-            db.mark_absent(row["id"])
+            db.mark_absent(row["id"])  # 内部で差し戻し＋本人再計算まで走る
             rep["absent"].append(label)
         elif row is not None:
             c.table("p1_shifts").update({
@@ -113,18 +115,27 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
                 "status": ("checked_out" if a_end else
                            "checked_in" if a_start else "scheduled"),
             }).eq("id", row["id"]).execute()
-            _revert_payment_if_amount_affected(
-                row, reason=f"勤怠CSV取込 {a_start or '—'}-{a_end or '—'}")
+            db.reset_payment_to_pending(
+                event_id, st_["id"],
+                reason=f"勤怠CSV取込 {a_start or '—'}-{a_end or '—'}")
+            affected_ids.append(st_["id"])
             rep["updated"].append(label)
+        elif a_start is None:
+            # 出勤なし・欠勤でもない空行 → 作るものが無い
+            rep["noop"] += 1
         else:
+            # 2026-08-14 QA修正: 以前は無条件に checked_out で作っていたため、
+            # 退勤未定（出勤のみ）の行が「退勤済・退勤時刻なし」になっていた
             c.table("p1_shifts").insert({
                 "event_id": event_id, "staff_id": st_["id"], "date": date,
-                "planned_start": a_start, "planned_end": a_end,
+                "planned_start": a_start, "planned_end": a_end or a_start,
                 "actual_start": a_start, "actual_end": a_end,
-                "status": "checked_out",
+                "status": "checked_out" if a_end else "checked_in",
             }).execute()
-            recalc_staff_payment(event_id, st_["id"])
+            affected_ids.append(st_["id"])
             rep["created"].append(label)
+
+    rep["recalced"] = recalc_staff_payments(event_id, affected_ids)
 
     db.log_action(
         "attendance_csv_import", "shifts",

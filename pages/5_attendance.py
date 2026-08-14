@@ -158,8 +158,15 @@ with col_bulk2:
                 ok_n += 1
             except Exception:
                 fails.append(str(s.get("no") or s["id"]))
+        # 2026-08-14 QA修正: このボタンは直接UPDATEで打刻フックを通らず、
+        # 打刻済ルール移行後は金額が¥0のまま残っていた。まとめて再計算する。
+        _aff = [s["staff_id"] for s in targets]
+        for _sid in _aff:
+            db.reset_payment_to_pending(event_id, _sid, reason="全員退勤（要再計算）")
+        from utils.payment_recalc import recalc_staff_payments as _recalc_many
+        _recalc_many(event_id, _aff)
         if not fails:
-            st.success(f"{ok_n}名を予定時刻で退勤確定しました")
+            st.success(f"{ok_n}名を予定時刻で退勤確定しました（金額も再計算済み）")
             st.rerun()  # 全件成功時のみ再描画（失敗時は警告を残す）
         else:
             st.warning(
@@ -196,8 +203,14 @@ with col_bulk3:
                 except Exception:
                     fails.append(str(s.get("no") or s["id"]))
             st.session_state["confirm_reset"] = False
+            # 2026-08-14 QA修正: リセットで実績が消える＝金額も¥0へ戻す必要がある
+            _aff = [s["staff_id"] for s in shifts]
+            for _sid in _aff:
+                db.reset_payment_to_pending(event_id, _sid, reason="全員リセット（要再計算）")
+            from utils.payment_recalc import recalc_staff_payments as _recalc_many2
+            _recalc_many2(event_id, _aff)
             if not fails:
-                st.success(f"全員（{ok_n}名）のステータスをリセットしました")
+                st.success(f"全員（{ok_n}名）のステータスをリセットしました（金額も再計算済み）")
                 st.rerun()  # 全件成功時のみ再描画（失敗時は警告を残す）
             else:
                 st.warning(
@@ -722,6 +735,11 @@ if (not _READONLY) and not df.empty and not edited_df.empty:
             if status == "absent":
                 _flash_and_rerun("⚠️ 欠勤の人は「②例外を記録→個別リセット」で戻してから操作してください。")
             if new_out:
+                # 予定時刻が無い行（CSV取込の当日追加分など）は確定時刻を決められない
+                if not srow.get("planned_end"):
+                    _flash_and_rerun(
+                        f"⚠️ {srow.get('name_jp', '')} は予定退勤時刻がありません。"
+                        "「実退勤」プルダウンで時刻を選んでください。")
                 # 未出勤なら出勤も予定時刻で記録してから退勤（退勤だけの記録を作らない）
                 if status == "scheduled":
                     db.checkin_staff(shift_id, srow.get("planned_start"))
@@ -803,7 +821,8 @@ if _csv_file is not None and st.button(
         st.success(
             f"✅ {_rep['total']}行を処理: 実績更新 {len(_rep['updated'])}名 / "
             f"行新規作成 {len(_rep['created'])}名 / 欠勤 {len(_rep['absent'])}名 / "
-            f"変化なし {_rep['noop']}名（金額は自動再計算済み）")
+            f"変化なし {_rep['noop']}名 / 金額再計算 {_rep.get('recalced', 0)}名")
+        st.caption("この画面の一覧・人数はページを再読み込みすると最新になります。")
         if _rep["invalid"]:
             st.error("⛔ 形式不正で反映しなかった行:\n- " + "\n- ".join(_rep["invalid"]))
         if _rep["unknown"]:

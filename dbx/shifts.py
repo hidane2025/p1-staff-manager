@@ -123,9 +123,22 @@ def bulk_checkout(shift_ids, actual_end, event_id=None):
         client.table("p1_shifts").update({
             "actual_end": actual_end, "actual_start": a_start, "status": "checked_out"
         }).eq("id", sid).execute()
-        # 2026-08-13 打刻済ルール移行: 一括退勤も1人ずつ金額を追随させる
-        _revert_payment_if_amount_affected(
-            row[0], reason=f"一括退勤 {actual_end} 記録（要再計算）")
+        # 差し戻しだけ即時に行い、再計算は最後にまとめて（2026-08-14 バッチ化）
+        try:
+            _ev = row[0].get("event_id") or event_id
+            if _ev:
+                reset_payment_to_pending(_ev, row[0].get("staff_id"),
+                                         reason=f"一括退勤 {actual_end} 記録（要再計算）")
+        except Exception:
+            pass
+    # 2026-08-13 打刻済ルール移行: 一括退勤も金額を追随させる（文脈共有のバッチ再計算）
+    try:
+        _ev = event_id or (row[0].get("event_id") if row else None)
+        if _ev and affected_staff_ids:
+            from utils.payment_recalc import recalc_staff_payments
+            recalc_staff_payments(_ev, affected_staff_ids)
+    except Exception:
+        pass
     if event_id:
         core.log_action("bulk_checkout", "shifts",
                     detail=f"{len(shift_ids)}名を{actual_end}で一括退勤",
