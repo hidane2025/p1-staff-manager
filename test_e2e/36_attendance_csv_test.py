@@ -180,6 +180,27 @@ _check("再計算対象=更新1+新規2（欠勤はフック側）",
        sorted(set(st["recalc_calls"][0])) == [10, 11], str(st["recalc_calls"]))
 _check("recalced数を報告", rep["recalced"] == 2, str(rep.get("recalced")))
 
+print("[C2] is_mix任意列（2026-08-14）")
+st = base_store()
+rep = run_import(
+    "dealer_number,date,actual_start,actual_end,is_absent,is_mix\n"
+    "0055,2026-08-12,12:00,25:00,0,1\n"    # 時刻同一・MIXのみ変更 → 更新扱い
+    "0076,2026-08-12,20:00,29:00,0,1\n",   # 新規＋MIX
+    st.update({}) or st)
+_check("MIXのみの変更でも更新される",
+       len(rep["updated"]) == 1 and st["updated"][0]["data"].get("is_mix") == 1,
+       str(st["updated"]))
+_check("新規行にis_mixが乗る",
+       st["inserted"] and st["inserted"][0].get("is_mix") == 1, str(st["inserted"]))
+_check("MIXラベル表示", any("〔MIX〕" in x for x in rep["updated"] + rep["created"]))
+st = base_store()
+rep = run_import(
+    "dealer_number,date,actual_start,actual_end,is_absent,is_mix\n"
+    "0055,2026-08-12,12:00,25:00,0,\n",    # is_mix空欄=変更しない → no-op
+    st)
+_check("is_mix空欄は変更しない（no-op維持）", rep["noop"] == 1 and not st["updated"],
+       str(rep))
+
 print("[D] 空行（出勤なし・欠勤でもない）は行を作らない")
 st = base_store()
 rep = run_import(

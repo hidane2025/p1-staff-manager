@@ -5,6 +5,10 @@
     0055,2026-08-12,12:03,25:17,0
     0277,2026-08-12,,,1        ← 欠勤
 
+任意列 `is_mix`（0/1・2026-08-14追加）:
+    その日MIX卓に入った人は 1 → MIX手当（日当）が支払いに乗る。
+    列が無いCSV・空欄は「変更しない」（既存のMIXフラグを保持）。
+
 ルール（勤怠受信APIと同じ思想・2026-08-14 CLIでの手動取込2回分をUI化）:
     - 冪等: 現在のDBと同じ内容の行は何もしない（再アップロード安全）
     - 支払い済み(paid)・承認済み(approved)のスタッフは変更せず差分を報告だけする
@@ -80,6 +84,9 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
             rep["invalid"].append(f"NO.{no} 時刻不正: {e}")
             continue
         is_abs = str(r["is_absent"]).strip() == "1"
+        # 任意列 is_mix: "1"/"0"のみ解釈。空欄・列なしは None=変更しない
+        _mix_raw = str(r.get("is_mix") or "").strip()
+        want_mix = 1 if _mix_raw == "1" else 0 if _mix_raw == "0" else None
         if a_end and not a_start:
             rep["invalid"].append(f"NO.{no} 退勤のみ（出勤なし）")
             continue
@@ -92,7 +99,10 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
         cur = (row.get("actual_start") if row else None,
                row.get("actual_end") if row else None,
                (row.get("status") if row else None) == "absent")
-        if row is not None and cur == (a_start, a_end, is_abs):
+        cur_mix = int(row.get("is_mix") or 0) if row else 0
+        mix_changed = (want_mix is not None and row is not None
+                       and want_mix != cur_mix)
+        if row is not None and cur == (a_start, a_end, is_abs) and not mix_changed:
             rep["noop"] += 1
             continue
         if pay is not None and pay["status"] in ("paid", "approved"):
@@ -110,16 +120,20 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
             db.mark_absent(row["id"])  # 内部で差し戻し＋本人再計算まで走る
             rep["absent"].append(label)
         elif row is not None:
-            c.table("p1_shifts").update({
+            _upd = {
                 "actual_start": a_start, "actual_end": a_end,
                 "status": ("checked_out" if a_end else
                            "checked_in" if a_start else "scheduled"),
-            }).eq("id", row["id"]).execute()
+            }
+            if want_mix is not None:
+                _upd["is_mix"] = want_mix
+            c.table("p1_shifts").update(_upd).eq("id", row["id"]).execute()
             db.reset_payment_to_pending(
                 event_id, st_["id"],
-                reason=f"勤怠CSV取込 {a_start or '—'}-{a_end or '—'}")
+                reason=f"勤怠CSV取込 {a_start or '—'}-{a_end or '—'}"
+                       + ("・MIX変更" if mix_changed else ""))
             affected_ids.append(st_["id"])
-            rep["updated"].append(label)
+            rep["updated"].append(label + ("〔MIX〕" if want_mix == 1 else ""))
         elif a_start is None:
             # 出勤なし・欠勤でもない空行 → 作るものが無い
             rep["noop"] += 1
@@ -131,9 +145,10 @@ def import_attendance_csv(file_bytes: bytes, event_id: int,
                 "planned_start": a_start, "planned_end": a_end or a_start,
                 "actual_start": a_start, "actual_end": a_end,
                 "status": "checked_out" if a_end else "checked_in",
+                "is_mix": want_mix or 0,
             }).execute()
             affected_ids.append(st_["id"])
-            rep["created"].append(label)
+            rep["created"].append(label + ("〔MIX〕" if want_mix == 1 else ""))
 
     rep["recalced"] = recalc_staff_payments(event_id, affected_ids)
 
