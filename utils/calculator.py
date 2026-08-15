@@ -393,8 +393,13 @@ def calculate_staff_payment(
     transport_total = sum(d.transport for d in daily_results)
     floor_total = sum(d.floor_bonus for d in daily_results)
     mix_total = sum(d.mix_bonus for d in daily_results)
+    # 2026-08-15 中野さん指示: 今大会（P1 OSAKA SUMMER）は精勤手当なし。
+    # calculate_attendance_bonus 自体は仕様として残し、適用だけ止める。
+    # 次イベントで復活させる場合はこのフラグを True に戻す。
+    ATTENDANCE_BONUS_ENABLED = False
     att_bonus = (att_bonus_override if att_bonus_override is not None
-                 else calculate_attendance_bonus(days_worked, total_event_days))
+                 else calculate_attendance_bonus(days_worked, total_event_days)
+                 if ATTENDANCE_BONUS_ENABLED else 0)
 
     # 交通費override: 新システム（領収書金額+上限）が指定されていればそれを使う
     if transport_override is not None:

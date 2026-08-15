@@ -761,9 +761,17 @@ if staff_opts:
                         p["id"], int(_adj_val), _adj_note,
                         event_id=event_id, performed_by=approver,
                     ):
-                        st.success(
-                            f"{p['name_jp']} の臨時調整を ¥{int(_adj_val):,} に更新しました"
-                        )
+                        # 2026-08-15: 適用「後」の実額を必ず見せる。打刻・再計算が
+                        # 並行で走ると画面表示と最新額がズレるため、適用結果の
+                        # 合計を取り直して明示する（「バグった」ように見える対策）
+                        _fresh = next((x for x in db.get_payments_for_event(event_id)
+                                       if x["id"] == p["id"]), None)
+                        _msg = f"{p['name_jp']} の臨時調整を ¥{int(_adj_val):,} に更新しました"
+                        if _fresh:
+                            _msg += (f"（最新合計 ¥{int(_fresh['total_amount']):,}"
+                                     f" → 確定額 ¥{db.get_payable(_fresh):,}。"
+                                     "画面の他の数字が古い場合は再読み込みで揃います）")
+                        st.success(_msg)
                         st.rerun()
                     else:
                         st.warning("支払済みのため変更できません（または対象なし）")

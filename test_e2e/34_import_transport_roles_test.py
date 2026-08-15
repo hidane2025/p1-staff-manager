@@ -161,8 +161,8 @@ _pd = calculate_staff_payment(staff_id=1, name="D", role="Dealer", shifts=_shift
 _pr = calculate_staff_payment(staff_id=2, name="R", role="受付", shifts=_shifts5,
                               rates_by_date=_rates, total_event_days=5,
                               break_6h=45, break_8h=60, transport_override=0)
-_check("Dealer 全日出勤 → 精勤手当 ¥10,000", _pd.attendance_bonus == 10000,
-       str(_pd.attendance_bonus))
+_check("Dealer 全日出勤でも精勤手当 ¥0（2026-08-15 適用停止）",
+       _pd.attendance_bonus == 0, str(_pd.attendance_bonus))
 _check("受付 全日出勤 → 精勤手当 ¥0（対象外役職）", _pr.attendance_bonus == 0,
        str(_pr.attendance_bonus))
 _check("受付に日当も付かない", _pr.floor_bonus_total == 0, str(_pr.floor_bonus_total))

@@ -362,8 +362,10 @@ partial_pay = calculate_staff_payment(
     total_event_days=6,  # ← イベント全体の日数（修正後の正しい呼び方）
     employment_type="contractor",
 )
-_check("Codex P1: 6日大会×4日勤務 → 精勤 ¥6,000（全勤¥10,000誤付与しない）",
-       partial_pay.attendance_bonus == 6000,
+# 2026-08-15 中野さん指示: 今大会は精勤手当を適用しない（calculator側フラグOFF）。
+# 閾値ロジック自体は calculate_attendance_bonus の単体テストで別途維持している。
+_check("精勤手当は適用停止中 → 全計算で ¥0（2026-08-15 中野さん指示）",
+       partial_pay.attendance_bonus == 0,
        f"got ¥{partial_pay.attendance_bonus}")
 
 # --- P2: タイミー fallback（個別時給ナシ） ---
