@@ -571,8 +571,17 @@ st.divider()
 st.subheader("個別スタッフ操作")
 staff_opts = {f"NO.{p['no']} {p['name_jp']} ({p['role']}) — ¥{db.get_payable(p):,}": p for p in filtered}
 if staff_opts:
-    sel = st.selectbox("スタッフを選択", list(staff_opts.keys()))
+    # 2026-08-16: 金額を含むラベルで選択を保持すると、交通費や調整で金額が変わった
+    # 瞬間にラベルが変わり、選択が先頭（NO.1）へ戻っていた。
+    # 選択の保持はスタッフIDで行い、ラベルは表示専用にする。
+    _sel_key = "pay_selected_staff_id"
+    _opt_items = list(staff_opts.items())
+    _prev_sid = st.session_state.get(_sel_key)
+    _idx = next((i for i, (_, _p) in enumerate(_opt_items)
+                 if _p["staff_id"] == _prev_sid), 0)
+    sel = st.selectbox("スタッフを選択", [k for k, _ in _opt_items], index=_idx)
     p = staff_opts[sel]
+    st.session_state[_sel_key] = p["staff_id"]
 
     col_d1, col_d2 = st.columns(2)
     with col_d1:
