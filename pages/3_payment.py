@@ -606,23 +606,48 @@ if staff_opts:
         # 時間は「現在の出退勤データ」（実績優先）から計算関数と同じロジックで算出。
         # 金額行と混ざって合計検算を壊さないよう、時間は h 表記で別行にする。
         _tot_min = _brk_min = _wdays = 0
-        for _s in db.get_shifts_for_event(event_id):
+        _day_rows = []  # 2026-08-15 中野さん要望: 個別スタッフに全日の出退勤を表示
+        _staff_shifts = sorted(
+            (s for s in db.get_shifts_for_event(event_id)
+             if s["staff_id"] == p["staff_id"]),
+            key=lambda x: x["date"])
+        for _s in _staff_shifts:
+            _row = {
+                "日付": _s["date"][5:].replace("-", "/"),
+                "予定": (f"{_s.get('planned_start') or '—'}〜{_s.get('planned_end') or '—'}"),
+                "実績": (f"{_s.get('actual_start') or '—'}〜{_s.get('actual_end') or '—'}"),
+                "支給時間": "—",
+                "メモ": "MIX" if _s.get("is_mix") else "",
+            }
+            if _s["status"] == "absent":
+                _row["実績"] = "❌ 欠勤"
+                _day_rows.append(_row)
+                continue
             # 支払いと同じルール: 打刻（実到着・実退勤）が揃った日だけを数える
-            if (_s["staff_id"] != p["staff_id"] or _s["status"] == "absent"
-                    or not (_s.get("actual_start") and _s.get("actual_end"))):
+            if not (_s.get("actual_start") and _s.get("actual_end")):
+                _row["メモ"] = ("打刻待ち（¥0）" + ("・MIX" if _s.get("is_mix") else ""))
+                _day_rows.append(_row)
                 continue
             _sm = calculator.parse_time_to_minutes(_s["actual_start"])
             _em = calculator.parse_time_to_minutes(_s["actual_end"])
             if _sm is None or _em is None:
+                _day_rows.append(_row)
                 continue
             try:
                 _sh = calculator.calculate_shift_hours(
                     _sm, _em, _s["date"], break_6h, break_8h)
             except calculator.InvalidShiftError:
+                _row["メモ"] = "⚠️ 打刻不備"
+                _day_rows.append(_row)
                 continue
             _tot_min += _sh.total_minutes
             _brk_min += _sh.break_minutes
             _wdays += 1
+            _worked = _sh.total_minutes - _sh.break_minutes
+            _row["支給時間"] = (
+                f"{_worked / 60:.2f}".rstrip("0").rstrip(".") + "h"
+                + (f"（休憩{_sh.break_minutes}分）" if _sh.break_minutes else ""))
+            _day_rows.append(_row)
 
         def _fmt_h(_m: int) -> str:
             return f"{_m / 60:.2f}".rstrip("0").rstrip(".") + "h"
@@ -654,6 +679,11 @@ if staff_opts:
                 "時間の行は現在の出退勤データから算出しているため、"
                 "出退勤を直した後は再計算するまで金額と食い違うことがあります。"
             )
+        # 全日の出退勤（2026-08-15 中野さん要望）
+        if _day_rows:
+            st.markdown("**📅 この人の出退勤（全日）**")
+            st.dataframe(pd.DataFrame(_day_rows), use_container_width=True,
+                         hide_index=True)
 
     with col_d2:
         # 承認（承認者はログイン中の operator に束縛済み）
