@@ -66,6 +66,16 @@ _check("休憩判定のベタ書きがページに無い", not _dup_dept, str(_d
 _calc = (ROOT / "utils/calculator.py").read_text()
 _check("calculatorも共通関数を使う", "break_minutes_for" in _calc)
 
+
+print("[E] 交通費: 片道×2→上限（2026-08-16）")
+from utils.transport_rules import round_trip_amount, clip_to_cap, ROUND_TRIP_MULTIPLIER  # noqa: E402
+_check("倍率は2", ROUND_TRIP_MULTIPLIER == 2)
+_check("片道7,000→往復14,000", round_trip_amount(7000, 25000) == 14000)
+_check("上限超過は頭打ち（片道15,000→上限25,000）", round_trip_amount(15000, 25000) == 25000)
+_check("上限0は無制限（片道5,000→10,000）", round_trip_amount(5000, 0) == 10000)
+_check("0円は0円", round_trip_amount(0, 25000) == 0)
+_check("従来のclip_to_capは不変", clip_to_cap(14000, 25000) == 14000)
+
 print("=" * 60)
 if failures:
     print(f"❌ 失敗 {len(failures)}件")

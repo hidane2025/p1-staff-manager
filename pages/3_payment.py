@@ -884,7 +884,7 @@ if staff_opts:
         st.caption(
             f"地域: {_stf.get('region') or '未登録'}"
             + (f"（開催地: 出勤1日あたり¥{_cap:,}を自動支給）" if _is_venue
-               else f"（領収書実費・上限¥{_cap:,}）" if _rule
+               else f"（領収書実費・**片道×2**で往復精算／上限¥{_cap:,}）" if _rule
                else "（地域未設定のため自動計算されません）")
             + f" ／ 現在の交通費: ¥{int(p['transport_total']):,}"
             + ("　※手入力あり" if _tr_claim else "　※自動計算"))
@@ -894,35 +894,48 @@ if staff_opts:
             st.caption("⚠️ 交通費の入力にはオペレーター名の設定（再ログイン）が必要です")
         else:
             with st.form(f"tr_form_{p['id']}"):
+                _tr_mode = st.radio(
+                    "入力する金額", ["片道（×2で往復精算）", "往復の総額"],
+                    horizontal=True, key=f"tr_mode_{p['id']}",
+                    help="現場で受け取る領収書は片道分が基本。片道を入れると自動で×2します。")
                 _tr_val = st.number_input(
-                    "交通費（円）", min_value=0, step=500, format="%d",
-                    value=int((_tr_claim or {}).get("approved_amount")
-                              or p["transport_total"] or 0),
-                    help="領収書の額や実費を直接入れます。上限を超える場合は上限額に調整されます。")
+                    "領収書の金額（円）", min_value=0, step=500, format="%d",
+                    value=int((_tr_claim or {}).get("receipt_amount")
+                              or (_tr_claim or {}).get("approved_amount") or 0),
+                    help="上限を超える場合は上限額（往復総額）に調整されます。")
                 _tr_note = st.text_input(
                     "メモ（任意）", value=(_tr_claim or {}).get("note") or "",
-                    placeholder="例: 新幹線往復・領収書あり")
+                    placeholder="例: 新幹線 片道・領収書あり")
                 _c_tr1, _c_tr2 = st.columns(2)
                 _tr_save = _c_tr1.form_submit_button("🚃 交通費を反映", type="primary")
                 _tr_clear = _c_tr2.form_submit_button("↩️ 自動計算に戻す")
             if _tr_save:
-                _adj_amt = min(int(_tr_val), _cap) if (_cap and not _is_venue) else int(_tr_val)
+                _one_way = _tr_mode.startswith("片道")
+                _gross = (int(_tr_val) * transport_rules_mod.ROUND_TRIP_MULTIPLIER
+                          if _one_way else int(_tr_val))
+                _adj_amt = (transport_rules_mod.clip_to_cap(_gross, _cap)
+                            if (_cap and not _is_venue) else _gross)
                 db.upsert_transport_claim(
                     event_id, p["staff_id"], receipt_amount=int(_tr_val),
                     approved_amount=_adj_amt, has_receipt=1,
-                    note=_tr_note or f"支払い計算画面で入力（{approver}）")
+                    note=(_tr_note or f"支払い計算画面で入力（{approver}）")
+                         + (f"／片道¥{int(_tr_val):,}×2" if _one_way else "／往復入力"))
                 db.reset_payment_to_pending(
                     event_id, p["staff_id"], reason=f"交通費を手入力 ¥{_adj_amt:,}")
                 from utils.payment_recalc import recalc_staff_payment as _rc_tr
                 _rc_tr(event_id, p["staff_id"])
                 db.log_action(
                     "transport_claim", "payments", p["id"],
-                    detail=f"{p['name_jp']} (NO.{p['no']}) 交通費を手入力 ¥{_adj_amt:,}"
-                           + (f"（入力¥{int(_tr_val):,}→上限調整）" if _adj_amt != int(_tr_val) else ""),
+                    detail=(f"{p['name_jp']} (NO.{p['no']}) 交通費を手入力 ¥{_adj_amt:,}"
+                            f"（{'片道' if _one_way else '往復'}¥{int(_tr_val):,}"
+                            f"{'×2' if _one_way else ''}"
+                            + (f"→上限¥{_cap:,}に調整" if _adj_amt != _gross else "") + "）"),
                     event_id=event_id, performed_by=approver)
                 st.success(
-                    f"🚃 交通費を ¥{_adj_amt:,} にしました（金額も再計算済み）"
-                    + (f"　※上限¥{_cap:,}に調整" if _adj_amt != int(_tr_val) else ""))
+                    f"🚃 交通費を ¥{_adj_amt:,} にしました"
+                    + (f"（片道¥{int(_tr_val):,} × 2 = ¥{_gross:,}）" if _one_way else "")
+                    + (f"　※上限¥{_cap:,}に調整" if _adj_amt != _gross else "")
+                    + "。金額も再計算済みです。")
                 st.rerun()
             if _tr_clear:
                 if _tr_claim:

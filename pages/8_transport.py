@@ -211,8 +211,9 @@ if summary_rows:
 st.divider()
 st.subheader("③ 領収書金額入力（確定モード）")
 st.markdown(
-    "圏外スタッフの領収書金額を入力します。上限超過時は自動で上限額に調整されます。"
-    "開催地在住者は入力不要（日額×出勤日数を自動支給）。"
+    "圏外スタッフの**片道**の領収書金額を入力します（自動で×2して往復精算・"
+    "上限超過時は上限額に調整）。開催地（関西圏）在住者は入力不要で、"
+    "領収書なし・出勤1日あたり一律の日額を自動支給します。"
 )
 
 # 既存の請求情報
@@ -284,8 +285,9 @@ if _input_staff:
             "上限額": st.column_config.NumberColumn(
                 "上限額", format="¥%d", help="0=上限なし（手入力額をそのまま支給）"),
             "領収書金額(円)": st.column_config.NumberColumn(
-                "領収書金額(円)", min_value=0, step=100,
-                help="上限超過時は自動で上限額に調整されます",
+                "領収書金額(片道・円)", min_value=0, step=100,
+                help="片道の領収書額を入れてください。自動で×2（往復）にし、"
+                     "上限超過時は上限額に調整します（2026-08-16 中野さん指示）",
             ),
             "領収書あり": st.column_config.CheckboxColumn("領収書あり"),
             "備考": "備考",
@@ -301,10 +303,12 @@ if _input_staff:
             receipt = int(row["領収書金額(円)"]) if row["領収書金額(円)"] else 0
             limit = int(row["上限額"])
             has_receipt = int(bool(row["領収書あり"]))
-            # 上限調整の式の正=utils/transport_rules.py（3画面共通）
-            approved = transport_rules_mod.clip_to_cap(receipt, limit)
-            if approved != receipt:
-                errors.append(f"{row['名前']}: ¥{receipt:,} → ¥{approved:,}（上限）に調整")
+            # 片道×2→上限で頭打ち。式の正=utils/transport_rules.py（3画面共通）
+            approved = transport_rules_mod.round_trip_amount(receipt, limit)
+            _gross = receipt * transport_rules_mod.ROUND_TRIP_MULTIPLIER
+            if approved != _gross:
+                errors.append(
+                    f"{row['名前']}: 片道¥{receipt:,}×2=¥{_gross:,} → ¥{approved:,}（上限）に調整")
             # 領収書なし・金額0は支払いなし
             if not has_receipt:
                 approved = 0

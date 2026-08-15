@@ -27,6 +27,22 @@ def clip_to_cap(receipt_amount: int, cap: int) -> int:
     return min(r, c) if c > 0 else r
 
 
+# 片道の領収書は往復（×2）で精算する（2026-08-16 中野さん指示）。
+# 現場が持ってくるのは片道分の領収書なので、入力値を往復に換算してから
+# 上限（往復総額）で頭打ちにする。往復額をそのまま入れる運用も残す。
+ROUND_TRIP_MULTIPLIER = 2
+
+
+def round_trip_amount(one_way_amount: int, cap: int) -> int:
+    """片道額 → 往復（×2）→ 上限で頭打ち。
+
+    Args:
+        one_way_amount: 片道の領収書金額
+        cap: 往復総額の上限（0=上限なし）
+    """
+    return clip_to_cap(int(one_way_amount or 0) * ROUND_TRIP_MULTIPLIER, cap)
+
+
 def approved_amount(rule: dict, days_worked: int,
                     receipt_amount: int = 0, has_receipt: bool = False) -> tuple:
     """地域ルールから精算額を決める。
