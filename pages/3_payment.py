@@ -607,9 +607,8 @@ if staff_opts:
         # 金額行と混ざって合計検算を壊さないよう、時間は h 表記で別行にする。
         _tot_min = _brk_min = _wdays = 0
         # 2026-08-16: 休憩控除は受付系のみ（計算ロジックと同一ルールで表示）
-        from utils.roles import role_dept as _role_dept_disp
-        _d_b6, _d_b8 = ((break_6h, break_8h)
-                        if _role_dept_disp(p.get("role")) == "受付系" else (0, 0))
+        from utils.roles import break_minutes_for as _break_for
+        _d_b6, _d_b8 = _break_for(p.get("role"), break_6h, break_8h)
         _day_rows = []  # 2026-08-15 中野さん要望: 個別スタッフに全日の出退勤を表示
         _staff_shifts = sorted(
             (s for s in db.get_shifts_for_event(event_id)
@@ -694,8 +693,7 @@ if staff_opts:
                 "保存すると金額は自動で再計算されます。"
                 "支払い済み・承認済みの人は変更できません（先に差し戻してください）。")
             _editable = p["status"] == "pending"
-            _time_opts = ["—"] + [f"{h:02d}:{m:02d}"
-                                  for h in range(7, 30) for m in range(0, 60, 5)] + ["30:00"]
+            from utils.time_input import TIME_OPTIONS as _time_opts
             _ddf = pd.DataFrame(_day_rows)
             _dedit = st.data_editor(
                 _ddf, use_container_width=True, hide_index=True,
@@ -712,14 +710,7 @@ if staff_opts:
             if not _editable:
                 st.caption(f"🔒 {'支払い済み' if p['status'] == 'paid' else '承認済み'}のため編集できません。")
             elif not _ddf.empty:
-                def _norm_t(v):
-                    v = str(v or "").strip()
-                    if v in ("", "—", "-", "None"):
-                        return None, True
-                    _m = calculator.parse_time_to_minutes(v)
-                    if _m is None or not (0 <= _m < 48 * 60):
-                        return None, False
-                    return f"{_m // 60:02d}:{_m % 60:02d}", True
+                from utils.time_input import normalize_edit_time as _norm_t
 
                 for _i in range(len(_ddf)):
                     _changed = any(str(_ddf.iloc[_i][c]) != str(_dedit.iloc[_i][c])

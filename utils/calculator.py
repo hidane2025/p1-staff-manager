@@ -315,9 +315,8 @@ def calculate_staff_payment(
     # 2026-08-16 中野さん指示: 休憩控除は受付系のみ。受付以外（ディーラー・
     # Floor・TD・Pit・Chip等）は控除なし。既に承認/支払済みの分は再計算保護に
     # より旧ルール（控除あり）のまま確定額が維持される。
-    from utils.roles import role_dept as _role_dept
-    if _role_dept(role) != "受付系":
-        break_6h, break_8h = 0, 0
+    from utils.roles import break_minutes_for as _break_for
+    break_6h, break_8h = _break_for(role, break_6h, break_8h)
 
     invalid_shifts: list[str] = []   # 打刻ミス等で計算対象外にした日
     for shift in shifts:

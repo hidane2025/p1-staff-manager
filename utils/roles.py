@@ -40,3 +40,17 @@ def role_dept(role) -> str:
     24名の受付系で目立たせた方が入力ミスに気づけるため。
     （手当の判定も未知役職には何も付けない設計と整合）"""
     return "ディーラー系" if str(role or "") in DEALER_LINE_ROLES else "受付系"
+
+
+def break_minutes_for(role, break_6h: int, break_8h: int) -> tuple:
+    """役職に応じた休憩控除（分）を返す。
+
+    2026-08-16 中野さん指示: 休憩控除は受付系のみ。受付以外（Dealer・Floor・
+    TD・Pit・Chip）は控除なし。計算（calculator）と表示（支払い計算ページ）で
+    判定が割れないよう、ここ1箇所に置く。
+
+    Returns: (6h超の控除分, 8h超の控除分)
+    """
+    if role_dept(role) == "受付系":
+        return int(break_6h or 0), int(break_8h or 0)
+    return 0, 0

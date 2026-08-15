@@ -47,3 +47,41 @@ def split_hhmm(value, default_hour: int = 0, default_minute: int = 0) -> tuple:
         return hour, snap_minute(int(m))
     except (ValueError, AttributeError, TypeError):
         return default_hour, snap_minute(default_minute)
+
+
+# ============================================================
+# 一覧の直接編集で使う「時刻プルダウン」とその正規化（2026-08-16 集約）
+#   出退勤ページ・支払い計算ページに同じ選択肢生成と正規化が
+#   別々に書かれていた（刻み・上限がズレると支払額の丸めが画面で変わる）。
+#   振る舞いは従来と同一（7:00〜29:55 の5分刻み＋30:00、"—"=未記録）。
+# ============================================================
+EMPTY_TIME = "—"
+_EDIT_HOUR_MIN = 7
+_EDIT_HOUR_MAX = 29
+
+# 実到着・実退勤の選択肢（先頭は「—」＝未記録/取り消し）
+TIME_OPTIONS: list = (
+    [EMPTY_TIME]
+    + [f"{h:02d}:{m:02d}"
+       for h in range(_EDIT_HOUR_MIN, _EDIT_HOUR_MAX + 1)
+       for m in range(0, 60, STEP_MINUTES)]
+    + ["30:00"]
+)
+
+
+def normalize_edit_time(value) -> tuple:
+    """一覧に入力された時刻を正規化する。
+
+    Returns:
+        (正規化済み "HH:MM" or None, 妥当か bool)
+        "—"・空文字は (None, True)＝未記録。読めない値・0〜48時間外は (None, False)。
+    """
+    from utils.calculator import parse_time_to_minutes
+
+    v = str(value or "").strip()
+    if v in ("", EMPTY_TIME, "-", "ー", "None"):
+        return None, True
+    m = parse_time_to_minutes(v)
+    if m is None or not (0 <= m < 48 * 60):
+        return None, False
+    return f"{m // 60:02d}:{m % 60:02d}", True

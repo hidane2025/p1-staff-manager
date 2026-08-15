@@ -587,7 +587,7 @@ if st.session_state.get("_att_flash"):
     st.warning(st.session_state.pop("_att_flash"))
 
 # 実到着・実退勤のプルダウン選択肢（5分刻み・「—」=未記録/取り消し）
-_TIME_OPTS = ["—"] + [f"{h:02d}:{m:02d}" for h in range(7, 30) for m in range(0, 60, 5)] + ["30:00"]
+from utils.time_input import TIME_OPTIONS as _TIME_OPTS  # 選択肢の正は utils/time_input
 
 # 並び順はサーバー側で固定する。表ヘッダのクリック並び替えはブラウザ側の
 # 一時状態のため、時刻を保存するたびの再描画で消えてしまう（2026-08-14 指摘）。
@@ -730,15 +730,7 @@ _paid_staff = {p["staff_id"] for p in (db.get_payments_for_event(event_id) or []
                if p.get("status") == "paid"}
 
 
-def _norm_edit_time(v):
-    """一覧に打ち込まれた時刻を正規化。(値 or None, 妥当か) を返す"""
-    v = str(v or "").strip()
-    if v in ("", "—", "-", "ー", "None"):
-        return None, True
-    m = parse_time_to_minutes(v)
-    if m is None or not (0 <= m < 48 * 60):
-        return None, False
-    return f"{m // 60:02d}:{m % 60:02d}", True
+from utils.time_input import normalize_edit_time as _norm_edit_time  # 正規化の正も同モジュール
 
 
 def _flash_and_rerun(msg):
