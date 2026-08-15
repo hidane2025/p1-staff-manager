@@ -312,6 +312,13 @@ def calculate_staff_payment(
     is_timee = employment_type == "timee"
     has_custom = bool(custom_hourly_rate and custom_hourly_rate > 0)
 
+    # 2026-08-16 中野さん指示: 休憩控除は受付系のみ。受付以外（ディーラー・
+    # Floor・TD・Pit・Chip等）は控除なし。既に承認/支払済みの分は再計算保護に
+    # より旧ルール（控除あり）のまま確定額が維持される。
+    from utils.roles import role_dept as _role_dept
+    if _role_dept(role) != "受付系":
+        break_6h, break_8h = 0, 0
+
     invalid_shifts: list[str] = []   # 打刻ミス等で計算対象外にした日
     for shift in shifts:
         time_range = f"{shift['start']}~{shift['end']}"

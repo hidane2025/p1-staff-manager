@@ -168,9 +168,9 @@ _check("業務委託の精勤は対象（>=4日条件未達なので0）",
 _check("タイミーの精勤は除外", timee.attendance_bonus == 0)
 _check("タイミーのフロア手当は0", timee.floor_bonus_total == 0)
 _check("タイミーのMIX手当は0", timee.mix_bonus_total == 0)
-_check("タイミーの深夜手当も通常時給で計算（割増なし）",
-       # 1日10h勤務 - 1h休憩 = 9h（うち深夜1h）。通し時給1200で9h=10800円/日
-       timee.base_pay + timee.night_pay == 9 * 1200 * 2,
+_check("タイミーの深夜手当も通常時給で計算（割増なし・受付以外は休憩控除なし）",
+       # 2026-08-16: Dealerは休憩控除なし → 1日10h。通し時給1200で12000円/日
+       timee.base_pay + timee.night_pay == 10 * 1200 * 2,
        f"got ¥{timee.base_pay + timee.night_pay}")
 _check("業務委託の交通費 ¥2,000",
        contractor.transport_total == 2000)
@@ -188,9 +188,9 @@ contractor_with_custom = calculate_staff_payment(
 # 業務委託 + 個別時給: 通常は2000、深夜は2000*(1875/1500)=2500（自動スケール）
 # 1日: 8h*2000 + 1h*2500 = 16000+2500 = 18500
 # 2日: 37000
-expected_base_2 = 8 * 2000 * 2  # 32000
+expected_base_2 = 9 * 2000 * 2  # 36000（2026-08-16: Dealerは休憩控除なし・通常9h）
 expected_night_2 = 1 * 2500 * 2  # 5000
-_check("業務委託の個別時給 ¥2000 で基本給 = ¥32,000",
+_check("業務委託の個別時給 ¥2000 で基本給 = ¥36,000（休憩控除なし）",
        contractor_with_custom.base_pay == expected_base_2,
        f"got ¥{contractor_with_custom.base_pay}")
 _check("業務委託の個別時給で深夜時給は1.25倍に自動スケール = ¥5,000",
@@ -207,8 +207,8 @@ contractor_default = calculate_staff_payment(
     employment_type="contractor",
     custom_hourly_rate=None,
 )
-_check("個別時給なしならイベント時給で計算（基本給 ¥1500*8h*2 = ¥24,000）",
-       contractor_default.base_pay == 8 * 1500 * 2,
+_check("個別時給なしならイベント時給で計算（基本給 ¥1500*9h*2 = ¥27,000・休憩控除なし）",
+       contractor_default.base_pay == 9 * 1500 * 2,
        f"got ¥{contractor_default.base_pay}")
 _check("個別時給=0 と個別時給なしは同等",
        calculate_staff_payment(
@@ -381,9 +381,9 @@ _check("Codex P2: タイミー個別ナシでもMIX手当ゼロ",
 _check("Codex P2: タイミー個別ナシでも精勤手当ゼロ",
        timee_no_custom.attendance_bonus == 0)
 # 深夜割増なし: 通常時給で深夜時間も計算される（イベント時給1500を使う）
-# 1日10h勤務 - 1h休憩 = 9h で 9*1500*2日 = ¥27,000 になる（base_pay+night_pay）
+# 2026-08-16: Dealerは休憩控除なし → 1日10h で 10*1500*2日 = ¥30,000
 _check("Codex P2: タイミー個別ナシ → 深夜割増なし（イベント時給で通し計算）",
-       timee_no_custom.base_pay + timee_no_custom.night_pay == 9 * 1500 * 2,
+       timee_no_custom.base_pay + timee_no_custom.night_pay == 10 * 1500 * 2,
        f"got ¥{timee_no_custom.base_pay + timee_no_custom.night_pay}")
 
 

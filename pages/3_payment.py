@@ -606,6 +606,10 @@ if staff_opts:
         # 時間は「現在の出退勤データ」（実績優先）から計算関数と同じロジックで算出。
         # 金額行と混ざって合計検算を壊さないよう、時間は h 表記で別行にする。
         _tot_min = _brk_min = _wdays = 0
+        # 2026-08-16: 休憩控除は受付系のみ（計算ロジックと同一ルールで表示）
+        from utils.roles import role_dept as _role_dept_disp
+        _d_b6, _d_b8 = ((break_6h, break_8h)
+                        if _role_dept_disp(p.get("role")) == "受付系" else (0, 0))
         _day_rows = []  # 2026-08-15 中野さん要望: 個別スタッフに全日の出退勤を表示
         _staff_shifts = sorted(
             (s for s in db.get_shifts_for_event(event_id)
@@ -635,7 +639,7 @@ if staff_opts:
                 continue
             try:
                 _sh = calculator.calculate_shift_hours(
-                    _sm, _em, _s["date"], break_6h, break_8h)
+                    _sm, _em, _s["date"], _d_b6, _d_b8)
             except calculator.InvalidShiftError:
                 _row["メモ"] = "⚠️ 打刻不備"
                 _day_rows.append(_row)
