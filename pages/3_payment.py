@@ -869,6 +869,78 @@ if staff_opts:
                     else:
                         st.warning("支払済みのため変更できません（または対象なし）")
 
+        # 交通費の直接入力（2026-08-16 中野さん要望）
+        # 地域ルール（近畿=日額／遠方=領収書実費・上限）に対する「手入力の上書き」。
+        # 判定の正は utils/transport_rules.payment_amount（claimが最優先）。
+        st.divider()
+        st.markdown("**🚃 交通費（この人だけ手入力で上書き）**")
+        _tr_rules = {r["region"]: r for r in db.get_transport_rules(event_id)}
+        _tr_claim = {c["staff_id"]: c for c in db.get_transport_claims(event_id)}.get(
+            p["staff_id"])
+        _stf = db.get_staff_by_id(p["staff_id"]) or {}
+        _rule = _tr_rules.get(_stf.get("region") or "")
+        _cap = int(_rule.get("max_amount") or 0) if _rule else 0
+        _is_venue = bool(_rule.get("is_venue_region")) if _rule else False
+        st.caption(
+            f"地域: {_stf.get('region') or '未登録'}"
+            + (f"（開催地: 出勤1日あたり¥{_cap:,}を自動支給）" if _is_venue
+               else f"（領収書実費・上限¥{_cap:,}）" if _rule
+               else "（地域未設定のため自動計算されません）")
+            + f" ／ 現在の交通費: ¥{int(p['transport_total']):,}"
+            + ("　※手入力あり" if _tr_claim else "　※自動計算"))
+        if p["status"] != "pending":
+            st.caption(f"🔒 {'支払い済み' if p['status'] == 'paid' else '承認済み'}のため変更できません。")
+        elif not operator_ok:
+            st.caption("⚠️ 交通費の入力にはオペレーター名の設定（再ログイン）が必要です")
+        else:
+            with st.form(f"tr_form_{p['id']}"):
+                _tr_val = st.number_input(
+                    "交通費（円）", min_value=0, step=500, format="%d",
+                    value=int((_tr_claim or {}).get("approved_amount")
+                              or p["transport_total"] or 0),
+                    help="領収書の額や実費を直接入れます。上限を超える場合は上限額に調整されます。")
+                _tr_note = st.text_input(
+                    "メモ（任意）", value=(_tr_claim or {}).get("note") or "",
+                    placeholder="例: 新幹線往復・領収書あり")
+                _c_tr1, _c_tr2 = st.columns(2)
+                _tr_save = _c_tr1.form_submit_button("🚃 交通費を反映", type="primary")
+                _tr_clear = _c_tr2.form_submit_button("↩️ 自動計算に戻す")
+            if _tr_save:
+                _adj_amt = min(int(_tr_val), _cap) if (_cap and not _is_venue) else int(_tr_val)
+                db.upsert_transport_claim(
+                    event_id, p["staff_id"], receipt_amount=int(_tr_val),
+                    approved_amount=_adj_amt, has_receipt=1,
+                    note=_tr_note or f"支払い計算画面で入力（{approver}）")
+                db.reset_payment_to_pending(
+                    event_id, p["staff_id"], reason=f"交通費を手入力 ¥{_adj_amt:,}")
+                from utils.payment_recalc import recalc_staff_payment as _rc_tr
+                _rc_tr(event_id, p["staff_id"])
+                db.log_action(
+                    "transport_claim", "payments", p["id"],
+                    detail=f"{p['name_jp']} (NO.{p['no']}) 交通費を手入力 ¥{_adj_amt:,}"
+                           + (f"（入力¥{int(_tr_val):,}→上限調整）" if _adj_amt != int(_tr_val) else ""),
+                    event_id=event_id, performed_by=approver)
+                st.success(
+                    f"🚃 交通費を ¥{_adj_amt:,} にしました（金額も再計算済み）"
+                    + (f"　※上限¥{_cap:,}に調整" if _adj_amt != int(_tr_val) else ""))
+                st.rerun()
+            if _tr_clear:
+                if _tr_claim:
+                    db.get_client().table("p1_transport_claims").delete().eq(
+                        "id", _tr_claim["id"]).execute()
+                    db.reset_payment_to_pending(
+                        event_id, p["staff_id"], reason="交通費の手入力を取消（自動計算へ）")
+                    from utils.payment_recalc import recalc_staff_payment as _rc_tr2
+                    _rc_tr2(event_id, p["staff_id"])
+                    db.log_action(
+                        "transport_claim", "payments", p["id"],
+                        detail=f"{p['name_jp']} (NO.{p['no']}) 交通費の手入力を取消し自動計算へ",
+                        event_id=event_id, performed_by=approver)
+                    st.success("↩️ 自動計算に戻しました（金額も再計算済み）")
+                else:
+                    st.info("この人は元から自動計算です。")
+                st.rerun()
+
         # 領収書PDF発行
         st.divider()
         st.markdown("**📄 領収書PDF**")
