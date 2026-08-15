@@ -853,6 +853,41 @@ if (not _READONLY) and not df.empty and not edited_df.empty:
 #   Claude/CLIを介さず、TAKAツールが出すCSVをそのまま画面から反映する。
 #   ロジックの正は utils/attendance_csv.py（冪等・支払い済み保護・自動再計算）。
 # ============================================================
+# ============================================================
+# ⚠️ 要確認: 過ぎた日なのに打刻が無い人（2026-08-16 中野さん指示）
+#   「情報が無い＝休み」と決めつけないための可視化。欠勤にはせず、
+#   人が見て判断できるよう名前と日付だけを出す。
+#   （受付系はTAKAツールのCSVに含まれないため特に落ちやすい）
+# ============================================================
+st.divider()
+st.subheader("⑤ 要確認（過ぎた日の打刻漏れ）")
+_today_jst = datetime.now(_JST).strftime("%Y-%m-%d")
+_missing: dict = {}
+for _s in db.get_shifts_for_event(event_id):
+    if _s["date"] >= _today_jst or _s["status"] == "absent":
+        continue
+    if _s.get("actual_start") and _s.get("actual_end"):
+        continue
+    _dept_m = role_dept(_s.get("role"))
+    _missing.setdefault((_s.get("no"), _s.get("name_jp"), _dept_m), []).append(_s["date"])
+if not _missing:
+    st.success("✅ 過ぎた日の打刻漏れはありません。")
+else:
+    st.warning(
+        f"⚠️ **{len(_missing)}名** に、過ぎた日の打刻が入っていません。"
+        "**欠勤にはしていません**（実際に休んだのか、入力漏れかを確認してください）。"
+        "働いていた場合、その日は¥0のままなので未払いになります。")
+    st.dataframe(
+        pd.DataFrame([
+            {"NO.": k[0], "名前": k[1], "部門": k[2],
+             "打刻が無い日": "・".join(d[5:].replace("-", "/") for d in sorted(v)),
+             "日数": len(v)}
+            for k, v in sorted(_missing.items(), key=lambda x: (x[0][2], x[0][0] or 9999))
+        ]), use_container_width=True, hide_index=True)
+    st.caption(
+        "対応: 働いた日は上の一覧か『💰支払い計算』の個別画面で実時刻を入力／"
+        "本当に休んだ日は「②例外を記録 → ❌欠勤」で欠勤にしてください。")
+
 st.divider()
 st.subheader("④ 勤怠CSV取込（TAKAツール）")
 st.caption(
