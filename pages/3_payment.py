@@ -619,12 +619,15 @@ if staff_opts:
             _row = {
                 "日付": _s["date"][5:].replace("-", "/"),
                 "予定": (f"{_s.get('planned_start') or '—'}〜{_s.get('planned_end') or '—'}"),
-                "実績": (f"{_s.get('actual_start') or '—'}〜{_s.get('actual_end') or '—'}"),
+                "実到着": _s.get("actual_start") or "—",
+                "実退勤": _s.get("actual_end") or "—",
                 "支給時間": "—",
                 "メモ": "MIX" if _s.get("is_mix") else "",
+                "_sid": _s["id"],
+                "_status": _s["status"],
             }
             if _s["status"] == "absent":
-                _row["実績"] = "❌ 欠勤"
+                _row["メモ"] = "❌ 欠勤"
                 _day_rows.append(_row)
                 continue
             # 支払いと同じルール: 打刻（実到着・実退勤）が揃った日だけを数える
@@ -683,11 +686,76 @@ if staff_opts:
                 "時間の行は現在の出退勤データから算出しているため、"
                 "出退勤を直した後は再計算するまで金額と食い違うことがあります。"
             )
-        # 全日の出退勤（2026-08-15 中野さん要望）
+        # 全日の出退勤（2026-08-15 表示／2026-08-16 その場編集を追加）
         if _day_rows:
-            st.markdown("**📅 この人の出退勤（全日）**")
-            st.dataframe(pd.DataFrame(_day_rows), use_container_width=True,
-                         hide_index=True)
+            st.markdown("**📅 この人の出退勤（全日・その場で修正できます）**")
+            st.caption(
+                "申告とズレていたらここで直せます（プルダウン・「—」で取り消し）。"
+                "保存すると金額は自動で再計算されます。"
+                "支払い済み・承認済みの人は変更できません（先に差し戻してください）。")
+            _editable = p["status"] == "pending"
+            _time_opts = ["—"] + [f"{h:02d}:{m:02d}"
+                                  for h in range(7, 30) for m in range(0, 60, 5)] + ["30:00"]
+            _ddf = pd.DataFrame(_day_rows)
+            _dedit = st.data_editor(
+                _ddf, use_container_width=True, hide_index=True,
+                key=f"day_edit_{p['id']}",
+                disabled=True if not _editable else ["日付", "予定", "支給時間", "メモ",
+                                                     "_sid", "_status"],
+                column_config={
+                    "実到着": st.column_config.SelectboxColumn("実到着", options=_time_opts),
+                    "実退勤": st.column_config.SelectboxColumn(
+                        "実退勤", options=_time_opts,
+                        help="深夜は 25:30 のような24時超表記"),
+                    "_sid": None, "_status": None,
+                })
+            if not _editable:
+                st.caption(f"🔒 {'支払い済み' if p['status'] == 'paid' else '承認済み'}のため編集できません。")
+            elif not _ddf.empty:
+                def _norm_t(v):
+                    v = str(v or "").strip()
+                    if v in ("", "—", "-", "None"):
+                        return None, True
+                    _m = calculator.parse_time_to_minutes(v)
+                    if _m is None or not (0 <= _m < 48 * 60):
+                        return None, False
+                    return f"{_m // 60:02d}:{_m % 60:02d}", True
+
+                for _i in range(len(_ddf)):
+                    _changed = any(str(_ddf.iloc[_i][c]) != str(_dedit.iloc[_i][c])
+                                   for c in ("実到着", "実退勤"))
+                    if not _changed:
+                        continue
+                    _sid = int(_ddf.iloc[_i]["_sid"])
+                    _ns, _ok1 = _norm_t(_dedit.iloc[_i]["実到着"])
+                    _ne, _ok2 = _norm_t(_dedit.iloc[_i]["実退勤"])
+                    if not (_ok1 and _ok2):
+                        st.warning("⚠️ 時刻を読めません。プルダウンから選んでください。")
+                        break
+                    if _ne and not _ns:
+                        st.warning("⚠️ 退勤だけは記録できません。先に実到着を入れてください。")
+                        break
+                    if (_ns and _ne and calculator.parse_time_to_minutes(_ne)
+                            < calculator.parse_time_to_minutes(_ns)):
+                        st.warning("⚠️ 退勤が到着より前です。深夜は 25:30 のような表記で。")
+                        break
+                    db.get_client().table("p1_shifts").update({
+                        "actual_start": _ns, "actual_end": _ne,
+                        "status": ("checked_out" if _ne else
+                                   "checked_in" if _ns else "scheduled"),
+                    }).eq("id", _sid).execute()
+                    db.reset_payment_to_pending(
+                        event_id, p["staff_id"], reason="支払い計算画面で実績を修正")
+                    from utils.payment_recalc import recalc_staff_payment as _rc1
+                    _rc1(event_id, p["staff_id"])
+                    db.log_action(
+                        "attendance_edit", "shifts", _sid,
+                        detail=(f"{p['name_jp']} (NO.{p['no']}) 支払い計算画面で修正: "
+                                f"{_ns or '—'}〜{_ne or '—'}"),
+                        event_id=event_id, performed_by=approver)
+                    st.success(f"💾 {_ddf.iloc[_i]['日付']} を {_ns or '—'}〜{_ne or '—'} "
+                               "に修正し、金額を再計算しました")
+                    st.rerun()
 
     with col_d2:
         # 承認（承認者はログイン中の operator に束縛済み）
