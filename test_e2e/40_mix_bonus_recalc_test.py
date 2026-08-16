@@ -12,6 +12,10 @@
   [A] set_shift_mix は必ず差し戻し＋再計算を通す（ON/OFF どちらでも）。
   [B] 差し戻しには対象シフトの event_id / staff_id が渡る（人違い再計算の防止）。
   [C] 計算側: is_mix=True の日だけ mix_bonus が加算される。
+  [D] 承認済み(approved)・支払済み(paid)は自動経路から絶対に触られない
+      （2026-08-16 中野さん指示「承認済みは絶対に編集してはいけません」）。
+      承認を外せるのは人が明示的に押す「↩️ 承認の取り消し」だけ
+      （allow_approved=True）。支払済みはそこからも外せない。
 
 DB接続:
     本番DBには繋がない。_fake_db.install_fake_db() で get_client を差し替え、
@@ -98,6 +102,33 @@ _check("is_mix=True は MIX手当 ¥1,500", with_mix.mix_bonus == 1500, str(with
 _check("差額は MIX手当ちょうど",
        with_mix.daily_total - without.daily_total == 1500,
        f"{with_mix.daily_total} - {without.daily_total}")
+
+print("\n[D] 承認済み・支払済みは自動経路から絶対に触られない（2026-08-16 中野さん指示）")
+import dbx.payments as dbx_payments  # noqa: E402
+
+for _status in ("approved", "paid"):
+    install_fake_db({"p1_payments": [
+        {"id": "pay-1", "event_id": 11, "staff_id": "st-70", "status": _status}]})
+    ok = dbx_payments.reset_payment_to_pending(11, "st-70", reason="打刻修正")
+    _check(f"{_status} は自動経路で差し戻されない", ok is False, f"戻り値={ok}")
+
+install_fake_db({"p1_payments": [
+    {"id": "pay-1", "event_id": 11, "staff_id": "st-70", "status": "approved"}]})
+ok = dbx_payments.reset_payment_to_pending(
+    11, "st-70", reason="承認取り消し（人が操作）", allow_approved=True)
+_check("承認の取り消しUIからは戻せる", ok is True, f"戻り値={ok}")
+
+install_fake_db({"p1_payments": [
+    {"id": "pay-1", "event_id": 11, "staff_id": "st-70", "status": "paid"}]})
+ok = dbx_payments.reset_payment_to_pending(
+    11, "st-70", reason="承認取り消し（人が操作）", allow_approved=True)
+_check("支払済みは人が操作しても戻せない", ok is False, f"戻り値={ok}")
+
+install_fake_db({"p1_payments": [
+    {"id": "pay-1", "event_id": 11, "staff_id": "st-70", "status": "pending"}]})
+ok = dbx_payments.reset_payment_to_pending(11, "st-70", reason="打刻修正")
+_check("未承認は従来どおり差し戻せる", ok is True, f"戻り値={ok}")
+
 
 print()
 if failures:

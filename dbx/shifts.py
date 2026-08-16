@@ -57,7 +57,7 @@ def get_shifts_for_event(event_id, date=None, staff_id=None):
     return _flatten_staff_join(data)
 
 
-def _revert_payment_if_amount_affected(shift_row, reason: str) -> None:
+def _revert_payment_if_amount_affected(shift_row, reason: str) -> bool:
     """出退勤の実績変更が支払い額に影響し得るとき、支払いを差し戻して即再計算する。
 
     凍結退勤と同じ内部統制（reset_payment_to_pending。支払済みは保護）を
@@ -66,16 +66,25 @@ def _revert_payment_if_amount_affected(shift_row, reason: str) -> None:
     （NO.496 欠勤マーク後も2日分の封筒額が表示された）ため、
     その場でこの1人だけを再計算・保存するところまで行う。
     支払い未計算・列欠損などの失敗は握りつぶし、本処理（打刻）は壊さない。
+
+    2026-08-16: 承認済み(approved)も reset_payment_to_pending 側で保護される
+    ようになった（中野さん指示「承認済みは絶対に編集してはいけません」）。
+    その場合は金額を更新しないので、呼び出し側が「反映されていない」と
+    気づけるよう False を返す。
+
+    Returns: True=再計算した / False=保護された・対象なし・失敗
     """
     try:
         ev = shift_row.get("event_id")
         sid = shift_row.get("staff_id")
         if ev and sid:
-            reset_payment_to_pending(ev, sid, reason=reason)
+            if not reset_payment_to_pending(ev, sid, reason=reason):
+                return False
             from utils.payment_recalc import recalc_staff_payment
-            recalc_staff_payment(ev, sid)
+            return bool(recalc_staff_payment(ev, sid))
     except Exception:
         pass
+    return False
 
 
 def checkin_staff(shift_id, actual_start):
@@ -369,7 +378,8 @@ def set_shift_mix(shift_id, is_mix):
         "event_id, staff_id, date"
     ).eq("id", shift_id).execute().data
     client.table("p1_shifts").update({"is_mix": is_mix}).eq("id", shift_id).execute()
-    if row:
-        mark = "MIX担当あり" if is_mix else "MIX担当なし"
-        _revert_payment_if_amount_affected(
-            row[0], reason=f"{row[0].get('date')} {mark}に変更（要再計算）")
+    if not row:
+        return False
+    mark = "MIX担当あり" if is_mix else "MIX担当なし"
+    return _revert_payment_if_amount_affected(
+        row[0], reason=f"{row[0].get('date')} {mark}に変更（要再計算）")

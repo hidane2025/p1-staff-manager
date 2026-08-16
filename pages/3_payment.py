@@ -488,9 +488,12 @@ if _approved_for_revert:
                 _ok_n = 0
                 for label in _revert_sel:
                     p = _revert_opts[label]
+                    # allow_approved=True はここと下の一括取り消しだけ。
+                    # 自動経路（打刻・MIX・CSV取込）からは承認を外せない。
                     if db.reset_payment_to_pending(
                             event_id, p["staff_id"],
-                            reason=f"承認取り消し（操作者: {approver}）"):
+                            reason=f"承認取り消し（操作者: {approver}）",
+                            allow_approved=True):
                         _ok_n += 1
                 st.success(f"{_ok_n}名を未承認に戻しました。")
                 st.rerun()
@@ -503,7 +506,8 @@ if _approved_for_revert:
                     1 for p in _approved_for_revert
                     if db.reset_payment_to_pending(
                         event_id, p["staff_id"],
-                        reason=f"承認一括取り消し（操作者: {approver}）")
+                        reason=f"承認一括取り消し（操作者: {approver}）",
+                        allow_approved=True)
                 )
                 st.success(f"{_ok_n}名を未承認に戻しました。")
                 st.rerun()

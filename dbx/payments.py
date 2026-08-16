@@ -14,11 +14,19 @@ from dbx import core
 from dbx.core import _flatten_staff_join
 
 
-def reset_payment_to_pending(event_id, staff_id, reason="凍結再計算"):
+def reset_payment_to_pending(event_id, staff_id, reason="凍結再計算",
+                             allow_approved=False):
     """支払いを未承認に戻す（凍結発生時の再計算準備）。
 
-    支払済み(paid)は保護。承認済み(approved)→未承認(pending)に戻す。
-    Returns: True=リセット成功、False=支払済みで保護 or レコードなし
+    支払済み(paid)は常に保護。
+    承認済み(approved)も既定で保護する（2026-08-16 中野さん指示
+    「承認済みは絶対に編集してはいけません」）。以前は打刻修正・MIX変更・
+    CSV取込などの自動経路が承認を勝手に外して金額を書き換えられたため、
+    承認を外すのは人が明示的に操作する
+    「↩️ 承認の取り消し」（pages/3_payment）だけに限定する。
+    そこからの呼び出しだけが allow_approved=True を渡す。
+
+    Returns: True=リセット成功、False=保護された or レコードなし
     """
     client = core.get_client()
     existing = client.table("p1_payments").select("id, status").eq(
@@ -29,6 +37,11 @@ def reset_payment_to_pending(event_id, staff_id, reason="凍結再計算"):
     if payment["status"] == "paid":
         core.log_action("freeze_recalc_skipped", "payments", payment["id"],
                     detail=f"{reason}: 支払済みのため保護", event_id=event_id)
+        return False
+    if payment["status"] == "approved" and not allow_approved:
+        core.log_action("freeze_recalc_skipped", "payments", payment["id"],
+                    detail=f"{reason}: 承認済みのため保護（変更するには承認の取り消しが必要）",
+                    event_id=event_id)
         return False
     # 2026-07-29 修正: 状態を確認してから更新するまでの間に他端末が支払済みにすると、
     # 支払済みが未承認へ巻き戻る競合があった（ピット端末と給与窓口の同時操作で起こりうる）。

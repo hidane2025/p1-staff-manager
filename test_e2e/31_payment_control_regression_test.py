@@ -471,15 +471,35 @@ _check("reset_payment_to_pending は支払済みに対して False を返す",
 _check("reset_payment_to_pending 後も status は paid のまま",
        row["status"] == "paid", f"got {row['status']}")
 
-# reset_payment_to_pending: approved は差し戻せる
-seed = {"p1_events": [dict(_EVENT_NO_ROUND)],
-        "p1_payments": [_payment(status="approved", approved_by="ooishi@p1",
-                                 approved_at="2026-08-01 10:00:00")],
-        "p1_audit_log": []}
+# reset_payment_to_pending: approved は自動経路からは触らせない
+# 2026-08-16 仕様変更（中野さん指示「承認済みは絶対に編集してはいけません」）。
+# それまでは打刻修正・MIX変更・CSV取込などが承認を勝手に外して金額を
+# 書き換えられた。承認を外せるのは人が押す「↩️ 承認の取り消し」だけ。
+def _approved_seed():
+    return {"p1_events": [dict(_EVENT_NO_ROUND)],
+            "p1_payments": [_payment(status="approved", approved_by="ooishi@p1",
+                                     approved_at="2026-08-01 10:00:00")],
+            "p1_audit_log": []}
+
+
+seed = _approved_seed()
 _install(seed)
 res = db.reset_payment_to_pending(1, 10, reason="凍結再計算")
 row = seed["p1_payments"][0]
-_check("reset_payment_to_pending は承認済みを True で差し戻す", res is True, f"got {res}")
+_check("reset_payment_to_pending は承認済みを自動経路では差し戻さない",
+       res is False, f"got {res}")
+_check("自動経路のあとも status=approved と承認情報が残る",
+       row["status"] == "approved" and row["approved_by"] == "ooishi@p1"
+       and row["approved_at"] == "2026-08-01 10:00:00",
+       f"status={row['status']} by={row['approved_by']} at={row['approved_at']}")
+
+seed = _approved_seed()
+_install(seed)
+res = db.reset_payment_to_pending(1, 10, reason="承認取り消し（人が操作）",
+                                  allow_approved=True)
+row = seed["p1_payments"][0]
+_check("承認の取り消しUI（allow_approved=True）からは差し戻せる",
+       res is True, f"got {res}")
 _check("差し戻し後 status=pending / approved_by・approved_at が None",
        row["status"] == "pending" and row["approved_by"] is None
        and row["approved_at"] is None,
