@@ -8,7 +8,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import db
 from utils import payment_recalc
 from utils import transport_rules as transport_rules_mod
-from utils.region import REGIONS, default_regions_for_event, address_to_region
+from utils.region import address_to_region
+# 2026-08-16: 上限の鍵を地方名（近畿・東海…）から交通区分（近郊通勤・隣接・
+# 中距離・遠方・特別遠方・海外）へ変更。同じ地方でも会場からの距離が違い
+# （大阪開催なら香川=中距離／愛媛=遠方）、地方単位では上限を表現できない。
+from utils import transport_zones as tz
+REGIONS = list(tz.ZONES)
+def default_regions_for_event():
+    return tz.default_zone_rules()
 from utils.event_selector import select_event
 
 st.set_page_config(page_title="交通費", page_icon="🚃", layout="wide")
@@ -20,21 +27,28 @@ hide_staff_only_pages()
 require_admin(page_name="交通費")
 admin_logout_button()
 
-page_header("🚃 交通費ルール・事前見積", "イベントごとに地域別の交通費上限を設定し、領収書金額から精算額を算出します。")
+page_header("🚃 交通費ルール・事前見積", "イベントごとに交通区分別の交通費上限を設定し、領収書金額から精算額を算出します。")
 flow_bar(active="setup")
 
 # --- イベント選択（全ページ共通） ---
 event_id = select_event(db.get_all_events(), "イベント")
 event = db.get_event_by_id(event_id)
+_VENUE_KEY = tz.venue_key(event)
+
+
+def _zone_of(staff: dict) -> str:
+    """スタッフの交通区分（住所の都道府県→会場別ゾーン）。未判定は空。"""
+    return tz.zone_for_staff(staff, _VENUE_KEY)
+
 
 # ============================================================
 # セクション1: 交通費ルール設定
 # ============================================================
 st.divider()
-st.subheader("① 地域別 交通費ルール")
+st.subheader("① 交通区分別 交通費ルール")
 st.markdown(
     "開催地（領収書不要・**出勤1日あたり一律**）とそれ以外（領収書必要・**往復総額の上限**）を"
-    "地域別に設定します。"
+    "交通区分別に設定します（区分は住所の都道府県から自動判定）。"
     "（交通費統一ルール 2026-07-22 TAKA起草・木村さん基本承認に準拠。個別具体例は都度相談）"
 )
 
@@ -63,7 +77,7 @@ rules_for_edit = sorted(
 
 rules_df = pd.DataFrame([
     {
-        "地域": r["region"],
+        "交通区分": r["region"],
         "開催地": bool(r.get("is_venue_region", 0)),
         "上限額(円)": int(r.get("max_amount", 0) or 0),
         "領収書必要": bool(r.get("receipt_required", 1)),
@@ -76,9 +90,9 @@ edited_rules = st.data_editor(
     rules_df,
     use_container_width=True,
     hide_index=True,
-    disabled=["地域"],
+    disabled=["交通区分"],
     column_config={
-        "地域": st.column_config.TextColumn("地域", width="small"),
+        "交通区分": st.column_config.TextColumn("交通区分", width="small"),
         "開催地": st.column_config.CheckboxColumn(
             "開催地",
             help="チェックを入れた地域は、領収書不要で「上限額(円)×出勤日数」を一律支給（上限額欄＝1日あたりの金額）",
@@ -100,7 +114,7 @@ with col_save:
         for _, row in edited_rules.iterrows():
             is_venue = bool(row["開催地"])
             new_rules.append({
-                "region": row["地域"],
+                "region": row["交通区分"],
                 "max_amount": int(row["上限額(円)"]) if row["上限額(円)"] else 0,
                 # 開催地は領収書不要を強制
                 "receipt_required": 0 if is_venue else (1 if row["領収書必要"] else 0),
@@ -145,13 +159,13 @@ for _s in shifts:
     if _s.get("status") != "absent":
         _days_by_staff.setdefault(_s["staff_id"], set()).add(_s["date"])
 
-# 地域別集計
+# 交通区分別集計
 region_summary = {r: {"count": 0, "estimate": 0, "need_receipt": 0, "no_region": 0}
                    for r in REGIONS}
 region_summary["未登録"] = {"count": 0, "estimate": 0, "need_receipt": 0, "no_region": 0}
 
 for staff in participating:
-    region = staff.get("region")
+    region = _zone_of(staff)
     if not region:
         region = "未登録"
     if region not in region_summary:
@@ -183,7 +197,7 @@ col_m4.metric("住所未登録", f"{no_address_count}名",
               delta=f"⚠️要対応" if no_address_count else None,
               delta_color="inverse" if no_address_count else "off")
 
-# 地域別テーブル
+# 交通区分別テーブル
 summary_rows = []
 for region in REGIONS + ["未登録"]:
     data = region_summary.get(region, {"count": 0, "estimate": 0, "need_receipt": 0})
@@ -191,7 +205,7 @@ for region in REGIONS + ["未登録"]:
         continue
     rule = rules_map.get(region, {})
     summary_rows.append({
-        "地域": region,
+        "交通区分": region,
         "人数": data["count"],
         "上限額/人": (
             (f"¥{rule.get('max_amount', 0):,}/日" if rule.get("is_venue_region")
@@ -224,7 +238,7 @@ receipt_staff = []
 venue_staff = []
 unregistered_staff = []
 for staff in sorted(participating, key=lambda s: (s.get("region") or "zzz", s.get("no") or 0)):
-    region = staff.get("region")
+    region = _zone_of(staff)
     if not region:
         unregistered_staff.append(staff)
         continue
@@ -267,7 +281,7 @@ if _input_staff:
             "_staff_id": staff["id"],
             "NO.": staff.get("no", ""),
             "名前": staff["name_jp"],
-            "地域": staff.get("region", "") or "（未登録）",
+            "交通区分": _zone_of(staff) or "（未判定）",
             "上限額": rule["max_amount"] if rule else 0,
             "領収書金額(円)": int(claim.get("receipt_amount") or 0),
             "領収書あり": bool(claim.get("has_receipt", 0)),
@@ -279,7 +293,7 @@ if _input_staff:
         claim_df,
         use_container_width=True,
         hide_index=True,
-        disabled=["_staff_id", "NO.", "名前", "地域", "上限額"],
+        disabled=["_staff_id", "NO.", "名前", "交通区分", "上限額"],
         column_config={
             "_staff_id": None,
             "上限額": st.column_config.NumberColumn(
@@ -344,7 +358,7 @@ venue_total = 0
 unconfirmed_count = 0
 
 for staff in participating:
-    region = staff.get("region")
+    region = _zone_of(staff)
     rule = rules_map.get(region) if region else None
     if not rule:
         continue

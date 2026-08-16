@@ -621,14 +621,16 @@ with st.expander("🚃 交通費の領収書金額を入力（任意）", expand
 
     # 地域ルール取得
     rules = db.get_transport_rules(event_id) or []
-    region, _pref = db.get_staff_region(target["id"])
+    # 2026-08-16: 地方名ではなく交通区分（都道府県→会場別ゾーン）で引く
+    from utils import transport_zones as _tz_pit
+    region = _tz_pit.zone_for_staff(target, _tz_pit.venue_key(event))
     rule = next((r for r in rules if r.get("region") == region), None)
     if rule:
         max_amt = int(rule.get("max_amount") or 0)
         is_venue = bool(rule.get("is_venue_region"))
         receipt_required = bool(rule.get("receipt_required"))
         st.caption(
-            f"📍 適用ルール（地域: {region or '未設定'}）— "
+            f"📍 適用ルール（交通区分: {region or '未判定'}）— "
             + (f"日額 ¥{max_amt:,}（×出勤日数）　／ " if is_venue
                else f"上限 ¥{max_amt:,}（往復総額）　／ ")
             + f"開催地: {'はい' if is_venue else 'いいえ'}　／ "
@@ -935,9 +937,11 @@ else:
                             r["region"]: r
                             for r in (db.get_transport_rules(event_id) or [])
                         }
-                        transport_override, _tr_reason = transport_rules_mod.payment_amount(
-                            _rules_by_region, target.get("region"),
+                        from utils import transport_zones as _tz_pit2
+                        transport_override, _tr_reason = transport_rules_mod.payment_amount_for_staff(
+                            _rules_by_region, target,
                             len(shifts_for_calc), claim,
+                            venue=_tz_pit2.venue_key(event),
                         )
                         # A-5: 既存の臨時調整を保全（ピット再退勤で消さない）
                         _existing_pay = db.get_client().table("p1_payments").select(

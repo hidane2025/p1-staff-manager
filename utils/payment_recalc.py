@@ -38,8 +38,10 @@ def _build_context(event_id):
             "date": s["date"], "start": s["actual_start"], "end": s["actual_end"],
             "is_mix": bool(s.get("is_mix", 0)),
         })
+    from utils import transport_zones as _tz
     return {
         "ev": ev,
+        "venue_key": _tz.venue_key(ev),   # 交通区分の判定に使う会場キー
         "rates": rates,
         "rates_by_date": {
             d: {"hourly": r["hourly_rate"], "night": r["night_rate"],
@@ -69,9 +71,10 @@ def _recalc_one(event_id, staff_id, ctx) -> bool:
         return False
     shifts = sorted(ctx["shifts_by_staff"].get(staff_id, []),
                     key=lambda x: x["date"])
-    transport_override, _ = transport_rules.payment_amount(
-        ctx["rules"], staff.get("region"), len(shifts),
-        ctx["claims"].get(staff_id))
+    # 2026-08-16: 交通区分（都道府県→会場別ゾーン）で上限を引く
+    transport_override, _ = transport_rules.payment_amount_for_staff(
+        ctx["rules"], staff, len(shifts),
+        ctx["claims"].get(staff_id), venue=ctx.get("venue_key") or "")
     payment = calculate_staff_payment(
         staff_id=staff_id, name=staff["name_jp"],
         role=staff.get("role") or "Dealer",

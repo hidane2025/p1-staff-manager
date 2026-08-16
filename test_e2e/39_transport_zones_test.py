@@ -14,9 +14,11 @@ import sys
 ROOT = pathlib.Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
+from utils import transport_zones as tz  # noqa: E402
 from utils.transport_zones import (  # noqa: E402
     MAX_CAP, ZONE_CAPS, ZONES, cap_of, settle_amount, venue_key, zone_of,
     ZONE_COMMUTE, ZONE_ADJACENT, ZONE_MIDDLE, ZONE_FAR, ZONE_EXTRA_FAR,
+    ZONE_OVERSEAS,
 )
 
 failures: list = []
@@ -29,8 +31,9 @@ def _check(name, cond, detail=""):
 
 
 print("[A] ゾーンと上限")
-_check("5ゾーン", ZONES == (ZONE_COMMUTE, ZONE_ADJACENT, ZONE_MIDDLE,
-                            ZONE_FAR, ZONE_EXTRA_FAR))
+# 2026-08-16: 海外招聘（台湾Dealer等・領収書不要の固定支給）を6つ目の区分に追加
+_check("6区分", ZONES == (ZONE_COMMUTE, ZONE_ADJACENT, ZONE_MIDDLE,
+                          ZONE_FAR, ZONE_EXTRA_FAR, ZONE_OVERSEAS))
 for z, c in (("近郊通勤", 1000), ("隣接", 5000), ("中距離", 15000),
              ("遠方", 25000), ("特別遠方", 30000)):
     _check(f"{z} = ¥{c:,}", cap_of(z) == c, str(cap_of(z)))
@@ -88,6 +91,40 @@ _check("EBiS303（東京） → 東京",
        venue_key({"venue": "EBiS303", "name": "P1 東京"}) == "東京")
 _check("都道府県からも推定", venue_key({"prefecture": "福岡県"}) == "福岡")
 _check("手掛かりなしは空文字", venue_key({"venue": "未定"}) == "")
+
+
+print("[E] 交通区分ベースの上限引き（2026-08-16 木村さんシート個人別明細に準拠）")
+import utils.transport_rules as _tr  # noqa: E402
+
+RULES = {r["region"]: r for r in tz.default_zone_rules()}
+for pref, want_zone, want_amt in (
+        ("大阪府", "近郊通勤", 5000),   # 日額1,000×5日（領収書不要）
+        ("滋賀県", "隣接", 0),          # 領収書が要る＝出るまで0
+        ("愛知県", "中距離", 0),
+        ("東京都", "遠方", 0),
+        ("宮崎県", "特別遠方", 0)):     # 表に無い県は特別遠方へ寄せる
+    st_ = {"prefecture": pref}
+    got = tz.zone_for_staff(st_, "大阪")
+    _check(f"{pref} → {want_zone}", got == want_zone, f"got={got}")
+    amt, _w = _tr.payment_amount_for_staff(RULES, st_, 5, None, venue="大阪")
+    _check(f"{pref} 領収書なしの支給額 ¥{want_amt:,}", int(amt) == want_amt, f"got={amt}")
+
+_ov = {"region": "海外"}
+_check("海外 → 海外区分", tz.zone_for_staff(_ov, "大阪") == ZONE_OVERSEAS)
+_amt, _w = _tr.payment_amount_for_staff(RULES, _ov, 5, None, venue="大阪")
+_check("海外は領収書不要で¥30,000固定", int(_amt) == 30000, f"got={_amt}")
+
+# 住所が無い人を勝手に特別遠方へ寄せない（根拠なく上限だけ膨らむ事故の防止）
+_check("住所なしは未判定（空文字）", tz.zone_for_staff({}, "大阪") == "")
+_amt, _w = _tr.payment_amount_for_staff(RULES, {}, 5, None, venue="大阪")
+_check("住所なしは0円（手入力に委ねる）", int(_amt) == 0, f"got={_amt}")
+
+_claim = {"has_receipt": 1, "approved_amount": 9000}
+_amt, _w = _tr.payment_amount_for_staff(
+    RULES, {"prefecture": "愛知県"}, 5, _claim, venue="大阪")
+_check("手入力額は区分ルールより優先", int(_amt) == 9000, f"got={_amt}")
+_check("片道¥9,000×2は中距離の上限¥15,000で頭打ち",
+       settle_amount("中距離", one_way_receipt=9000)[0] == 15000)
 
 print("=" * 60)
 if failures:

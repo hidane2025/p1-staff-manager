@@ -35,7 +35,11 @@ ZONE_ADJACENT = "隣接"
 ZONE_MIDDLE = "中距離"
 ZONE_FAR = "遠方"
 ZONE_EXTRA_FAR = "特別遠方"
-ZONES = (ZONE_COMMUTE, ZONE_ADJACENT, ZONE_MIDDLE, ZONE_FAR, ZONE_EXTRA_FAR)
+# 海外招聘（台湾Dealer等）。国内の距離区分に載らないため別枠で固定支給する。
+# 木村さんシート（2026-08-06）の「特別遠方（台湾固定）30,000円/人」に相当。
+ZONE_OVERSEAS = "海外"
+ZONES = (ZONE_COMMUTE, ZONE_ADJACENT, ZONE_MIDDLE, ZONE_FAR, ZONE_EXTRA_FAR,
+         ZONE_OVERSEAS)
 
 # ゾーン別の上限（近郊通勤だけは「1日あたりの日額」、他は往復総額の上限）
 ZONE_CAPS: dict = {
@@ -44,6 +48,7 @@ ZONE_CAPS: dict = {
     ZONE_MIDDLE: 15000,
     ZONE_FAR: 25000,
     ZONE_EXTRA_FAR: 30000,
+    ZONE_OVERSEAS: 30000,    # 固定支給（領収書不要）
 }
 
 # 全ゾーン共通の絶対上限（事前承認がある場合のみ超過可）
@@ -128,6 +133,58 @@ def zone_of(venue: str, prefecture) -> str:
     if not mapping:
         return ""
     return mapping.get(str(prefecture or ""), ZONE_EXTRA_FAR)
+
+
+def zone_for_staff(staff: dict, venue: str) -> str:
+    """スタッフ1人の交通区分を決める（2026-08-16 追加）。
+
+    順序:
+      1. region が「海外」なら海外ゾーン（台湾Dealer等の固定支給）
+      2. prefecture（無ければ住所から抽出）→ 会場別のゾーン表
+      3. 住所が分からなければ空文字（＝ゾーン未判定。交通費は0で手入力に委ねる）
+
+    ⚠️ 住所が無い人を勝手に「特別遠方」に寄せない。上限だけ大きくなって
+    実態のない支給根拠を作るより、未判定として人が見る方が安全。
+    """
+    if not staff:
+        return ""
+    if str(staff.get("region") or "") == ZONE_OVERSEAS:
+        return ZONE_OVERSEAS
+    pref = staff.get("prefecture")
+    if not pref:
+        try:
+            from utils.region import extract_prefecture
+            pref = extract_prefecture(staff.get("address"))
+        except Exception:
+            pref = None
+    if not pref:
+        return ""
+    return zone_of(venue, pref)
+
+
+def default_zone_rules(venue: str = "") -> list:
+    """交通費ルール表（p1_event_transport_rules）に入れる区分別の行を返す。
+
+    近郊通勤だけ is_venue_region=1（＝日額×出勤日数・領収書不要）。
+    海外は領収書不要の固定支給なので receipt_required=0 だが日額ではない。
+    """
+    rows = []
+    for z in ZONES:
+        is_venue = 1 if z == ZONE_COMMUTE else 0
+        if z == ZONE_COMMUTE:
+            note = "開催地近郊（領収書不要・出勤1日あたり一律）"
+        elif z == ZONE_OVERSEAS:
+            note = "海外招聘（領収書不要・固定支給）"
+        else:
+            note = f"往復総額の上限¥{ZONE_CAPS[z]:,}（片道領収書×2で精算）"
+        rows.append({
+            "region": z,
+            "max_amount": ZONE_CAPS[z],
+            "receipt_required": 0 if z in (ZONE_COMMUTE, ZONE_OVERSEAS) else 1,
+            "is_venue_region": is_venue,
+            "note": note,
+        })
+    return rows
 
 
 def cap_of(zone: str) -> int:

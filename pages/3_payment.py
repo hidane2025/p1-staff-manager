@@ -152,6 +152,9 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
     # 交通費ルール・領収書請求の取得
     transport_rules = {r["region"]: r for r in db.get_transport_rules(event_id)}
     transport_claims = {c["staff_id"]: c for c in db.get_transport_claims(event_id)}
+    # 交通区分は会場からの距離で決まるので、会場キー（大阪/福岡/東京）を先に出す
+    from utils import transport_zones as _tz_mod
+    _venue_key = _tz_mod.venue_key(event)
 
     def _calc_transport(staff_info: dict, days: int) -> tuple[int | None, str]:
         """新交通費システムでスタッフの交通費を計算
@@ -162,9 +165,12 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
         # 判定の正は utils/transport_rules.payment_amount（ピット端末と共通）。
         # 2026-08-12: 同じ判定がピット端末側に無く、遠方スタッフの表示額が
         # 1,000円/日ずれていたため、両画面をこの1関数に寄せた。
-        return transport_rules_mod.payment_amount(
-            transport_rules, staff_info.get("region"), days,
+        # 2026-08-16: 地方名（近畿・東海…）ではなく交通区分（近郊通勤・隣接・
+        # 中距離・遠方・特別遠方・海外）を鍵に上限を引く。都道府県から機械判定。
+        return transport_rules_mod.payment_amount_for_staff(
+            transport_rules, staff_info, days,
             transport_claims.get(staff_info.get("id")),
+            venue=_venue_key,
         )
 
     # スタッフごとにグループ化

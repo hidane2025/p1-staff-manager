@@ -88,4 +88,29 @@ def payment_amount(rules_by_region: dict, region, days_worked: int,
         per_day = int(rule.get("max_amount") or 0)
         return (venue_amount(per_day, days_worked),
                 f"開催地一律（¥{per_day:,}/日 × {days_worked}日）")
+    # 2026-08-16: 領収書不要の固定支給（海外招聘の台湾Dealer等）。
+    # 従来はここへ落ちて無条件0円になり、領収書を出しようがない海外スタッフに
+    # 交通費が付かなかった（木村さんシートでは「台湾固定30,000円/人」）。
+    if not rule.get("receipt_required"):
+        amt = int(rule.get("max_amount") or 0)
+        return amt, f"領収書不要の固定支給（¥{amt:,}）"
     return 0, "領収書が未提出のため0（提出後に精算）"
+
+
+def payment_amount_for_staff(rules_by_zone: dict, staff: dict, days_worked: int,
+                             claim: dict = None, venue: str = "") -> tuple:
+    """交通区分（近郊通勤/隣接/中距離/遠方/特別遠方/海外）で交通費を決める。
+
+    2026-08-16 中野さん指示で導入。従来は地方名（近畿・東海・関東…）を鍵に
+    上限を引いていたが、同じ地方でも会場からの距離が違う（大阪開催なら
+    香川=中距離15,000／愛媛=遠方25,000、岡山=中距離／広島=遠方）ため、
+    地方単位では正しい上限を表現できなかった。都道府県から会場別の
+    交通区分を機械判定して引く。
+
+    区分と上限の出典:
+        木村さんシート「P1_OSAKA_SUMMER_2026_スタッフ人件費_交通費」個人別明細
+        ＋ P1共通ルール（2026-08-16 中野さん確定・utils/transport_zones）
+    """
+    from utils import transport_zones as _tz
+    zone = _tz.zone_for_staff(staff or {}, venue)
+    return payment_amount(rules_by_zone, zone, days_worked, claim)
