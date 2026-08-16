@@ -65,8 +65,10 @@ _check("領収書があっても日額計算",
        settle_amount(ZONE_COMMUTE, one_way_receipt=9999, days_worked=2)[0] == 2000)
 
 print("[E] 会場ごとに同じ県でもゾーンが変わる")
-_check("兵庫: 大阪=近郊通勤 / 福岡=遠方",
-       zone_of("大阪", "兵庫県") == ZONE_COMMUTE
+# 2026-08-16 中野さん確定: 大阪開催の兵庫は「県としては隣接」。
+# 会場寄りの市（兵庫東部）だけを住所で近郊通勤へ引き上げる（[F]で検証）。
+_check("兵庫: 大阪=隣接 / 福岡=遠方",
+       zone_of("大阪", "兵庫県") == ZONE_ADJACENT
        and zone_of("福岡", "兵庫県") == ZONE_FAR)
 _check("愛知: 大阪=中距離 / 東京=中距離 / 福岡=遠方",
        zone_of("大阪", "愛知県") == ZONE_MIDDLE
@@ -125,6 +127,32 @@ _amt, _w = _tr.payment_amount_for_staff(
 _check("手入力額は区分ルールより優先", int(_amt) == 9000, f"got={_amt}")
 _check("片道¥9,000×2は中距離の上限¥15,000で頭打ち",
        settle_amount("中距離", one_way_receipt=9000)[0] == 15000)
+
+
+print("[F] 県内の一部だけ近郊通勤（兵庫東部・京都南部・奈良北部）")
+# 県単位では隣接。住所の市区町村で会場寄りだけを近郊通勤へ引き上げる。
+for pref, addr, want in (
+        ("兵庫県", "兵庫県神戸市兵庫区新開地4-5-4", ZONE_COMMUTE),
+        ("兵庫県", "兵庫県西宮市門戸西町4-25", ZONE_COMMUTE),
+        ("兵庫県", "兵庫県宝塚市青葉台1-10", ZONE_COMMUTE),
+        ("兵庫県", "兵庫県姫路市本町68", ZONE_ADJACENT),      # 西播磨は隣接のまま
+        ("京都府", "京都府京都市伏見区日野野色町74", ZONE_COMMUTE),
+        ("京都府", "京都府福知山市駅前町40", ZONE_ADJACENT),   # 京都北部は隣接
+        ("奈良県", "奈良県生駒市北新町10-1", ZONE_COMMUTE),
+        ("奈良県", "奈良県十津川村小原225", ZONE_ADJACENT),    # 奈良南部は隣接
+        ("滋賀県", "滋賀県草津市野路東3-1-7", ZONE_ADJACENT),  # 滋賀に近郊通勤枠は無い
+        ("和歌山県", "和歌山県和歌山市七番丁23", ZONE_ADJACENT)):
+    got = tz.zone_for_staff({"prefecture": pref, "address": addr}, "大阪")
+    _check(f"{addr[:14]}… → {want}", got == want, f"got={got}")
+
+# 住所が県名までしか無い場合は県の区分（隣接）に落ちる＝勝手に近郊通勤へ上げない
+_check("住所が県名だけなら隣接",
+       tz.zone_for_staff({"prefecture": "兵庫県", "address": "兵庫県"}, "大阪")
+       == ZONE_ADJACENT)
+# 市区町村ルールは大阪開催だけ。福岡開催の神戸市は遠方のまま
+_check("福岡開催の神戸市は遠方のまま",
+       tz.zone_for_staff({"prefecture": "兵庫県", "address": "兵庫県神戸市"}, "福岡")
+       == ZONE_FAR)
 
 print("=" * 60)
 if failures:
