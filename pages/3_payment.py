@@ -623,9 +623,11 @@ if staff_opts:
         from utils.roles import break_minutes_for as _break_for
         _d_b6, _d_b8 = _break_for(p.get("role"), break_6h, break_8h)
         _day_rows = []  # 2026-08-15 中野さん要望: 個別スタッフに全日の出退勤を表示
+        # 2026-08-16: 以前は全員分（約600行）を取ってから1人分に絞っていた。
+        # 画面を触るたびに走る重い読み取りで、接続断（Server disconnected）を
+        # 誘発しやすかったためDB側で絞る。
         _staff_shifts = sorted(
-            (s for s in db.get_shifts_for_event(event_id)
-             if s["staff_id"] == p["staff_id"]),
+            db.get_shifts_for_event(event_id, staff_id=p["staff_id"]),
             key=lambda x: x["date"])
         for _s in _staff_shifts:
             _row = {

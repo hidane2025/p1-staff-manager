@@ -107,9 +107,68 @@ def connection_health() -> dict:
     return out
 
 
+# === 接続断（Server disconnected）への自動リトライ 2026-08-16 追加 ===
+# 症状: 支払い計算ページで httpx.RemoteProtocolError: Server disconnected の
+#       トレースバックが画面に出て操作不能（2026-08-16 中野さん報告・NO.344表示中）。
+# 原因: get_client は st.cache_resource で永続キャッシュされ、その中の httpx が
+#       keep-alive 接続を使い回す。Supabase(PostgREST/Cloudflare)側は待機中の接続を
+#       一定時間で切るため、次に使ったとき「送る先が既に閉じている」で例外になる。
+#       postgrest の send_with_retry は **HTTPステータス 503/520 しか見ておらず**、
+#       送信そのものが落ちる転送例外は素通しする（実装確認済）。
+# 対処: 転送例外だけをここで捕まえて短い間隔で張り直す。
+#       ⚠️ 二重書き込みを避けるため、POST（insert）は再送しない。
+#       GET/HEAD（読み取り）と PATCH/PUT（同じ値の再設定）・DELETE は
+#       同じ操作を繰り返しても結果が変わらないので再送してよい。
+_RETRY_SAFE_METHODS = {"GET", "HEAD", "PATCH", "PUT", "DELETE"}
+_RETRY_MAX_ATTEMPTS = 3
+_transport_retry_installed = False
+
+
+def _install_transport_retry():
+    """postgrest の送信関数を包み、接続断だけを再送するようにする（1回だけ実行）。"""
+    global _transport_retry_installed
+    if _transport_retry_installed:
+        return
+    try:
+        import time as _time
+        import httpx as _httpx
+        from postgrest._sync import request_builder as _rb
+    except Exception:
+        return
+
+    _TRANSIENT = (
+        _httpx.RemoteProtocolError,   # Server disconnected（今回の症状）
+        _httpx.ConnectError,
+        _httpx.ConnectTimeout,
+        _httpx.ReadError,
+        _httpx.WriteError,
+        _httpx.PoolTimeout,
+    )
+    _original = _rb.send_with_retry
+
+    def _send_with_transport_retry(req):
+        last = None
+        for attempt in range(_RETRY_MAX_ATTEMPTS):
+            try:
+                return _original(req)
+            except _TRANSIENT as e:
+                last = e
+                method = str(getattr(req, "http_method", "") or "").upper()
+                if method not in _RETRY_SAFE_METHODS:
+                    raise
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise
+                _time.sleep(0.4 * (attempt + 1))
+        raise last  # 到達しない（ループ内で raise 済み）
+
+    _rb.send_with_retry = _send_with_transport_retry
+    _transport_retry_installed = True
+
+
 @st.cache_resource
 def get_client():
     """Supabaseクライアントを取得（キャッシュ）"""
+    _install_transport_retry()
     url, key = _get_supabase_config()
     return create_client(url, key)
 
