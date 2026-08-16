@@ -567,14 +567,24 @@ if st.button("➕ 当日シフトに追加", key="exec_add_staff", type="primary
         else:
             st.warning("スタッフを選択してください")
     else:
+        # 2026-08-16: NO.はテキスト入力なので、数値かどうかを先に確かめる。
+        # 以前は文字列のままDB層へ渡り TypeError で画面が落ちていた。
+        _no = db.normalize_no(new_no)
         if not new_no or not new_name_jp:
             st.warning("スタッフNOと名前（日本語）は必須です")
+        elif _no is None or _no <= 0:
+            st.warning(f"スタッフNO「{new_no}」は数字で入力してください（例: 2021）")
         else:
-            staff_row = db.find_or_create_staff(new_no, new_name_jp, new_name_en, new_role)
-            new_staff_id = staff_row["id"] if isinstance(staff_row, dict) else staff_row
-            db.upsert_shift(event_id, new_staff_id, selected_date, planned_start, planned_end)
-            st.success(f"{new_name_jp} を {planned_start}〜{planned_end} で追加しました")
-            st.rerun()
+            try:
+                staff_row = db.find_or_create_staff(_no, new_name_jp, new_name_en, new_role)
+                new_staff_id = staff_row["id"] if isinstance(staff_row, dict) else staff_row
+                db.upsert_shift(event_id, new_staff_id, selected_date,
+                                planned_start, planned_end)
+                st.success(f"{new_name_jp}（NO.{_no}）を "
+                           f"{planned_start}〜{planned_end} で追加しました")
+                st.rerun()
+            except ValueError as e:
+                st.error(str(e))
 
 # ============================================================
 # セクション3: 当日の状況一覧

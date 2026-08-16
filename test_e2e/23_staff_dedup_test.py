@@ -97,6 +97,24 @@ def test_index_add_absorbs_in_batch_duplicate() -> None:
     print("  ✅ 同一バッチ内の二重取込を吸収")
 
 
+def test_normalize_no_accepts_text_input() -> None:
+    """出退勤の「当日シフトに追加」からNO.が文字列で来ても落ちない（2026-08-16）。
+
+    事故: NO.はテキスト入力なので "2021" が文字列のまま create_staff へ渡り、
+    `if no and no > 0:` が str と int の比較になって
+    TypeError: '>' not supported between instances of 'str' and 'int'
+    で画面ごと落ちた（NO.2021 松川るいさんの追加時）。
+    find_or_create_staff は int() で判定していたのに作成へは元の値を
+    渡していたのが原因。入口で int/None へ正規化して塞ぐ。
+    """
+    for raw, want in (("2021", 2021), (2021, 2021), (" 2021 ", 2021),
+                      ("２０２１", 2021), ("NO.2021", 2021), (2021.0, 2021),
+                      ("", None), (None, None), ("abc", None), (True, None)):
+        got = db.normalize_no(raw)
+        assert got == want, f"normalize_no({raw!r}) = {got!r}（期待 {want!r}）"
+    print("  ✅ NO.の文字列・全角・NO.表記を数値へ正規化")
+
+
 # ---------------------------------------------------------------------------
 # Test runner
 # ---------------------------------------------------------------------------
@@ -124,6 +142,7 @@ if __name__ == "__main__":
         test_no_match_returns_none,
         test_no_priority_over_email,
         test_index_add_absorbs_in_batch_duplicate,
+        test_normalize_no_accepts_text_input,
     ]
     passed = 0
     failed = 0

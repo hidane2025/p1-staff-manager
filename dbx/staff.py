@@ -15,11 +15,40 @@ from dbx import core
 
 # === Staff CRUD ===
 
+def normalize_no(no):
+    """スタッフNO.を int か None に正規化する（2026-08-16 追加）。
+
+    出退勤画面の「当日シフトに追加」はNO.をテキスト入力で受け取るため、
+    "2021" のような**文字列**のまま create_staff に渡っていた。
+    その中の `if no and no > 0:` が str と int の比較になり
+    TypeError: '>' not supported between instances of 'str' and 'int'
+    で画面が落ちていた（NO.2021 松川るいさんの追加時に発生）。
+    全角数字・前後空白・"NO.2021" 表記も拾う。数値でなければ None。
+    """
+    if no is None:
+        return None
+    if isinstance(no, bool):
+        return None
+    if isinstance(no, int):
+        return no
+    s = str(no).strip()
+    if not s:
+        return None
+    s = s.translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+    s = s.replace("NO.", "").replace("No.", "").replace("no.", "").strip()
+    try:
+        return int(float(s))
+    except (ValueError, TypeError):
+        return None
+
+
 def create_staff(no, name_jp, name_en="", role="Dealer", contact="", notes="",
                  real_name="", address="", email="",
                  employment_type="contractor", custom_hourly_rate=None,
                  nearest_station="", prefecture=None, region=None):
     from utils.region import address_to_region
+    # 2026-08-16: 画面から文字列で来ることがあるので必ず int/None にしてから使う
+    no = normalize_no(no)
     # 重複チェック: NO.が指定されていて既存の場合はエラーを投げる
     if no and no > 0:
         existing = core.get_client().table("p1_staff").select("id, name_jp").eq("no", no).execute()
@@ -291,12 +320,11 @@ def find_or_create_staff(no, name_jp, name_en="", role="Dealer"):
     NO.未指定/未一致のときだけ、表記揺れを吸収したディーラーネームで照合する。
     """
     client = core.get_client()
-    has_no = False
-    if no not in (None, ""):
-        try:
-            has_no = int(no) > 0
-        except (ValueError, TypeError):
-            has_no = False
+    # 2026-08-16: 文字列・全角・"NO.2021" 表記を先に int へ寄せる。
+    # 以前は照合だけ int() し、作成へは元の値（文字列）を渡していたため、
+    # create_staff 側の `no > 0` が TypeError で落ちていた。
+    no = normalize_no(no)
+    has_no = bool(no and no > 0)
     if has_no:
         r = client.table("p1_staff").select("id").eq("no", no).execute()
         if r.data:
