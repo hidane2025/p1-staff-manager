@@ -917,7 +917,7 @@ if staff_opts:
                     placeholder="例: 新幹線 片道・領収書あり")
                 _c_tr1, _c_tr2 = st.columns(2)
                 _tr_save = _c_tr1.form_submit_button("🚃 交通費を反映", type="primary")
-                _tr_clear = _c_tr2.form_submit_button("↩️ 自動計算に戻す")
+                _tr_clear = _c_tr2.form_submit_button("🗑 交通費リセット")
             if _tr_save:
                 _one_way = _tr_mode.startswith("片道")
                 _gross = (int(_tr_val) * transport_rules_mod.ROUND_TRIP_MULTIPLIER
@@ -958,9 +958,9 @@ if staff_opts:
                         "transport_claim", "payments", p["id"],
                         detail=f"{p['name_jp']} (NO.{p['no']}) 交通費の手入力を取消し自動計算へ",
                         event_id=event_id, performed_by=approver)
-                    st.success("↩️ 自動計算に戻しました（金額も再計算済み）")
+                    st.success("🗑 交通費をリセットしました（地域ルールの自動計算に戻り、金額も再計算済み）")
                 else:
-                    st.info("この人は元から自動計算です。")
+                    st.info("この人は手入力がないため、リセットするものがありません（自動計算のままです）。")
                 st.rerun()
 
         # 領収書PDF発行
