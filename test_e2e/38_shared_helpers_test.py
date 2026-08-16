@@ -27,14 +27,18 @@ def _check(name, cond, detail=""):
 
 
 print("[A] 時刻プルダウンの選択肢（集約前と完全一致）")
-_legacy = ["—"] + [f"{h:02d}:{m:02d}" for h in range(7, 30)
-                   for m in range(0, 60, 5)] + ["30:00"]
-_check("集約前の生成結果と同一", TIME_OPTIONS == _legacy,
-       f"{len(TIME_OPTIONS)} vs {len(_legacy)}")
+# 2026-08-16: 実打刻（26:44等）が選択肢に無く空欄表示になる事故のため1分刻みへ
+_expected = ["—"] + [f"{h:02d}:{m:02d}" for h in range(7, 30)
+                     for m in range(0, 60)] + ["30:00"]
+_check("1分刻みの全時刻を網羅", TIME_OPTIONS == _expected,
+       f"{len(TIME_OPTIONS)} vs {len(_expected)}")
+_check("TAKA打刻の実例が選べる（空欄表示にならない）",
+       all(t in TIME_OPTIONS for t in ("26:44", "25:32", "16:24", "10:41", "28:03")))
 _check("先頭は未記録マーカー", TIME_OPTIONS[0] == EMPTY_TIME)
 _check("末尾は30:00（大会の最終退勤）", TIME_OPTIONS[-1] == "30:00")
-_check("刻みは5分", STEP_MINUTES == 5 and "07:05" in TIME_OPTIONS
-       and "07:01" not in TIME_OPTIONS)
+_check("分入力の刻み定数は5分のまま（number_input用・選択肢とは別）",
+       STEP_MINUTES == 5)
+_check("選択肢は1分刻み", "07:01" in TIME_OPTIONS and "07:05" in TIME_OPTIONS)
 _check("24時超表記を含む（深夜退勤）", "25:30" in TIME_OPTIONS and "29:55" in TIME_OPTIONS)
 _check("7時前は選べない（前日の打刻誤りを防ぐ）", "06:55" not in TIME_OPTIONS)
 
