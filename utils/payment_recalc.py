@@ -30,7 +30,9 @@ def _build_context(event_id):
     for a in db.get_individual_allowances(event_id):
         allowances.setdefault(a["staff_id"], []).append(a)
     shifts_by_staff = {}
+    staff_with_shifts = set()
     for s in db.get_shifts_for_event(event_id):
+        staff_with_shifts.add(s["staff_id"])
         # 支払い対象は打刻（実到着・実退勤）が揃った日だけ（2026-08-13 中野さん方針）
         if s["status"] == "absent" or not (s.get("actual_start") and s.get("actual_end")):
             continue
@@ -51,7 +53,9 @@ def _build_context(event_id):
         "rules": {r["region"]: r for r in db.get_transport_rules(event_id)},
         "claims": {c["staff_id"]: c for c in db.get_transport_claims(event_id)},
         "allowances": allowances,
-        "shifts_by_staff": shifts_by_staff,
+        "shifts_by_staff": shifts_by_staff,   # 打刻が揃った日のみ（支払い対象）
+        "staff_with_shifts": staff_with_shifts,   # 打刻の有無を問わずシフトがある人
+
         "staff_by_id": {s["id"]: s for s in db.get_all_staff()},
         "payments": {p["staff_id"]: p for p in db.get_payments_for_event(event_id)},
     }
@@ -63,11 +67,19 @@ def _recalc_one(event_id, staff_id, ctx) -> bool:
     from utils.calculator import calculate_staff_payment
     from utils import transport_rules
 
-    prev = ctx["payments"].get(staff_id)
-    if prev is None or prev["status"] in ("paid", "approved"):
+    # 2026-08-16: 支払いレコードがまだ無い人もここで作る。
+    # 従来は prev is None でスキップしていたため、一括計算のあとに追加された
+    # スタッフは打刻してもCSVを取り込んでも支払いが1件も作られず、支払い計算
+    # 画面から丸ごと消えていた（NO.2020 上奨吾さん・シフト5件/打刻3日）。
+    prev = ctx["payments"].get(staff_id) or {}
+    if prev.get("status") in ("paid", "approved"):
         return False
     staff = ctx["staff_by_id"].get(staff_id)
     if staff is None:
+        return False
+    # シフトが1件も無い人にまで空の支払いを作らない
+    # （shifts_by_staff は打刻済みの日だけなので、判定には全シフトの有無を使う）
+    if staff_id not in ctx["staff_with_shifts"] and not prev:
         return False
     shifts = sorted(ctx["shifts_by_staff"].get(staff_id, []),
                     key=lambda x: x["date"])

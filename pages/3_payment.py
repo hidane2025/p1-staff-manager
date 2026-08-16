@@ -299,6 +299,22 @@ if not payments:
     st.info("支払いデータがありません。上の「支払い額を計算」ボタンを押してください。")
     st.stop()
 
+# 2026-08-16: 一括計算のあとに追加されたスタッフは支払いが1件も作られず、
+# この画面から丸ごと消えていた（NO.2020 上奨吾さん・シフト5件/打刻3日）。
+# 再計算側で作るよう直したが、取りこぼしを画面でも検知する。
+_paid_ids = {p["staff_id"] for p in payments}
+_missing = []
+for _s in db.get_shifts_for_event(event_id):
+    if _s["staff_id"] not in _paid_ids:
+        _missing.append((_s.get("no"), _s.get("name_jp")))
+if _missing:
+    _uniq = sorted(set(_missing), key=lambda t: t[0] or 9999)
+    st.warning(
+        f"⚠️ シフトはあるのに支払いが未計算の人が {len(_uniq)}名います: "
+        + "／".join(f"NO.{n} {nm}" for n, nm in _uniq)
+        + " — 上の「支払い額を計算」を押すと作成されます。"
+    )
+
 # --- サマリー ---
 st.subheader("支払い一覧")
 # A-6: 表示金額は保存済みの確定額(payable_amount)に統一。端数処理は上の
