@@ -839,7 +839,13 @@ if (not _READONLY) and not df.empty and not edited_df.empty:
         old_mix = df.iloc[idx]["MIX"]
         new_mix = edited_df.iloc[idx]["MIX"]
         if old_mix != new_mix:
+            # set_shift_mix 側で支払いの差し戻し＋再計算まで走る（2026-08-16 修正）。
+            # それ以前はフラグだけ立って MIX手当¥0 のままだった（NO.70 miwa）。
             db.set_shift_mix(shift_id, int(new_mix))
+            _nm = df.iloc[idx]["名前"]
+            st.session_state["_att_flash"] = (
+                f"{_nm} {selected_date} を「MIX担当{'あり' if new_mix else 'なし'}」に"
+                "変更し、支払いを再計算しました。")
             st.rerun()
         # 備考変更
         old_note = df.iloc[idx]["備考"] or ""

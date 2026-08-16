@@ -358,4 +358,18 @@ def mark_absent(shift_id):
 
 
 def set_shift_mix(shift_id, is_mix):
-    core.get_client().table("p1_shifts").update({"is_mix": is_mix}).eq("id", shift_id).execute()
+    """MIX担当フラグの切替。
+
+    2026-08-16: フラグだけ更新して再計算を呼んでいなかったため、
+    MIXにチェックを入れてもMIX手当¥0のままだった（NO.70 miwa）。
+    打刻・欠勤と同じく、金額に影響する変更として差し戻し＋再計算を通す。
+    """
+    client = core.get_client()
+    row = client.table("p1_shifts").select(
+        "event_id, staff_id, date"
+    ).eq("id", shift_id).execute().data
+    client.table("p1_shifts").update({"is_mix": is_mix}).eq("id", shift_id).execute()
+    if row:
+        mark = "MIX担当あり" if is_mix else "MIX担当なし"
+        _revert_payment_if_amount_affected(
+            row[0], reason=f"{row[0].get('date')} {mark}に変更（要再計算）")
