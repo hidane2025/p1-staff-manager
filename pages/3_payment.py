@@ -176,8 +176,16 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
     # スタッフごとにグループ化
     staff_shifts = {}
     unpunched_days = 0  # 打刻未完了で対象外にした日数（可視化用）
+    from utils import payroll_scope
+    _excluded_names = []
     for s in shifts:
         key = s["staff_id"]
+        # 2026-08-17: 社員など精算対象外のスタッフは支払いを作らない
+        if payroll_scope.is_excluded(all_staff_map.get(key, {})):
+            _nm = f"NO.{s.get('no')} {s.get('name_jp')}"
+            if _nm not in _excluded_names:
+                _excluded_names.append(_nm)
+            continue
         if key not in staff_shifts:
             staff_info = all_staff_map.get(key, {})
             staff_shifts[key] = {
@@ -265,6 +273,11 @@ if st.button("🔄 支払い額を計算", type="primary", use_container_width=T
     if skipped:
         msg += f"（承認/支払済み{skipped}名はスキップ）"
     st.success(msg)
+    if _excluded_names:
+        st.info(
+            f"🏢 精算対象外に設定された **{len(_excluded_names)}名** は計算していません"
+            f"（{'／'.join(_excluded_names)}）。社員などの区分です。"
+        )
     if unpunched_days:
         st.info(
             f"⏳ 打刻（実到着・実退勤）が揃っていない **{unpunched_days}日分** は"

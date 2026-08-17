@@ -77,6 +77,10 @@ def _recalc_one(event_id, staff_id, ctx) -> bool:
     staff = ctx["staff_by_id"].get(staff_id)
     if staff is None:
         return False
+    # 2026-08-17: 社員など精算対象外のスタッフは金額を作らない・更新しない
+    from utils import payroll_scope
+    if payroll_scope.is_excluded(staff):
+        return False
     # シフトが1件も無い人にまで空の支払いを作らない
     # （shifts_by_staff は打刻済みの日だけなので、判定には全シフトの有無を使う）
     if staff_id not in ctx["staff_with_shifts"] and not prev:
