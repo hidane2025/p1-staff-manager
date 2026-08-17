@@ -46,8 +46,8 @@
 
   /* ---------- columns ---------- */
   .cols { display: flex; gap: 2.6mm; margin-top: 1.4mm; align-items: flex-start; }
-  .col-main { flex: 1 1 68%; }
-  .col-side { flex: 0 0 29.5%; }
+  .col-main { flex: 1 1 70.5%; }
+  .col-side { flex: 0 0 27.2%; }
 
   /* ---------- steps ---------- */
   .step { display: flex; gap: 1.4mm; padding: .18mm 0; border-top: .5pt solid var(--rule); }
@@ -145,11 +145,12 @@
     <div class="step">
       <div class="stepno">1</div>
       <div class="stepbody">
-        <div class="steptitle">受付突破 <span>／ 分類させない言い方で入る</span></div>
+        <div class="steptitle">受付突破 <span>／ ★指名は「総務」。分類させない言い方で入る</span></div>
         <div class="say">お世話になります、名古屋のヒダネと申します。
 社員さん一人ひとりに秘書をつける、という仕事をしてまして。
-人事のご担当の方、いらっしゃいますでしょうか。</div>
-        <div class="note"><b>分類できない言葉なので、受付が断り文句を選べない。</b>「研修の件」だと営業と判定されて切られる。「秘書」は聞き返される＝会話が始まる</div>
+<b>総務のご担当の方</b>、いらっしゃいますか。</div>
+        <div class="fork"><b>「私が総務ですが」</b>→ そのままQ1へ（<b>20〜50名では一番多い。受付＝総務</b>）　　<b>「ご用件は？」</b>→ <b class="x">言い換えず同じ言葉を繰り返す</b>（言い換えたら営業になる）　　<b>「総務はおりません」</b>→「社員さんの研修とか見られてる方は、どなたになりますか？」</div>
+        <div class="note"><b>◯総務＝20〜100名でほぼ実在する唯一の名称／受付自身が総務のことが多い／外れても正しい人を教えてくれる。</b>100名超なら「人事」も可　／　<b class="x">✕AI担当・社内システム担当・研修担当は指名しない</b>（存在しない・ITツール検討にされる・営業と即分類される）</div>
       </div>
     </div>
 
@@ -157,7 +158,7 @@
       <div class="stepno">2</div>
       <div class="stepbody">
         <div class="steptitle">名乗り・時間の合意 <span>／ 20秒</span></div>
-        <div class="q2"><span class="n">Q1</span><span class="t">人事（総務）のご担当の方でいらっしゃいますか？</span></div>
+        <div class="q2"><span class="n">Q1</span><span class="t">総務のご担当の方でいらっしゃいますか？</span></div>
         <div class="q2"><span class="n">Q2</span><span class="t">突然すみません、名古屋のヒダネの◯◯です。3分だけ、よろしいですか？</span></div>
       </div>
     </div>
@@ -199,7 +200,7 @@
 部下でもなくて、秘書です。指示を出すのは◯◯さんなので。
 
 うち研修の会社なので、<b>1体目はうちが作りますけど、2体目は◯◯さんが作れるようになります。</b></div>
-        <div class="note"><b>本人が作れるから、本人の言い方と判断を覚える。</b>これが「代替ではない」の根拠。<b>「1体目はうち、2体目から本人」</b>が事前に作って持参する形と矛盾しない言い方</div>
+        <div class="note"><b>本人が作れるから、本人の言い方と判断を覚える。</b>これが<b>「代替ではない」の根拠</b>。実演と矛盾しない言い方はこれだけ</div>
       </div>
     </div>
 
@@ -211,7 +212,7 @@
 最初の1体は◯◯さんのを作りたいんです。
 使ってもらわないと、配れないので。</div>
         <div class="q2"><span class="n">Q6</span><span class="t">御社、今何名くらいでやられてます？　<span style="color:var(--gray2);font-size:6.7pt">（＝秘書の体数。助成金判定も兼ねる）</span></span></div>
-        <div class="note"><b>社内で秘書を配る側になるのは総務・人事。</b>担当が主役になる設計。「配った人」として評価が上がる</div>
+        <div class="note"><b>秘書を配る側になるのは総務。</b>担当が主役になり、社内で「配った人」になる</div>
       </div>
     </div>
 
@@ -219,11 +220,10 @@
       <div class="stepno">7</div>
       <div class="stepbody">
         <div class="steptitle">新人の話 <span>／ 採用の文脈に接続。25秒</span></div>
-        <div class="q2"><span class="n">Q7</span><span class="t">新しく入った方って、最初の1か月、誰が見てます？</span></div>
-        <div class="ans">▶「私か、現場ですね」</div>
+        <div class="q2"><span class="n">Q7</span><span class="t">新しく入った方って、最初の1か月、誰が見てます？　<span style="color:var(--gray2);font-size:6.7pt">▶「私か、現場ですね」</span></span></div>
         <div class="say">これ、新人さんにも入社初日から1体つけられます。
 同じことを10回聞かれるのが、◯◯さんじゃなくて秘書になるので。</div>
-        <div class="note">採ったあとの教育工数は、<b>担当の痛みなのに職業否定にならない唯一の場所</b>。採用の話をするならここだけ</div>
+        <div class="note">教育工数は<b>担当の痛みなのに職業否定にならない唯一の場所</b>。採用の話をするならここだけ</div>
       </div>
     </div>
 
@@ -303,7 +303,7 @@
         <div><span class="x">✕</span> AI社員（<b>社長専用。担当には必ず「秘書」</b>）</div>
         <div><span class="x">✕</span> 人が要らなくなります／省人化／人件費</div>
         <div><span class="x">✕</span> 部下ができます（<b>管理が増えると取られる</b>）</div>
-        <div><span class="x">✕</span> ◯◯さんの手が空きます（暇だと言われたと取る）<br>　→ ◎<b>「秘書がつきます」</b>と言う</div>
+        <div><span class="x">✕</span> 手が空きます（暇だと取る）→ ◎<b>「秘書がつきます」</b></div>
         <div><span class="x">✕</span> 御社の社員を1人作らせてください</div>
         <div><span class="x">✕</span> 全員分でいくらです／✕助成金（<b>どちらも電話では出さない。商談で出す</b>）</div>
         <div><span class="x">✕</span> 求人原稿AIで書けます（代理店の領域）／✕営業ではありません（嘘）</div>
@@ -327,7 +327,6 @@
 </div>
 
 <div class="foot" style="display:block; line-height:1.5">
-  <b>同じものを、相手によって呼び分ける。社長には「社員」、社員には「秘書」。</b>社長は代替を買う。社員は補佐を歓迎する。<b>能力を偽らず、範囲の言い方を変えるだけ。</b><br>
-  <b>商談で出す助成金の言い方：</b>2026-08-03改正で「全社員向けAIリテラシー研修」「汎用プロンプト講座」は対象外。<b>「自分の職務専用の秘書を作る」＝職務直結</b>なので設計として正しい（社労士確認が前提）<br>
+  <b>商談で出す助成金：</b>2026-08-03改正で汎用のAI研修は対象外。<b>「自分の職務専用の秘書を作る」＝職務直結</b>（社労士確認が前提）<br>
   <b>KPIは「担当アポが取れた」ではなく「社長との商談が設定された」。</b>／ <b>2回断られたら引く。</b>／ 優先順位：① 社労士紹介　② 社長へ直接　③ 本カード<span class="sp" style="float:right">株式会社ヒダネ ／ 2026-08-17</span>
 </div>
