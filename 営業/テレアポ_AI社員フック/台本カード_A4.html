@@ -19,17 +19,17 @@
   html, body {
     font-family: "IPAGothic", "IPAPGothic", sans-serif;
     color: var(--ink);
-    font-size: 7.85pt;
-    line-height: 1.26;
+    font-size: 7.6pt;
+    line-height: 1.24;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
   /* ---------- masthead ---------- */
-  .mast { display: flex; align-items: flex-end; gap: 4mm; border-bottom: 1.6pt solid var(--ink); padding-bottom: 1.2mm; }
+  .mast { display: flex; align-items: flex-end; gap: 4mm; border-bottom: 1.6pt solid var(--ink); padding-bottom: .95mm; }
   .mast-l { flex: 1; }
   .kicker { font-size: 6.6pt; letter-spacing: .26em; color: var(--gray2); }
-  h1 { font-size: 12.6pt; line-height: 1.15; letter-spacing: -.01em; margin-top: .6mm; }
+  h1 { font-size: 11.8pt; line-height: 1.15; letter-spacing: -.01em; margin-top: .6mm; }
   .tagline { font-size: 9pt; margin-top: .8mm; letter-spacing: .01em; }
   .tagline b { border-bottom: 1.4pt solid var(--ink); padding-bottom: .3mm; }
   .slots { display: flex; gap: 3mm; font-size: 6.8pt; color: var(--gray2); white-space: nowrap; }
@@ -45,12 +45,12 @@
   .warn-body b { color: var(--red); }
 
   /* ---------- columns ---------- */
-  .cols { display: flex; gap: 3mm; margin-top: 1.6mm; align-items: flex-start; }
-  .col-main { flex: 1 1 63%; }
-  .col-side { flex: 0 0 34%; }
+  .cols { display: flex; gap: 2.6mm; margin-top: 1.4mm; align-items: flex-start; }
+  .col-main { flex: 1 1 68%; }
+  .col-side { flex: 0 0 29.5%; }
 
   /* ---------- steps ---------- */
-  .step { display: flex; gap: 1.6mm; padding: .56mm 0; border-top: .5pt solid var(--rule); }
+  .step { display: flex; gap: 1.4mm; padding: .36mm 0; border-top: .5pt solid var(--rule); }
   .step:first-child { border-top: none; padding-top: 0; }
   .stepno {
     flex: 0 0 5mm; height: 5mm; border: 1pt solid var(--ink);
@@ -62,13 +62,13 @@
 
   .say {
     border-left: 2.2pt solid var(--ink); background: var(--fill);
-    padding: .9mm 1.7mm; margin-top: .5mm; font-size: 7.95pt; line-height: 1.29;
+    padding: .68mm 1.55mm; margin-top: .35mm; font-size: 7.65pt; line-height: 1.22;
     white-space: pre-line;
   }
   .say.alt { border-left-color: var(--gray3); background: transparent; border-left-style: dashed; }
-  .say-tag { display: block; font-size: 6.2pt; letter-spacing: .18em; color: var(--gray2); margin-bottom: .5mm; }
+  .say-tag { display: block; font-size: 6.1pt; letter-spacing: .16em; color: var(--gray2); margin-bottom: .3mm; }
   .beat { font-size: 6.8pt; color: var(--gray2); text-align: center; letter-spacing: .12em; margin: .55mm 0; }
-  .note { font-size: 6.9pt; color: var(--gray1); margin-top: .55mm; line-height: 1.3; }
+  .note { font-size: 6.7pt; color: var(--gray1); margin-top: .38mm; line-height: 1.24; }
   .note b { background: var(--fill2); padding: 0 .6mm; }
 
   /* ---------- questions ---------- */
@@ -82,36 +82,47 @@
   .panel { border: 1pt solid var(--ink); padding: 1.4mm 1.8mm; margin-bottom: 1.5mm; }
   .panel:last-child { margin-bottom: 0; }
   .ptitle { font-size: 7.4pt; letter-spacing: .14em; border-bottom: .8pt solid var(--ink); padding-bottom: .7mm; margin-bottom: 1.2mm; }
-  .frow { font-size: 7.05pt; margin-bottom: 1.2mm; }
+  .frow { font-size: 6.9pt; margin-bottom: 1mm; }
   .frow:last-child { margin-bottom: 0; }
   .flabel { color: var(--gray1); }
-  .fline { border-bottom: .6pt solid var(--gray3); height: 4.1mm; margin-top: .4mm; }
+  .fline { border-bottom: .6pt solid var(--gray3); height: 3.7mm; margin-top: .4mm; }
   .fline.short { width: 60%; }
   .fbox { display: flex; gap: 1.2mm; margin-top: .6mm; }
   .fchk { border: .7pt solid var(--gray2); font-size: 6.8pt; padding: .3mm 1.2mm; }
 
-  .rb { font-size: 7.05pt; line-height: 1.27; margin-bottom: 1.05mm; }
+  .rb { font-size: 6.9pt; line-height: 1.24; margin-bottom: .85mm; }
   .rb:last-child { margin-bottom: 0; }
   .rb .q { color: var(--gray1); }
   .rb .a { display: block; border-left: 1.6pt solid var(--ink); padding-left: 1.6mm; margin-top: .5mm; }
 
-  .nglist { font-size: 6.95pt; line-height: 1.28; }
-  .nglist div { margin-bottom: .75mm; padding-left: 3.4mm; text-indent: -3.4mm; }
+  .nglist { font-size: 6.8pt; line-height: 1.25; }
+  .nglist div { margin-bottom: .6mm; padding-left: 3.4mm; text-indent: -3.4mm; }
   .nglist div:last-child { margin-bottom: 0; }
   .x { color: var(--red); }
 
   /* ---------- footer ---------- */
   .foot {
-    margin-top: 1.6mm; border-top: 1.2pt solid var(--ink); padding-top: 1mm;
+    margin-top: 1.4mm; border-top: 1.2pt solid var(--ink); padding-top: .9mm;
     display: flex; gap: 3mm; align-items: baseline; font-size: 6.9pt; color: var(--gray1);
   }
   .foot b { color: var(--ink); }
   .foot .sp { margin-left: auto; color: var(--gray2); white-space: nowrap; }
+
+  /* ---------- v7: compact question rows ---------- */
+  .q2 { display: flex; gap: 1.2mm; align-items: baseline; padding: .2mm 0; font-size: 7.9pt; line-height: 1.22; }
+  .q2 .n { flex: 0 0 6.4mm; font-size: 6.9pt; color: var(--gray2); font-variant-numeric: tabular-nums; }
+  .q2 .t { flex: 1; }
+  .q2.hot .n { color: var(--ink); }
+  .q2.hot .t { border-bottom: 1.1pt solid var(--ink); display: inline; }
+  .ans { font-size: 6.75pt; color: var(--gray2); padding-left: 7.4mm; line-height: 1.27; margin-bottom: .2mm; }
+  .fork { font-size: 6.7pt; color: var(--gray1); padding-left: 7.2mm; line-height: 1.25; }
+  .fork b { background: var(--fill2); padding: 0 .5mm; }
+  .qgrp { border-left: 1.6pt solid var(--rule-2); padding-left: 1.8mm; margin-top: .7mm; }
 </style>
 
 <div class="mast">
   <div class="mast-l">
-    <div class="kicker">株式会社ヒダネ ／ テレアポ台本</div>
+    <div class="kicker">株式会社ヒダネ ／ テレアポ台本 ／ 質問20問</div>
     <h1>AI社員フック</h1>
     <div class="tagline">弊社、<b>社員を作ってる会社</b>です。 ── 人は、採用する時代から、作る時代へ。</div>
   </div>
@@ -124,123 +135,138 @@
 
 <div class="warn">
   <span class="warn-tag">絶対厳守</span>
-  <span class="warn-body"><b class="x">✕「人を減らせます」</b>　→　<b>◯「これから増やさなくて済みます」</b>　／　今いる人には触れない。<b>これから増える予定の1人</b>の話だけをする。</span>
+  <span class="warn-body"><b class="x">✕「人を減らせます」</b> → <b>◯「これから増やさなくて済みます」</b>　／　<b>質問は2〜3問ごとに1つ返す</b>（尋問にしない）　／　質問したら<b>3秒黙る</b></span>
 </div>
 
 <div class="cols">
 
-  <!-- ============ MAIN ============ -->
   <div class="col-main">
 
     <div class="step">
       <div class="stepno">1</div>
       <div class="stepbody">
-        <div class="steptitle">受付突破 <span>／ 25秒・A/Bを記録する</span></div>
-        <div class="say"><span class="say-tag">A ── 求人ルート（安全）</span>お世話になります、名古屋のヒダネと申します。
-御社の求人の件でお電話しました。Indeedの「◯◯」の募集を拝見しまして、
-1つだけお伺いしたいことがあります。社長さん、いらっしゃいますか。</div>
+        <div class="steptitle">受付突破 <span>／ A・Bを記録する</span></div>
+        <div class="say"><span class="say-tag">A ── 求人ルート（安全）</span>お世話になります、名古屋のヒダネと申します。御社の求人の件でお電話しました。Indeedの
+「◯◯」の募集を拝見しまして、1つだけお伺いしたいことがあります。</div>
         <div class="say alt"><span class="say-tag">B ── AI社員ルート（攻め）</span>うち、AI社員を作ってる会社でして。社員3人でAI社員12人使って回してるんですけど、
-その事例を東海の◯◯業さんにお話しして回っています。社長さん、いらっしゃいますか。</div>
-        <div class="note">不在なら<b>「何時ごろお戻りですか」</b>を必ず聞く（一番数が取れる）／ 早口にしない</div>
+その事例を東海の◯◯業さんにお話しして回っています。</div>
+        <div class="note">不在なら<b>「何時ごろお戻りですか」</b>／<b class="x">受付には必ず「AI社員」と言う</b>（人材紹介と誤解され切られる）</div>
       </div>
     </div>
 
     <div class="step">
       <div class="stepno">2</div>
       <div class="stepbody">
-        <div class="steptitle">自己紹介と訂正 <span>／ 30秒・相手に質問させる</span></div>
+        <div class="steptitle">名乗り・自己紹介・訂正 <span>／ 30秒</span></div>
+        <div class="q2"><span class="n">Q1</span><span class="t">◯◯社長でいらっしゃいますか？</span></div>
+        <div class="q2"><span class="n">Q2</span><span class="t">3分だけ、よろしいですか？　<span style="color:var(--gray2);font-size:6.8pt">← 時間の合意。これがないと途中で切られる</span></span></div>
         <div class="say">弊社、社員を作ってる会社でして。
 　　<span style="color:var(--gray2);font-size:6.8pt">── 黙る。相手：「人材紹介？」「どういうこと？」 ──</span>
 いえ、作るほうです。採用じゃなくて。
 AI社員なんです。うち社員3人しかいないんですけど、AI社員が12人いまして。</div>
-        <div class="note"><b>「人材紹介ですか？」は即座に否定。</b>曖昧にすると商談で崩れる／無反応なら間を置かず続ける</div>
+        <div class="note"><b>「人材紹介ですか？」は即座に否定</b>（曖昧にすると商談で崩れる）／無反応なら →「人材紹介っぽく聞こえますよね。違うんですけど、想像つきます？」</div>
       </div>
     </div>
 
     <div class="step">
       <div class="stepno">3</div>
       <div class="stepbody">
-        <div class="steptitle">強みの一言 <span>／ 20秒・事実 → 一般化 の順</span></div>
-        <div class="say">それで、人が足りなくなったら、AI社員を1人作るんです。
-採用しないので。
-
-人って、採用する時代から、作る時代になったなと思ってて。</div>
-        <div class="note">先に一般化を言うと意識高い系に聞こえる。<b>必ず自社の事実が先。</b></div>
+        <div class="steptitle">AIの温度を測る <span>／ 25秒・以降の話し方が全部変わる</span></div>
+        <div class="q2 hot"><span class="n">Q3</span><span class="t">社長、AIって使われてます？</span></div>
+        <div class="fork"><b>使ってる</b>→「何に使われてます？」　<b>使ってない/分からない</b>→「ですよね。<b>うちも去年まで全然でした</b>」<span style="color:var(--gray2)">（否定しない）</span></div>
+        <div class="q2"><span class="n">Q4</span><span class="t">社内で使ってる方、います？</span></div>
+        <div class="q2"><span class="n">Q5</span><span class="t">興味はあります？</span></div>
+        <div class="note">「今はいいかな」でも引かない →「売り込みじゃないので大丈夫です。<b>ちょっとだけ状況伺ってもいいですか？</b>」→ 4へ</div>
       </div>
     </div>
 
     <div class="step">
       <div class="stepno">4</div>
       <div class="stepbody">
-        <div class="steptitle">質問6問 <span>／ 100秒・相手7割。答えは右欄に書く</span></div>
-        <div class="qrow"><span class="qn">Q1</span><span class="qt">今も募集出されてますよね。何名くらい探されてるんですか？</span></div>
-        <div class="qrow"><span class="qn">Q2</span><span class="qt">それ、いつ頃から出されてます？</span></div>
-        <div class="qrow hot"><span class="qn">Q3</span><span class="qt">…けっこう、しんどくないですか？</span></div>
-        <div class="qrow"><span class="qn">Q4</span><span class="qt">1人採れたとして、一人前になるまでどのくらいかかります？</span></div>
-        <div class="qrow"><span class="qn">Q5</span><span class="qt">その間、教える先輩の方の仕事ってどのくらい止まります？</span></div>
-        <div class="qrow hot"><span class="qn">Q6</span><span class="qt">…そもそも、その仕事って“人”じゃないとダメですか？</span></div>
-        <div class="note">質問したら<b>3秒黙る</b>／「なぜ」で聞かない／Q5のあと1つだけ返す →「<b>じゃあ1人採ると、実質もう1人分の手が3か月消える感じですね</b>」／<b>Q6は長く待つ</b></div>
+        <div class="steptitle">人の話に入る <span>／ 50秒・答えは右欄に書く</span></div>
+        <div class="q2"><span class="n">Q6</span><span class="t">今、人は足りてます？</span></div>
+        <div class="q2"><span class="n">Q7</span><span class="t">募集は出されてます？</span></div>
+        <div class="q2"><span class="n">Q8</span><span class="t">何名くらい探されてるんですか？</span></div>
+        <div class="q2"><span class="n">Q9</span><span class="t">それ、いつ頃から出されてます？</span></div>
+        <div class="ans">→ 1つ返す：「半年ですか。」（間）</div>
+        <div class="q2 hot"><span class="n">Q10</span><span class="t">…けっこう、しんどくないですか？</span></div>
+        <div class="note"><b>★分岐点。愚痴が出たらほぼ取れる。</b>返しは共感だけ →「そうですよね。今どこもそうみたいで」<b>解決策を出さない</b></div>
       </div>
     </div>
 
     <div class="step">
       <div class="stepno">5</div>
       <div class="stepbody">
-        <div class="steptitle">具体例 <span>／ 40秒・2体だけ。3体目を出さない</span></div>
-        <div class="say">たとえば営業準備の担当が1人いて、会社名を1個渡すと、その会社を調べて
-提案書と商談の台本まで作って出してきます。人間だと1社で半日でした。
-
-あと失注の分析だけやってる担当もいて、「次はこう言え」って台本を
-直してくるんです。…わりと厳しいんですけど（笑）</div>
-        <div class="note">相手の困りごとで差し替え可 → <b>数字＝経理KPI／書類＝オンボーディング／事務＝リスト・メール</b>担当</div>
+        <div class="steptitle">教育コスト・核心 <span>／ 45秒</span></div>
+        <div class="q2"><span class="n">Q11</span><span class="t">もし1人採れたとして、入って何か月で戦力になります？</span></div>
+        <div class="q2"><span class="n">Q12</span><span class="t">教えるのって、どなたがやられてます？　<span style="color:var(--gray2);font-size:6.8pt">← 職務が特定される</span></span></div>
+        <div class="q2"><span class="n">Q13</span><span class="t">その方の仕事、止まりますよね？</span></div>
+        <div class="ans">→ 1つ返す：「じゃあ1人採ると、<b style="color:var(--ink)">実質もう1人分の手が3か月消える</b>感じですね」</div>
+        <div class="q2 hot"><span class="n">Q14</span><span class="t">…そもそも、その仕事って“人”じゃないとダメですか？</span></div>
+        <div class="fork"><b>考えてなかった</b>→「うちもそうでした。3人しかいないので」　<b>人じゃないと無理</b>→「<b>現場は絶対に人ですよね。</b>うちが作ってるのも資料作るとか調べるとかの担当だけです」<span style="color:var(--gray2)">（即座に同意）</span></div>
       </div>
     </div>
 
     <div class="step">
       <div class="stepno">6</div>
       <div class="stepbody">
-        <div class="steptitle">アポ打診 <span>／ 35秒・説明を拒否して、作る提案に変える</span></div>
-        <div class="say">12人いるんですけど、全員違う仕事してまして。一番説明しづらいのが、そいつら毎回
-自分で自分の仕事を採点して、次から勝手に直してくるところで。
-…電話だとちょっと説明しづらいので──
+        <div class="steptitle">具体例 <span>／ 35秒・2体だけ</span></div>
+        <div class="say">たとえば営業準備の担当が1人いて、会社名を1個渡すと、その会社を調べて提案書と商談の
+台本まで作って出してきます。人間だと1社で半日でした。
 
-<b>30分だけいただいて、御社の社員を1人、作らせてもらえませんか。</b>
-業務を1つ選んでいただければ、それを覚えさせて、そのまま御社で使っていただけます。
-無料です。売り込みもしません。うちがどういう会社かは、それ見てもらうのが一番早いので。
-
-来週だと、火曜の午後か木曜の午前、どちらが動きやすいですか？</div>
-        <div class="note"><b>「説明できないので、作って見せます」</b>で拒否が提案に変わる／<b>「1人だけ」を明示</b>する（後出しの制限は不誠実）</div>
+あと失注の分析だけやってる担当もいて、「次はこう言え」って台本を直してくるんです。
+…わりと厳しいんですけど（笑）</div>
+        <div class="note">差し替え → 数字＝<b>経理KPI</b>／書類＝<b>オンボーディング</b>／事務＝<b>リスト・メール</b>担当</div>
       </div>
     </div>
 
     <div class="step">
       <div class="stepno">7</div>
       <div class="stepbody">
-        <div class="steptitle">確定と仕込み <span>／ 40秒</span></div>
-        <div class="say">当日までに、「これ人にやらせるの、もったいないな」と思ってる業務を1つだけ
-決めておいていただけますか。その業務をやられてる方も入っていただけると、
-その場で覚えさせられます。──ちなみに御社、今何名くらいでやられてます？</div>
+        <div class="steptitle">クロージング質問・アポ <span>／ 35秒</span></div>
+        <div class="q2 hot"><span class="n">Q15</span><span class="t">もし人を増やさずにその仕事が回るなら、興味あります？</span></div>
+        <div class="say">12人いるんですけど、全員違う仕事してまして。一番説明しづらいのが、そいつら毎回自分で
+自分の仕事を採点して、次から勝手に直してくるところで。…電話だとちょっと説明しづらいので──</div>
+        <div class="q2 hot"><span class="n">Q16</span><span class="t"><b>30分だけいただいて、御社の社員を1人、作らせてもらえませんか？</b></span></div>
+        <div class="say">業務を1つ選んでいただければ、それを覚えさせて、そのまま御社で使っていただけます。無料です。
+売り込みもしません。うちがどういう会社かは、それ見てもらうのが一番早いので。</div>
+        <div class="q2"><span class="n">Q17</span><span class="t">来週だと、火曜の午後か木曜の午前、どちらが動きやすいですか？</span></div>
+        <div class="note">Q15で「興味ある」が出た直後に提案／「興味ない」なら<b>即引く</b>／<b>「1人だけ」を明示</b>（後出しの制限は不誠実）</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">8</div>
+      <div class="stepbody">
+        <div class="steptitle">確定と仕込み <span>／ 35秒</span></div>
+        <div class="q2"><span class="n">Q18</span><span class="t">当日までに「これ人にやらせるの、もったいないな」という業務を1つ決めておけますか？</span></div>
+        <div class="q2"><span class="n">Q19</span><span class="t">当日は社長お一人ですか？<span style="color:var(--gray2);font-size:6.7pt">（担当者が入ると職務特定が完了）</span></span></div>
+        <div class="q2"><span class="n">Q20</span><span class="t">ちなみに御社、今何名くらいでやられてます？<span style="color:var(--gray2);font-size:6.7pt">（助成金判定。助成金の話はしない）</span></span></div>
       </div>
     </div>
 
   </div>
 
-  <!-- ============ SIDE ============ -->
   <div class="col-side">
 
     <div class="panel">
       <div class="ptitle">記入欄 ── 相手が言った数字</div>
-      <div class="frow"><span class="flabel">Q1 募集人数 ／ Q2 いつから</span><div class="fline"></div></div>
-      <div class="frow"><span class="flabel">Q3「しんどい」が出たか</span>
+      <div class="frow"><span class="flabel">Q3 AIの温度</span>
+        <div class="fbox"><span class="fchk">□ 使ってる</span><span class="fchk">□ 使ってない</span></div>
+        <div class="fbox" style="margin-top:.7mm"><span class="fchk">□ 分からない</span><span class="fchk">□ 興味あり</span></div>
+      </div>
+      <div class="frow"><span class="flabel">Q8 募集人数 ／ Q9 いつから</span><div class="fline"></div></div>
+      <div class="frow"><span class="flabel">Q10「しんどい」が出たか</span>
         <div class="fbox"><span class="fchk">□ 出た</span><span class="fchk">□ 出ない</span></div>
       </div>
-      <div class="frow"><span class="flabel">Q4 一人前まで ／ Q5 削られる工数</span><div class="fline"></div></div>
-      <div class="frow"><span class="flabel">Q6 の反応</span>
+      <div class="frow"><span class="flabel">Q11 戦力まで ／ Q13 削られる工数</span><div class="fline"></div></div>
+      <div class="frow"><span class="flabel">Q12 教えている人（職務）</span><div class="fline"></div></div>
+      <div class="frow"><span class="flabel">Q14 の反応</span>
         <div class="fbox"><span class="fchk">□ 考えてなかった</span></div>
-        <div class="fbox" style="margin-top:.8mm"><span class="fchk">□ 人じゃないと無理</span></div>
+        <div class="fbox" style="margin-top:.7mm"><span class="fchk">□ 人じゃないと無理</span></div>
       </div>
-      <div class="frow"><span class="flabel">「人材紹介？」が出たか</span>
-        <div class="fbox"><span class="fchk">□ 出た</span><span class="fchk">□ 出ない</span></div>
+      <div class="frow"><span class="flabel">Q15 興味あり？</span>
+        <div class="fbox"><span class="fchk">□ YES</span><span class="fchk">□ NO</span><span class="fchk">□「人材紹介？」が出た</span></div>
       </div>
       <div class="frow"><span class="flabel">作る対象に選ばれた業務</span><div class="fline"></div></div>
       <div class="frow"><span class="flabel">従業員数 ／ 受付ルート</span>
@@ -252,12 +278,12 @@ AI社員なんです。うち社員3人しかいないんですけど、AI社員
       <div class="ptitle">切り返し</div>
       <div class="rb"><span class="q">人材紹介ですか？</span>
         <span class="a"><b>いえ、作るほうです。採用じゃなくて。</b>← 即座に否定。曖昧にしない</span></div>
+      <div class="rb"><span class="q">AIはよく分からない</span>
+        <span class="a">ほとんどの方がそうです。うちも去年まで全然でした。← 否定しない</span></div>
       <div class="rb"><span class="q">結局、人を減らすってこと？</span>
         <span class="a">今いる方はそのままです。これから増やす予定の1人の話です。</span></div>
       <div class="rb"><span class="q">人がいないとできない仕事もある</span>
         <span class="a">そうです。現場は絶対に人です。うちが作ってるのも、資料作るとか調べるとかの担当だけです。</span></div>
-      <div class="rb"><span class="q">結局AIツールでしょ？</span>
-        <span class="a">はい、実体はAIです。ただ、うちの仕事のやり方を覚えさせてあるので。</span></div>
       <div class="rb"><span class="q">30分で本当にできるの？</span>
         <span class="a">簡単な業務なら。複雑なやつは無理です。当日どれを選ぶかで決まります。</span></div>
       <div class="rb"><span class="q">うちにも作れますか？</span>
@@ -267,17 +293,14 @@ AI社員なんです。うち社員3人しかいないんですけど、AI社員
     <div class="panel">
       <div class="ptitle">言わない</div>
       <div class="nglist">
+        <div><span class="x">✕</span> 質問を5問以上連続で投げる（尋問）</div>
+        <div><span class="x">✕</span> 長い質問（考えさせると答えない）</div>
+        <div><span class="x">✕</span> 「興味ないですか？」＝否定形</div>
         <div><span class="x">✕</span> 人件費削減／省人化／置き換え</div>
-        <div><span class="x">✕</span> AI社員1人＝人間1人分です</div>
         <div><span class="x">✕</span> 全部AIでやってます</div>
-        <div><span class="x">✕</span> AI社員を導入しませんか</div>
-        <div><span class="x">✕</span> 助成金で実質10万円です</div>
-        <div><span class="x">✕</span> なぜ採れないんですか</div>
-        <div><span class="x">✕</span> 今だけ／お得／絶対／必ず</div>
-        <div><span class="x">✕</span> 営業ではありません（嘘）</div>
-        <div><span class="x">✕</span> 未確認のAI社員4体の話</div>
-        <div><span class="x">✕</span> 受付に「社員を作ってる会社」だけ<br>　（人材紹介と誤解される。<b>AI社員</b>と言う）</div>
         <div><span class="x">✕</span> できないのに「作れます」</div>
+        <div><span class="x">✕</span> 助成金で実質10万円です</div>
+        <div><span class="x">✕</span> 営業ではありません（嘘）</div>
       </div>
     </div>
 
@@ -292,5 +315,5 @@ AI社員なんです。うち社員3人しかいないんですけど、AI社員
 
 <div class="foot" style="display:block; line-height:1.5">
   <b>押さない相手：</b>現場作業が中心／「人を育てるのが経営」と言う社長（論破しない）／従業員5名未満／直近で人員整理をした会社。<b>2回断られたら引く。</b><br>
-  <b>架電時間：</b>10:00–11:30／16:00–17:00（建設 8:30–9:30・17:00〜／介護 14:00–16:00）　<b>1日30〜40件</b>（仕込み込み）<span class="sp" style="float:right">株式会社ヒダネ ／ v5 ／ 2026-08-17</span>
+  <b>架電時間：</b>10:00–11:30／16:00–17:00（建設 8:30–9:30・17:00〜／介護 14:00–16:00）　<b>1日30〜40件</b>（仕込み込み）<span class="sp" style="float:right">株式会社ヒダネ ／ v7 ／ 2026-08-17</span>
 </div>
