@@ -50,7 +50,7 @@
   .col-side { flex: 0 0 29.5%; }
 
   /* ---------- steps ---------- */
-  .step { display: flex; gap: 1.4mm; padding: .3mm 0; border-top: .5pt solid var(--rule); }
+  .step { display: flex; gap: 1.4mm; padding: .2mm 0; border-top: .5pt solid var(--rule); }
   .step:first-child { border-top: none; padding-top: 0; }
   .stepno {
     flex: 0 0 5mm; height: 5mm; border: 1pt solid var(--ink);
@@ -62,13 +62,13 @@
 
   .say {
     border-left: 2.2pt solid var(--ink); background: var(--fill);
-    padding: .62mm 1.55mm; margin-top: .32mm; font-size: 7.65pt; line-height: 1.19;
+    padding: .58mm 1.55mm; margin-top: .3mm; font-size: 7.65pt; line-height: 1.16;
     white-space: pre-line;
   }
   .say.alt { border-left-color: var(--gray3); background: transparent; border-left-style: dashed; }
   .say-tag { display: block; font-size: 6.1pt; letter-spacing: .16em; color: var(--gray2); margin-bottom: .3mm; }
   .beat { font-size: 6.8pt; color: var(--gray2); text-align: center; letter-spacing: .12em; margin: .55mm 0; }
-  .note { font-size: 6.65pt; color: var(--gray1); margin-top: .34mm; line-height: 1.22; }
+  .note { font-size: 6.6pt; color: var(--gray1); margin-top: .3mm; line-height: 1.19; }
   .note b { background: var(--fill2); padding: 0 .6mm; }
 
   /* ---------- questions ---------- */
@@ -87,8 +87,8 @@
   .flabel { color: var(--gray1); }
   .fline { border-bottom: .6pt solid var(--gray3); height: 3.8mm; margin-top: .4mm; }
   .fline.short { width: 60%; }
-  .fbox { display: flex; gap: 1.2mm; margin-top: .6mm; }
-  .fchk { border: .7pt solid var(--gray2); font-size: 6.8pt; padding: .3mm 1.2mm; }
+  .fbox { display: flex; flex-wrap: wrap; gap: .9mm; margin-top: .6mm; }
+  .fchk { border: .7pt solid var(--gray2); font-size: 6.8pt; padding: .3mm 1.1mm; white-space: nowrap; }
 
   .rb { font-size: 7pt; line-height: 1.26; margin-bottom: .95mm; }
   .rb:last-child { margin-bottom: 0; }
@@ -135,7 +135,7 @@
 
 <div class="warn">
   <span class="warn-tag">絶対厳守</span>
-  <span class="warn-body"><b class="x">✕「採用しなくてよくなります」</b>＝職業否定 → <b>◯「◯◯さんの手が空きます」</b>　／　<b class="x">✕「採用する時代から作る時代へ」は社長専用</b>　／　<b>誰を採るか決めるのは人</b>と必ず言う</span>
+  <span class="warn-body"><b class="x">✕「採用しなくてよくなります」</b>＝職業否定 → <b>◯「◯◯さんの手が空きます」</b>　／　<b class="x">✕「採用する時代から作る時代へ」は社長専用</b>　／　<b class="x">✕求人原稿の話</b>＝代理店の領域で担当の痛みではない　／　<b class="x">✕代理店を悪者にする</b></span>
 </div>
 
 <div class="cols">
@@ -166,14 +166,12 @@
       <div class="stepno">3</div>
       <div class="stepbody">
         <div class="steptitle">共感から入る <span>／ ★ここが分岐点。40秒</span></div>
-        <div class="q2 hot"><span class="n">Q3</span><span class="t">あの、求人の原稿って、どなたが書かれてるんですか？</span></div>
-        <div class="ans">▶「私ですね」</div>
-        <div class="q2 hot"><span class="n">Q4</span><span class="t">…あれ、けっこう時間取られませんか？</span></div>
-        <div class="ans">▶「取られますね（笑）」</div>
-        <div class="say">そうですよね。しかも書いても応募来ないと、
-社長さんにも言われるじゃないですか。</div>
-        <div class="ans">▶「…そうなんですよ」　← <b>ここまで来たら、ほぼ聞いてもらえる</b></div>
-        <div class="note">担当は「応募が来ない」より<b>日常的に「時間を取られること」</b>に苦しんでいる。そこに共感されると味方だと認識される</div>
+        <div class="q2 hot"><span class="n">Q3</span><span class="t">求人って、代理店さん通されてますか？</span></div>
+        <div class="ans">▶「はい、お願いしてます」　← <b>当てられると「分かってる人」だと思われる</b></div>
+        <div class="q2"><span class="n">Q4</span><span class="t">じゃあ原稿は代理店さんですね。◯◯さんは、そのやりとりと社長への報告のほうですか？　<span style="color:var(--gray2);font-size:6.7pt">▶「そうですね…」</span></span></div>
+        <div class="q2 hot"><span class="n">Q5</span><span class="t">あの、代理店さんって「この媒体はやめましょう」って言ってくれます？</span></div>
+        <div class="ans">▶「…言わないですね（笑）」　← <b>ここで同じ側に立てる。ほぼ聞いてもらえる</b></div>
+        <div class="note">原稿は代理店が書く。だから<b class="x">原稿の話は刺さらない。</b>担当に残っているのは<b>代理店とのやりとり・社内の集計・社長への説明</b>。代理店は媒体を売る側なので<b>「やめましょう」と構造的に言えない</b>。そこだけ突く</div>
       </div>
     </div>
 
@@ -184,9 +182,9 @@
         <div class="say">うち、AI社員を作ってる会社でして。
 社員3人しかいないんですけど、AI社員が12人いまして。
 
-求人の原稿も、面接の記録まとめも、社長への報告資料も、全部AIにやらせてます。
+面接の記録まとめも、媒体別の集計も、社長への報告資料も、全部AIにやらせてます。
 うち、採用担当がいないので。</div>
-        <div class="note">「採用担当がいないので」は<b>自社の状況説明</b>。相手の否定ではない</div>
+        <div class="note">「採用担当がいないので」は<b>自社の状況説明</b>。相手の否定ではない。<b class="x">原稿は挙げない</b>＝代理店の領域。<b>代理店がやらない仕事だけを並べる</b></div>
       </div>
     </div>
 
@@ -196,19 +194,21 @@
         <div class="steptitle">先回りする <span>／ ★必須。聞かれる前に言う</span></div>
         <div class="say">あ、先に言っておくと、
 ◯◯さんの仕事を減らす話であって、なくす話ではないです。
+それと、代理店さんを替える話でもないです。
 
-うちがやってるのは、原稿書くとか記録まとめるとか、そういう作業のほうなので。
+うちがやってるのは、集計とかまとめとか、そういう作業のほうなので。
 誰を採るか決めるのは、絶対に人です。</div>
-        <div class="note">担当は必ず「自分の仕事は？」と考える。<b>聞かれてから答えると言い訳に聞こえる。先に言うと分かってる人だと思われる</b></div>
+        <div class="note">担当は必ず「自分の仕事は？」と考える。<b>聞かれてから答えると言い訳に聞こえる。</b>加えて<b class="x">代理店を悪者にすると担当が代理店をかばう</b>ので、先に両方消しておく</div>
       </div>
     </div>
 
     <div class="step">
       <div class="stepno">6</div>
       <div class="stepbody">
-        <div class="steptitle">媒体を確認 <span>／ ★ここで話す内容が変わる</span></div>
-        <div class="q2 hot"><span class="n">Q5</span><span class="t">どちらの媒体を使われてます？</span></div>
-        <div class="fork"><b>Indeed／求人ボックス／Airワーク</b> → 原稿の話をしてよい　　<b class="x">ビズリーチ／doda</b> → <b class="x">原稿とスカウトの話は絶対にしない</b>（媒体AIが搭載済み。「うちのがやってます」で終わる）</div>
+        <div class="steptitle">2点だけ確認 <span>／ ★ここで刺す場所が決まる</span></div>
+        <div class="q2"><span class="n">Q6</span><span class="t">媒体はどちらを？　ハローワークと紹介も併用されてます？</span></div>
+        <div class="q2 hot"><span class="n">Q7</span><span class="t">応募の管理って、ATS（採用管理システム）入れてます？</span></div>
+        <div class="fork"><b>ATSなし</b> → 集計そのものが手作業。そのまま刺さる　　<b>ATSあり</b> → 歩留まりは出る。ただし<b class="x">ATSは掲載費を持っていない</b>ので<b>1人あたりいくら掛かったかは出ない</b>。そこを突く　　<b class="x">原稿・スカウト文面の話は一切しない</b></div>
       </div>
     </div>
 
@@ -216,13 +216,13 @@
       <div class="stepno">7</div>
       <div class="stepbody">
         <div class="steptitle">社内政治の話 <span>／ ★一番刺さる。45秒</span></div>
-        <div class="q2"><span class="n">Q6</span><span class="t">社長さんへの報告って、月1くらいで出されてます？</span></div>
-        <div class="q2"><span class="n">Q7</span><span class="t">あれ、作るのにどのくらいかかります？</span></div>
+        <div class="q2"><span class="n">Q8</span><span class="t">社長さんへの報告って月1くらいで出されてます？　あれ、どのくらいかかります？</span></div>
         <div class="ans">▶「半日はかかりますね…」</div>
-        <div class="q2 hot"><span class="n">Q8</span><span class="t">今って、媒体ごとの費用対効果って出せてます？</span></div>
-        <div class="ans">▶「…ざっくりしか」　← <b>ここが本命。媒体をまたぐ分析はどのツールにもできない</b></div>
+        <div class="q2 hot"><span class="n">Q9</span><span class="t">代理店さんのレポートって、扱ってる媒体の分だけですよね？　<span style="color:var(--gray2);font-size:6.7pt">▶「…そうですね」</span></span></div>
+        <div class="q2 hot"><span class="n">Q10</span><span class="t">じゃあ、媒体ごとに1人採るのにいくら掛かったかって、出せてます？</span></div>
+        <div class="ans">▶「…ざっくりしか」　← <b>★本命。掲載費は代理店側、面接と入社の数は社内側。突き合わせた人がどこにもいない</b></div>
         <div class="say">うち、そこもAIにやらせてまして。
-媒体別に何件来て、何人会えて、いくら掛かったか。
+媒体別に、いくら払って、何人面接まで来て、何人入って、何人残ってるか。
 そこまで出して、社長に渡すだけの形にしてます。</div>
       </div>
     </div>
@@ -234,12 +234,11 @@
         <div class="say"><b>30分だけいただいて、社長さんに出す報告資料を1本、
 無料で作らせてもらえませんか。</b>
 
-御社の媒体別に、何件来て、何人会えて、いくら掛かったか。
-そこまで出して、社長さんに渡すだけの形にします。
-
-無料です。売り込みもしません。</div>
-        <div class="q2"><span class="n">Q9</span><span class="t">来週だと、火曜の午後か木曜の午前、どちらが動きやすいですか？</span></div>
-        <div class="note">予備：<b>面接の記録を1人分、評価シートの形にする</b>／<b>採ったあとの受け入れ計画を1つ組む</b>（どちらも撮影不要・営業1人・30分）</div>
+代理店さんのレポートに、ハローワークと直接応募と紹介の分を足して、
+いくら払って、何人面接まで来て、何人入ったかまで並べた1枚にします。
+代理店さんを替える話ではないので、そこはご安心ください。無料です。</div>
+        <div class="q2"><span class="n">Q11</span><span class="t">来週だと、火曜の午後か木曜の午前、どちらが動きやすいですか？</span></div>
+        <div class="note">予備：<b>面接の記録を1人分、評価シートの形にする</b>／<b>採ったあとの受け入れ計画を1つ組む</b>（撮影不要・営業1人・30分）　<b class="x">✕求人原稿は絶対に出さない</b></div>
       </div>
     </div>
 
@@ -257,9 +256,9 @@
       <div class="stepno">10</div>
       <div class="stepbody">
         <div class="steptitle">確定と仕込み <span>／ 30秒</span></div>
-        <div class="q2"><span class="n">Q10</span><span class="t">当日、媒体の管理画面を開ける状態にしておいていただけますか？</span></div>
-        <div class="q2 hot"><span class="n">Q11</span><span class="t">ちなみに社長さんって、なんてお名前でしたっけ？　<span style="color:var(--gray2);font-size:6.7pt">← 次回の名指し用。不発でもこれは残す</span></span></div>
-        <div class="q2"><span class="n">Q12</span><span class="t">御社、今何名くらいでやられてます？　<span style="color:var(--gray2);font-size:6.7pt">（助成金判定。電話では助成金の話をしない）</span></span></div>
+        <div class="q2"><span class="n">Q12</span><span class="t">当日、代理店さんのレポートと請求書を見られる状態にしておいていただけますか？</span></div>
+        <div class="q2 hot"><span class="n">Q13</span><span class="t">ちなみに社長さんって、なんてお名前でしたっけ？　<span style="color:var(--gray2);font-size:6.7pt">← 次回の名指し用。不発でもこれは残す</span></span></div>
+        <div class="q2"><span class="n">Q14</span><span class="t">御社、今何名くらいでやられてます？　<span style="color:var(--gray2);font-size:6.7pt">（助成金判定。電話では助成金の話をしない）</span></span></div>
       </div>
     </div>
 
@@ -270,16 +269,13 @@
     <div class="panel">
       <div class="ptitle">★商談で社長を呼ぶ質問</div>
       <div class="rb">
-        <span class="q">商談の中盤で、これを聞く：</span>
-        <span class="a"><b>これ、国の助成金が使える可能性があるんですけど、その話って◯◯さんの範囲ですか？　社長さんの範囲ですか？</b></span>
+        <span class="a" style="margin-top:0"><b>これ、国の助成金が使える可能性があるんですけど、その話って◯◯さんの範囲ですか？　社長さんの範囲ですか？</b></span>
       </div>
-      <div class="nglist" style="margin-top:1.2mm">
-        <div>▶ 担当：「…社長ですね」<b>（ほぼ100%）</b></div>
-        <div style="margin-top:1mm">→「じゃあ社長さんに一度だけ、5分でいいので説明させてもらえませんか。<b>◯◯さんも同席で</b>」</div>
+      <div class="nglist" style="margin-top:1mm">
+        <div>▶「…社長ですね」<b>（ほぼ100%）</b>→「じゃあ社長さんに一度だけ、5分でいいので。<b>◯◯さんも同席で</b>」</div>
       </div>
       <div class="nglist" style="margin-top:1.4mm; border-top:.5pt solid var(--rule); padding-top:1.2mm">
-        <div><b>助成金は担当の決裁範囲外だと明らか</b>→ 担当自身が「社長」と言う</div>
-        <div>同席させるので<b>担当を外さない</b></div>
+        <div><b>助成金は担当の決裁範囲外</b>→ 担当自身が「社長」と言う。同席させるので<b>担当を外さない</b></div>
         <div><b class="x">電話では助成金を出さない。商談で出す</b></div>
       </div>
     </div>
@@ -287,41 +283,41 @@
     <div class="panel">
       <div class="ptitle">切り返し</div>
       <div class="rb"><span class="q">それ、私の仕事なくなりません？</span>
-        <span class="a"><b>なくなりません。</b>作業のほうを減らす話です。誰を採るか決めるのは絶対に人なので。</span></div>
+        <span class="a"><b>なくなりません。</b>作業のほうです。誰を採るかは人が決めます。</span></div>
+      <div class="rb"><span class="q">代理店に全部任せてるので</span>
+        <span class="a"><b>代理店さんが出さない数字</b>の話です。紹介や入ったあとの分は持ってないので。</span></div>
+      <div class="rb"><span class="q">代理店さんに悪いので</span>
+        <span class="a"><b>替える話じゃないです。</b>同じ代理店さんのまま、社長に出す1枚だけ作ります。</span></div>
+      <div class="rb"><span class="q">レポートは代理店がくれてます</span>
+        <span class="a"><b>その媒体の分だけですよね？</b>入ったあとの数字も入ってないので。</span></div>
       <div class="rb"><span class="q">うちATS入れてます</span>
-        <span class="a"><b>どちらのですか？</b>→ じゃあ返信や日程調整は自動ですね。うちがやってるのは原稿を"書く"とか記録を"まとめる"ほうです。</span></div>
-      <div class="rb"><span class="q">原稿は代理店に任せてます</span>
-        <span class="a">そうなんですね。<b>費用どのくらいかかってます？</b></span></div>
+        <span class="a">歩留まりは出ますね。ただ<b>ATSは掲載費が入ってない</b>ので採用単価は出ません。</span></div>
       <div class="rb"><span class="q">決裁は社長なので</span>
-        <span class="a">ですよね。なので<b>◯◯さんから持っていってもらう形がいい</b>と思ってて。← むしろ好都合</span></div>
-      <div class="rb"><span class="q">AIで書いた原稿って大丈夫？</span>
-        <span class="a">そのまま出すのは危ないです。<b>◯◯さんが直す前提</b>です。ゼロから書くのと直すのとで時間が全然違うので。</span></div>
-      <div class="rb"><span class="q">興味はあるけど時間が</span>
-        <span class="a">30分だけです。<b>むしろ◯◯さんの時間を作る話</b>なので。</span></div>
+        <span class="a">ですよね。<b>◯◯さんから持っていってもらう形がいい</b>と思ってて。← 好都合</span></div>
     </div>
 
     <div class="panel">
       <div class="ptitle">言わない</div>
       <div class="nglist">
         <div><span class="x">✕</span> 採用しなくてよくなります（職業否定）</div>
-        <div><span class="x">✕</span> 人は採用する時代から作る時代へ<br>　（<b>社長専用のタグライン</b>）</div>
+        <div><span class="x">✕</span> 人は採用する時代から作る時代へ（<b>社長専用</b>）</div>
+        <div><span class="x">✕</span> 求人原稿AIで書けます（<b>代理店の領域</b>）</div>
+        <div><span class="x">✕</span> 代理店のレポート意味ない／替えたほうがいい<br>　（<b>担当が代理店をかばう。その場で終わる</b>）</div>
         <div><span class="x">✕</span> 採用コストが下がります（予算＝権限が減る）</div>
         <div><span class="x">✕</span> 採用担当いらなくなりますね（冗談でも）</div>
-        <div><span class="x">✕</span> 原稿が悪いから採れないんです<br>　（<b>担当が書いた原稿の否定。最悪</b>）</div>
-        <div><span class="x">✕</span> 応募、来てないですよね（決めつけ）</div>
+        <div><span class="x">✕</span> 応募来てないですよね（決めつけ）／✕営業ではありません（嘘）</div>
         <div><span class="x">✕</span> 御社の社員を1人作らせてください<br>　（<b>自分の代わりが来ると聞こえる</b>）</div>
-        <div><span class="x">✕</span> 営業ではありません（嘘）</div>
       </div>
     </div>
 
     <div class="panel">
       <div class="ptitle">記入 ／ 結果</div>
-      <div class="frow"><span class="flabel">使っている媒体 ／ ATS</span><div class="fline"></div></div>
+      <div class="frow"><span class="flabel">代理店名 ／ 媒体 ／ ATS ／ 併用経路</span><div class="fline"></div></div>
       <div class="frow"><span class="flabel">報告資料に何時間かかっているか</span><div class="fline short"></div></div>
       <div class="frow"><span class="flabel">社長の氏名</span><div class="fline"></div></div>
       <div class="frow"><span class="flabel">従業員数</span><div class="fline short"></div></div>
       <div class="frow"><span class="flabel">結果</span>
-        <div class="fbox"><span class="fchk">□ アポ</span><span class="fchk">□ 資料送付</span><span class="fchk">□ 再架電</span><span class="fchk">□ 終了</span></div>
+        <div class="fbox"><span class="fchk">□アポ</span><span class="fchk">□送付</span><span class="fchk">□再架電</span><span class="fchk">□終了</span></div>
       </div>
       <div class="frow"><span class="flabel">★社長との商談が設定されたか</span>
         <div class="fbox"><span class="fchk">□ YES</span><span class="fchk">□ NO</span></div>
