@@ -50,7 +50,7 @@
   .col-side { flex: 0 0 29.5%; }
 
   /* ---------- steps ---------- */
-  .step { display: flex; gap: 1.4mm; padding: .22mm 0; border-top: .5pt solid var(--rule); }
+  .step { display: flex; gap: 1.4mm; padding: .18mm 0; border-top: .5pt solid var(--rule); }
   .step:first-child { border-top: none; padding-top: 0; }
   .stepno {
     flex: 0 0 5mm; height: 5mm; border: 1pt solid var(--ink);
@@ -62,7 +62,7 @@
 
   .say {
     border-left: 2.2pt solid var(--ink); background: var(--fill);
-    padding: .56mm 1.5mm; margin-top: .28mm; font-size: 7.65pt; line-height: 1.16;
+    padding: .54mm 1.5mm; margin-top: .26mm; font-size: 7.65pt; line-height: 1.15;
     white-space: pre-line;
   }
   .say.alt { border-left-color: var(--gray3); background: transparent; border-left-style: dashed; }
@@ -135,7 +135,7 @@
 
 <div class="warn">
   <span class="warn-tag">絶対厳守</span>
-  <span class="warn-body"><b class="x">✕「AI社員」は社長専用</b>。担当には<b>必ず「秘書」</b>（社員＝代替／秘書＝補佐）　／　<b class="x">✕「作らせてください」</b>＝30分では作れない → <b>◯「作ってから伺います」</b>　／　<b class="x">✕電話で金額と助成金</b>　／　<b>1体目はヒダネ、2体目から本人が作る</b></span>
+  <span class="warn-body"><b class="x">✕「AI社員」は社長専用</b>。担当には<b>必ず「秘書」</b>（社員＝代替／秘書＝補佐）　／　<b class="x">✕「作らせてください」「作ってから伺います」</b>＝相手専用は当日できない → <b>◯「その場でお見せします」</b>　／　<b class="x">✕電話で金額と助成金</b>　／　<b>1体目はヒダネ、2体目から本人が作る</b></span>
 </div>
 
 <div class="cols">
@@ -182,9 +182,9 @@
         <div class="steptitle">具体的に言う <span>／ ★どの職種でも成立する話から。40秒</span></div>
         <div class="q2 hot"><span class="n">Q4</span><span class="t">◯◯さん、予定って自分でカレンダーに入れてますか？</span></div>
         <div class="ans">▶「入れてますね」</div>
-        <div class="say">それ、秘書に言うだけで済みます。
-「来週の火曜14時に◯◯社」って言ったら、いま使ってるカレンダーに入って、
-当日の朝に「今日はこれです」って教えてくれます。</div>
+        <div class="say">それ、秘書に言うだけで済みます。「来週の火曜14時に◯◯社」って言ったら、
+そのままカレンダーに入って、当日の朝に「今日はこれです」って教えてくれます。
+<b>今この電話でもできるんですけど、画面がないので。当日お見せします。</b></div>
         <div class="q2"><span class="n">Q5</span><span class="t">あと◯◯さんの場合…社内から質問される回数って、1日何回くらいですか？</span></div>
         <div class="ans">▶「けっこう来ますね…」　→ 有給の残り・経費の出し方・書類の場所。<b>そこも秘書が一次対応します</b></div>
         <div class="note"><b>予定の話は全職種で通る。</b>そこに職種の話を1つ足す。<b class="x">機能で勝とうとしない</b>（Siriで返される）。<b>売り物は「全員が使えている状態」</b></div>
@@ -230,14 +230,14 @@
     <div class="step">
       <div class="stepno">8</div>
       <div class="stepbody">
-        <div class="steptitle">アポ打診 <span>／ ★本命。作ってから持っていく</span></div>
-        <div class="say"><b>◯◯さん専用の秘書を1体、こちらで作ってから伺います。
-30分だけ、いただけませんか。</b>
+        <div class="steptitle">アポ打診 <span>／ ★本命。見てもらうだけ</span></div>
+        <div class="say"><b>30分だけ、見てもらうだけでいいので、いただけませんか。</b>
 
-動くものを持っていくので、その場で使ってみてもらえます。
-◯◯さんは何もしなくて大丈夫です。無料です。</div>
+うちが今使ってる秘書を、その場でお見せします。
+私が予定を言って、カレンダーに入るところまで、実際に。
+<b>同じものを、◯◯さん専用に作れます。</b></div>
         <div class="q2"><span class="n">Q8</span><span class="t">来週だと、火曜の午後か木曜の午前、どちらが動きやすいですか？</span></div>
-        <div class="note"><b class="x">✕「作らせてください」</b>＝相手の30分を作業に使う＋<b class="x">当日作れないので崩れる</b>　→　<b>◯「作ってから伺います」</b>＝相手は見るだけ、しかも<b>すでに動く</b>。主語は必ず<b>◯◯さんの</b>秘書</div>
+        <div class="note"><b>「見てもらうだけ」＝断る理由が作れない。</b>実演は<b>ヒダネのカレンダーで完結＝事前準備ゼロ</b>。<b class="x">「専用を作ってから伺う」は言わない</b>（当日できない）</div>
       </div>
     </div>
 
@@ -248,8 +248,8 @@
         <div class="q2 hot"><span class="n">Q9</span><span class="t">全員分だと人数×の話になるので、そこは社長さんの決裁ですよね？</span></div>
         <div class="ans">▶「そうですね」</div>
         <div class="say">じゃあ当日、社長さんも5分だけ覗いてもらうことできませんか。
-動くもの見せるので、そのほうが早いと思うんです。</div>
-        <div class="note"><b>デモがあるから当日の同席を頼める。</b>断られたら →<b>「◯◯さんが1週間使ってから、社長さんに」</b>の2段構え。<b class="x">助成金は電話で出さない</b></div>
+実際に動かして見せるので、そのほうが早いと思うんです。</div>
+        <div class="note"><b>「見るだけ5分」なので社長も断りにくい。</b>断られたら →<b>「◯◯さんから社長さんに、見た話をしてもらえませんか」</b>の2段構え。<b class="x">助成金は電話で出さない</b></div>
       </div>
     </div>
 
@@ -257,7 +257,7 @@
       <div class="stepno">10</div>
       <div class="stepbody">
         <div class="steptitle">確定と仕込み <span>／ 30秒</span></div>
-        <div class="q2 hot"><span class="n">Q10</span><span class="t">カレンダーって、GoogleですかOutlookですか？　<span style="color:var(--gray2);font-size:6.7pt">★事前に作るので、これを聞かないと当日動かない</span></span></div>
+        <div class="q2 hot"><span class="n">Q10</span><span class="t">◯◯さんのところ、カレンダーってGoogleですか？　<span style="color:var(--gray2);font-size:6.7pt">★Google＝そのまま同じ形。他＝実演は見せられるが導入可否は「確認します」と言う</span></span></div>
         <div class="q2 hot"><span class="n">Q11</span><span class="t">ちなみに社長さんって、なんてお名前でしたっけ？　<span style="color:var(--gray2);font-size:6.7pt">← 次回の名指し用。不発でもこれは残す</span></span></div>
         <div class="q2"><span class="n">Q12</span><span class="t">当日は◯◯さんが普段使ってるパソコンで大丈夫ですか？</span></div>
       </div>
@@ -270,7 +270,7 @@
     <div class="panel">
       <div class="ptitle">★秘書がやること</div>
       <div class="nglist">
-        <div>▶ <b>言った予定を、いまのカレンダーに入れる＋当日リマインド</b>　<b class="x">←全職種。これを持っていく</b></div>
+        <div>▶ <b>言った予定をGoogleカレンダーに入れる＋当日リマインド</b>　<b class="x">←全職種。当日その場で実演する</b></div>
         <div>▶ <b>社内からの質問の一次対応</b>（有給・経費・書類の場所・就業規則）</div>
         <div>▶ 明日行く会社を調べて紙にする／お礼メールの下書き</div>
         <div>▶ <b>面接の記録を、しゃべると評価シートにする</b></div>
@@ -288,11 +288,11 @@
       <div class="rb"><span class="q">うちの社員にAIなんて使えますかね</span>
         <span class="a"><b>だから研修でやります。</b>本人が自分の秘書を作るところまでやるので。</span></div>
       <div class="rb"><span class="q">ChatGPT入れてます</span>
-        <span class="a"><b>どなたが使われてます？</b>→ 全員に1体ずつ、<b>自分の仕事を覚えた秘書</b>がいる状態は別なので。</span></div>
+        <span class="a"><b>どなたが使われてます？</b>→ <b>全員に1体ずつある状態</b>は別なので。</span></div>
+      <div class="rb"><span class="q">うちOutlookなんですけど</span>
+        <span class="a">実演はうちのGoogleで見せます。<b>御社で同じことができるかは確認してお答えします</b>（できると言わない）。</span></div>
       <div class="rb"><span class="q">情報漏洩が心配</span>
-        <span class="a">ですよね。<b>社内のルールを決めるところから</b>やります。そこも入ってます。</span></div>
-      <div class="rb"><span class="q">決裁は社長なので</span>
-        <span class="a">ですよね。<b>◯◯さんの1体を見せながら持っていってもらう形</b>がいいと思ってて。</span></div>
+        <span class="a">ですよね。<b>社内のルールを決めるところから</b>やります。</span></div>
       <div class="rb"><span class="q">興味はあるけど時間が／求人は代理店に</span>
         <span class="a">30分だけで、<b>◯◯さん自身の秘書の話</b>です。むしろ時間を作る話なので。</span></div>
     </div>
@@ -305,8 +305,7 @@
         <div><span class="x">✕</span> 部下ができます（<b>管理が増えると取られる</b>）</div>
         <div><span class="x">✕</span> ◯◯さんの手が空きます（暇だと言われたと取る）<br>　→ ◎<b>「秘書がつきます」</b>と言う</div>
         <div><span class="x">✕</span> 御社の社員を1人作らせてください</div>
-        <div><span class="x">✕</span> 全員分でいくらです（<b>電話で金額を出さない</b>）</div>
-        <div><span class="x">✕</span> 助成金（<b>電話では出さない。商談で出す</b>）</div>
+        <div><span class="x">✕</span> 全員分でいくらです／✕助成金（<b>どちらも電話では出さない。商談で出す</b>）</div>
         <div><span class="x">✕</span> 求人原稿AIで書けます（代理店の領域）／✕営業ではありません（嘘）</div>
       </div>
     </div>
