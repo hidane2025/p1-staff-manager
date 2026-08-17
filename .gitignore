@@ -11,6 +11,7 @@ env/
 manual_images/
 *.pdf
 !docs/MANUAL_*.pdf
+!営業/**/*.pdf
 generate_manual_pdf.py
 generate_presentation.py
 test_nagoya.py
