@@ -1,0 +1,287 @@
+<meta charset="utf-8">
+<title>テレアポ台本カード</title>
+<style>
+  @page { size: A4 portrait; margin: 7mm 8mm 6mm 8mm; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink:   #000000;
+    --gray1: #3a3a3a;
+    --gray2: #6b6b6b;
+    --gray3: #9a9a9a;
+    --rule:  #b8b8b8;
+    --fill:  #efefef;
+    --fill2: #e2e2e2;
+    --red:   #8c1d13;
+  }
+
+  html, body {
+    font-family: "IPAGothic", "IPAPGothic", sans-serif;
+    color: var(--ink);
+    font-size: 8pt;
+    line-height: 1.3;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ---------- masthead ---------- */
+  .mast { display: flex; align-items: flex-end; gap: 4mm; border-bottom: 1.6pt solid var(--ink); padding-bottom: 1.2mm; }
+  .mast-l { flex: 1; }
+  .kicker { font-size: 6.6pt; letter-spacing: .26em; color: var(--gray2); }
+  h1 { font-size: 12.6pt; line-height: 1.15; letter-spacing: -.01em; margin-top: .6mm; }
+  .tagline { font-size: 9pt; margin-top: .8mm; letter-spacing: .01em; }
+  .tagline b { border-bottom: 1.4pt solid var(--ink); padding-bottom: .3mm; }
+  .slots { display: flex; gap: 3mm; font-size: 6.8pt; color: var(--gray2); white-space: nowrap; }
+  .slot { border-bottom: .6pt solid var(--gray3); min-width: 24mm; padding-bottom: .4mm; }
+
+  /* ---------- top warning strip ---------- */
+  .warn {
+    display: flex; align-items: center; gap: 2.5mm;
+    border: 1.1pt solid var(--red); margin-top: 1.6mm; padding: 1.1mm 1.8mm;
+  }
+  .warn-tag { font-size: 6.4pt; letter-spacing: .16em; color: #fff; background: var(--red); padding: .5mm 1.4mm; white-space: nowrap; }
+  .warn-body { font-size: 8pt; }
+  .warn-body b { color: var(--red); }
+
+  /* ---------- columns ---------- */
+  .cols { display: flex; gap: 3mm; margin-top: 1.9mm; align-items: flex-start; }
+  .col-main { flex: 1 1 63%; }
+  .col-side { flex: 0 0 34%; }
+
+  /* ---------- steps ---------- */
+  .step { display: flex; gap: 1.8mm; padding: .82mm 0; border-top: .5pt solid var(--rule); }
+  .step:first-child { border-top: none; padding-top: 0; }
+  .stepno {
+    flex: 0 0 5mm; height: 5mm; border: 1pt solid var(--ink);
+    font-size: 7.4pt; display: flex; align-items: center; justify-content: center;
+  }
+  .stepbody { flex: 1; min-width: 0; }
+  .steptitle { font-size: 8.2pt; letter-spacing: .01em; }
+  .steptitle span { font-size: 6.8pt; color: var(--gray2); letter-spacing: .04em; }
+
+  .say {
+    border-left: 2.2pt solid var(--ink); background: var(--fill);
+    padding: .9mm 1.7mm; margin-top: .6mm; font-size: 8.1pt; line-height: 1.44;
+    white-space: pre-line;
+  }
+  .say.alt { border-left-color: var(--gray3); background: transparent; border-left-style: dashed; }
+  .say-tag { display: block; font-size: 6.2pt; letter-spacing: .18em; color: var(--gray2); margin-bottom: .5mm; }
+  .beat { font-size: 6.8pt; color: var(--gray2); text-align: center; letter-spacing: .12em; margin: .55mm 0; }
+  .note { font-size: 6.9pt; color: var(--gray1); margin-top: .7mm; line-height: 1.34; }
+  .note b { background: var(--fill2); padding: 0 .6mm; }
+
+  /* ---------- questions ---------- */
+  .qrow { display: flex; gap: 1.4mm; padding: .62mm 0; border-top: .4pt dotted var(--rule); font-size: 8.1pt; line-height: 1.32; }
+  .qrow:first-of-type { border-top: none; }
+  .qn { flex: 0 0 6mm; color: var(--gray2); font-size: 7.4pt; padding-top: .3mm; }
+  .qrow.hot .qn { color: var(--ink); }
+  .qrow.hot .qt { border-bottom: 1.2pt solid var(--ink); display: inline; }
+
+  /* ---------- side panel ---------- */
+  .panel { border: 1pt solid var(--ink); padding: 1.4mm 1.8mm; margin-bottom: 1.5mm; }
+  .panel:last-child { margin-bottom: 0; }
+  .ptitle { font-size: 7.4pt; letter-spacing: .14em; border-bottom: .8pt solid var(--ink); padding-bottom: .7mm; margin-bottom: 1.2mm; }
+  .frow { font-size: 7.2pt; margin-bottom: 1.45mm; }
+  .frow:last-child { margin-bottom: 0; }
+  .flabel { color: var(--gray1); }
+  .fline { border-bottom: .6pt solid var(--gray3); height: 4.6mm; margin-top: .4mm; }
+  .fline.short { width: 60%; }
+  .fbox { display: flex; gap: 1.2mm; margin-top: .6mm; }
+  .fchk { border: .7pt solid var(--gray2); font-size: 6.8pt; padding: .3mm 1.2mm; }
+
+  .rb { font-size: 7.2pt; line-height: 1.33; margin-bottom: 1.25mm; }
+  .rb:last-child { margin-bottom: 0; }
+  .rb .q { color: var(--gray1); }
+  .rb .a { display: block; border-left: 1.6pt solid var(--ink); padding-left: 1.6mm; margin-top: .5mm; }
+
+  .nglist { font-size: 7.1pt; line-height: 1.34; }
+  .nglist div { margin-bottom: .9mm; padding-left: 3.4mm; text-indent: -3.4mm; }
+  .nglist div:last-child { margin-bottom: 0; }
+  .x { color: var(--red); }
+
+  /* ---------- footer ---------- */
+  .foot {
+    margin-top: 1.9mm; border-top: 1.2pt solid var(--ink); padding-top: 1.1mm;
+    display: flex; gap: 3mm; align-items: baseline; font-size: 6.9pt; color: var(--gray1);
+  }
+  .foot b { color: var(--ink); }
+  .foot .sp { margin-left: auto; color: var(--gray2); white-space: nowrap; }
+</style>
+
+<div class="mast">
+  <div class="mast-l">
+    <div class="kicker">株式会社ヒダネ ／ テレアポ台本</div>
+    <h1>AI社員フック</h1>
+    <div class="tagline">人は、<b>採用する時代から、作る時代へ。</b></div>
+  </div>
+  <div class="slots">
+    <div class="slot">会社名</div>
+    <div class="slot">担当者</div>
+    <div class="slot">日付</div>
+  </div>
+</div>
+
+<div class="warn">
+  <span class="warn-tag">絶対厳守</span>
+  <span class="warn-body"><b class="x">✕「人を減らせます」</b>　→　<b>◯「これから増やさなくて済みます」</b>　／　今いる人には触れない。<b>これから増える予定の1人</b>の話だけをする。</span>
+</div>
+
+<div class="cols">
+
+  <!-- ============ MAIN ============ -->
+  <div class="col-main">
+
+    <div class="step">
+      <div class="stepno">1</div>
+      <div class="stepbody">
+        <div class="steptitle">受付突破 <span>／ 25秒・A/Bを記録する</span></div>
+        <div class="say"><span class="say-tag">A ── 求人ルート（安全）</span>お世話になります、名古屋のヒダネと申します。
+御社の求人の件でお電話しました。Indeedの「◯◯」の募集を拝見しまして、
+1つだけお伺いしたいことがあります。社長さん、いらっしゃいますか。</div>
+        <div class="say alt"><span class="say-tag">B ── AI社員ルート（攻め）</span>うち、社員3人でAI社員を12人使って会社を回してまして、
+その事例を東海の◯◯業さんにお話しして回っています。社長さん、いらっしゃいますか。</div>
+        <div class="note">不在なら<b>「何時ごろお戻りですか」</b>を必ず聞く（一番数が取れる）／ 早口にしない</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">2</div>
+      <div class="stepbody">
+        <div class="steptitle">フック <span>／ 20秒・説明しない</span></div>
+        <div class="say">うち、社員3人しかいない会社なんですけど、
+AI社員が12人いまして。</div>
+        <div class="beat">── 一拍。相手が「え？」と言うまで黙る ──</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">3</div>
+      <div class="stepbody">
+        <div class="steptitle">強みの一言 <span>／ 20秒・事実 → 一般化 の順</span></div>
+        <div class="say">それで、人が足りなくなったら、AI社員を1人作るんです。
+採用しないので。
+
+人って、採用する時代から、作る時代になったなと思ってて。</div>
+        <div class="note">先に一般化を言うと意識高い系に聞こえる。<b>必ず自社の事実が先。</b></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">4</div>
+      <div class="stepbody">
+        <div class="steptitle">質問6問 <span>／ 100秒・相手7割。答えは右欄に書く</span></div>
+        <div class="qrow"><span class="qn">Q1</span><span class="qt">今も募集出されてますよね。何名くらい探されてるんですか？</span></div>
+        <div class="qrow"><span class="qn">Q2</span><span class="qt">それ、いつ頃から出されてます？</span></div>
+        <div class="qrow hot"><span class="qn">Q3</span><span class="qt">…けっこう、しんどくないですか？</span></div>
+        <div class="qrow"><span class="qn">Q4</span><span class="qt">1人採れたとして、一人前になるまでどのくらいかかります？</span></div>
+        <div class="qrow"><span class="qn">Q5</span><span class="qt">その間、教える先輩の方の仕事ってどのくらい止まります？</span></div>
+        <div class="qrow hot"><span class="qn">Q6</span><span class="qt">…そもそも、その仕事って“人”じゃないとダメですか？</span></div>
+        <div class="note">質問したら<b>3秒黙る</b>／「なぜ」で聞かない／Q5のあと1つだけ返す →「<b>じゃあ1人採ると、実質もう1人分の手が3か月消える感じですね</b>」／<b>Q6は長く待つ</b></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">5</div>
+      <div class="stepbody">
+        <div class="steptitle">具体例 <span>／ 40秒・2体だけ。3体目を出さない</span></div>
+        <div class="say">たとえば、営業準備の担当が1人いるんですけど、会社名を1個渡すと、その会社を
+調べて、提案書と商談の台本まで作って出してきます。人間だと1社で半日でした。
+
+あと、失注の分析だけやってる担当もいて。商談が流れると理由を分析して、
+「次はこう言え」って台本を直してくるんです。…わりと厳しいんですけど（笑）</div>
+        <div class="note">相手の困りごとで差し替え可 → <b>数字＝経理KPI／書類＝オンボーディング／事務＝リスト・メール</b>担当</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">6</div>
+      <div class="stepbody">
+        <div class="steptitle">説明を拒否する <span>／ 20秒・これがアポになる</span></div>
+        <div class="say">12人いるんですけど、全員違う仕事してまして。
+一番説明しづらいのが、そいつら毎回自分で自分の仕事を採点して、
+次から勝手に直してくるところで。
+
+…電話だとちょっと説明しづらいんですけど。</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">7</div>
+      <div class="stepbody">
+        <div class="steptitle">アポ打診 <span>／ 30秒・拒否した説明をここで約束する</span></div>
+        <div class="say">30分だけいただいて、うちのAI社員12人が何やってるか、全部お見せします。画面で。
+その上で、さっきおっしゃってた<b>◯◯の仕事</b>、AIに渡せそうかどうか一緒に見てみませんか。
+
+人を増やす前に、一回見てもらうだけで結構です。売り込みはしません。
+来週だと、火曜の午後か木曜の午前、どちらが動きやすいですか？</div>
+        <div class="note">確定後 →「当日までに<b>“人を増やそうと思ってる仕事”を1つ</b>決めておいてください」「その仕事をやられてる方も入れますか」「今<b>何名</b>で？」</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ SIDE ============ -->
+  <div class="col-side">
+
+    <div class="panel">
+      <div class="ptitle">記入欄 ── 相手が言った数字</div>
+      <div class="frow"><span class="flabel">Q1 募集人数</span><div class="fline short"></div></div>
+      <div class="frow"><span class="flabel">Q2 いつから</span><div class="fline short"></div></div>
+      <div class="frow"><span class="flabel">Q3「しんどい」が出たか</span>
+        <div class="fbox"><span class="fchk">□ 出た</span><span class="fchk">□ 出ない</span></div>
+      </div>
+      <div class="frow"><span class="flabel">Q4 一人前まで</span><div class="fline short"></div></div>
+      <div class="frow"><span class="flabel">Q5 削られる工数</span><div class="fline short"></div></div>
+      <div class="frow"><span class="flabel">Q6 の反応</span>
+        <div class="fbox"><span class="fchk">□ 考えてなかった</span></div>
+        <div class="fbox" style="margin-top:.8mm"><span class="fchk">□ 人じゃないと無理</span></div>
+      </div>
+      <div class="frow"><span class="flabel">増やそうとしている仕事</span><div class="fline"></div></div>
+      <div class="frow"><span class="flabel">従業員数 ／ 受付ルート</span>
+        <div class="fbox"><div class="fline" style="flex:1"></div><span class="fchk">□A</span><span class="fchk">□B</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ptitle">切り返し</div>
+      <div class="rb"><span class="q">結局、人を減らすってこと？</span>
+        <span class="a">今いる方はそのままです。これから増やす予定の1人の話です。</span></div>
+      <div class="rb"><span class="q">人がいないとできない仕事もある</span>
+        <span class="a">そうです。現場は絶対に人です。うちが渡してるのも、資料作るとか調べるとか、そういう部分だけです。</span></div>
+      <div class="rb"><span class="q">結局AIツールでしょ？</span>
+        <span class="a">はい、実体はAIです。人格があるわけじゃないです。ただ、うちの仕事のやり方を覚えさせてあるので。</span></div>
+      <div class="rb"><span class="q">品質は大丈夫？</span>
+        <span class="a">最初は落ちます。うちも。人間が最後に見る前提で回してます。</span></div>
+      <div class="rb"><span class="q">うちにも作れますか？</span>
+        <span class="a">作れます。どの仕事を渡すかで難易度が違うので、そこを一緒に選ぶのが当日やりたいことです。<b>← アポ直結</b></span></div>
+    </div>
+
+    <div class="panel">
+      <div class="ptitle">言わない</div>
+      <div class="nglist">
+        <div><span class="x">✕</span> 人件費削減／省人化／置き換え</div>
+        <div><span class="x">✕</span> AI社員1人＝人間1人分です</div>
+        <div><span class="x">✕</span> 全部AIでやってます</div>
+        <div><span class="x">✕</span> AI社員を導入しませんか</div>
+        <div><span class="x">✕</span> 助成金で実質10万円です</div>
+        <div><span class="x">✕</span> なぜ採れないんですか</div>
+        <div><span class="x">✕</span> 今だけ／お得／絶対／必ず</div>
+        <div><span class="x">✕</span> 営業ではありません（嘘）</div>
+        <div><span class="x">✕</span> 未確認のAI社員4体の話</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ptitle">結果 ／ メモ</div>
+      <div class="fbox"><span class="fchk">□ アポ</span><span class="fchk">□ 資料送付</span><span class="fchk">□ 再架電</span><span class="fchk">□ 終了</span></div>
+      <div class="fline"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="foot" style="display:block; line-height:1.5">
+  <b>押さない相手：</b>現場作業が中心／「人を育てるのが経営」と言う社長（論破しない）／従業員5名未満／直近で人員整理をした会社。<b>2回断られたら引く。</b><br>
+  <b>架電時間：</b>10:00–11:30／16:00–17:00（建設 8:30–9:30・17:00〜／介護 14:00–16:00）　<b>1日30〜40件</b>（仕込み込み）<span class="sp" style="float:right">株式会社ヒダネ ／ v5 ／ 2026-08-17</span>
+</div>
