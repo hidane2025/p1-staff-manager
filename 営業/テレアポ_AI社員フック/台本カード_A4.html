@@ -50,25 +50,25 @@
   .col-side { flex: 0 0 28.6%; }
 
   /* ---------- steps ---------- */
-  .step { display: flex; gap: 1.4mm; padding: .48mm 0; border-top: .5pt solid var(--rule); }
+  .step { display: flex; gap: 1.4mm; padding: .26mm 0; border-top: .5pt solid var(--rule); }
   .step:first-child { border-top: none; padding-top: 0; }
   .stepno {
     flex: 0 0 5mm; height: 5mm; border: 1pt solid var(--ink);
     font-size: 7.4pt; display: flex; align-items: center; justify-content: center;
   }
   .stepbody { flex: 1; min-width: 0; }
-  .steptitle { font-size: 8.4pt; letter-spacing: .01em; line-height: 1.25; }
+  .steptitle { font-size: 8.15pt; letter-spacing: .01em; line-height: 1.2; }
   .steptitle span { font-size: 6.8pt; color: var(--gray2); letter-spacing: .04em; }
 
   .say {
     border-left: 2.2pt solid var(--ink); background: var(--fill);
-    padding: .8mm 1.7mm; margin-top: .4mm; font-size: 7.85pt; line-height: 1.25;
+    padding: .62mm 1.6mm; margin-top: .32mm; font-size: 7.7pt; line-height: 1.17;
     white-space: pre-line;
   }
   .say.alt { border-left-color: var(--gray3); background: transparent; border-left-style: dashed; }
   .say-tag { display: block; font-size: 6.1pt; letter-spacing: .16em; color: var(--gray2); margin-bottom: .3mm; }
   .beat { font-size: 6.8pt; color: var(--gray2); text-align: center; letter-spacing: .12em; margin: .55mm 0; }
-  .note { font-size: 6.85pt; color: var(--gray1); margin-top: .45mm; line-height: 1.27; }
+  .note { font-size: 6.65pt; color: var(--gray1); margin-top: .32mm; line-height: 1.2; }
   .note b { background: var(--fill2); padding: 0 .6mm; }
 
   /* ---------- questions ---------- */
@@ -79,24 +79,24 @@
   .qrow.hot .qt { border-bottom: 1.2pt solid var(--ink); display: inline; }
 
   /* ---------- side panel ---------- */
-  .panel { border: 1pt solid var(--ink); padding: 1.5mm 1.9mm; margin-bottom: 1.7mm; }
+  .panel { border: 1pt solid var(--ink); padding: 1.2mm 1.7mm; margin-bottom: 1.3mm; }
   .panel:last-child { margin-bottom: 0; }
-  .ptitle { font-size: 7.6pt; letter-spacing: .14em; border-bottom: .8pt solid var(--ink); padding-bottom: .8mm; margin-bottom: 1.3mm; }
-  .frow { font-size: 7.2pt; margin-bottom: 1.5mm; }
+  .ptitle { font-size: 7.45pt; letter-spacing: .14em; border-bottom: .8pt solid var(--ink); padding-bottom: .6mm; margin-bottom: 1mm; }
+  .frow { font-size: 7pt; margin-bottom: 1.1mm; }
   .frow:last-child { margin-bottom: 0; }
   .flabel { color: var(--gray1); }
-  .fline { border-bottom: .6pt solid var(--gray3); height: 4.6mm; margin-top: .5mm; }
+  .fline { border-bottom: .6pt solid var(--gray3); height: 3.9mm; margin-top: .4mm; }
   .fline.short { width: 60%; }
   .fbox { display: flex; flex-wrap: wrap; gap: .9mm; margin-top: .6mm; }
   .fchk { border: .7pt solid var(--gray2); font-size: 6.8pt; padding: .3mm 1.1mm; white-space: nowrap; }
 
-  .rb { font-size: 7.15pt; line-height: 1.32; margin-bottom: 1.2mm; }
+  .rb { font-size: 6.95pt; line-height: 1.24; margin-bottom: .85mm; }
   .rb:last-child { margin-bottom: 0; }
   .rb .q { color: var(--gray1); }
   .rb .a { display: block; border-left: 1.6pt solid var(--ink); padding-left: 1.6mm; margin-top: .5mm; }
 
   .nglist { font-size: 6.9pt; line-height: 1.26; }
-  .nglist div { margin-bottom: .85mm; padding-left: 3.4mm; text-indent: -3.4mm; }
+  .nglist div { margin-bottom: .6mm; padding-left: 3.4mm; text-indent: -3.4mm; }
   .nglist div:last-child { margin-bottom: 0; }
   .x { color: var(--red); }
 
@@ -109,13 +109,13 @@
   .foot .sp { margin-left: auto; color: var(--gray2); white-space: nowrap; }
 
   /* ---------- v7: compact question rows ---------- */
-  .q2 { display: flex; gap: 1.2mm; align-items: baseline; padding: .4mm 0; font-size: 8.2pt; line-height: 1.3; }
+  .q2 { display: flex; gap: 1.2mm; align-items: baseline; padding: .22mm 0; font-size: 8pt; line-height: 1.22; }
   .q2 .n { flex: 0 0 6.4mm; font-size: 6.9pt; color: var(--gray2); font-variant-numeric: tabular-nums; }
   .q2 .t { flex: 1; }
   .q2.hot .n { color: var(--ink); }
   .q2.hot .t { border-bottom: 1.1pt solid var(--ink); display: inline; }
-  .ans { font-size: 7pt; color: var(--gray2); padding-left: 7.4mm; line-height: 1.32; margin-bottom: .35mm; }
-  .fork { font-size: 6.85pt; color: var(--gray1); padding-left: 7.2mm; line-height: 1.32; }
+  .ans { font-size: 6.8pt; color: var(--gray2); padding-left: 7.4mm; line-height: 1.24; margin-bottom: .18mm; }
+  .fork { font-size: 6.7pt; color: var(--gray1); padding-left: 7.2mm; line-height: 1.22; }
   .fork b { background: var(--fill2); padding: 0 .5mm; }
   .qgrp { border-left: 1.6pt solid var(--rule-2); padding-left: 1.8mm; margin-top: .7mm; }
 </style>
@@ -221,13 +221,20 @@
     <div class="step">
       <div class="stepno">8</div>
       <div class="stepbody">
-        <div class="steptitle">具体例を1〜2体だけ <span>／ 30秒</span></div>
-        <div class="say">うちのだと、たとえば数字をまとめるやつがいて。
-毎週、勝手にKPIと月次のPLを出してきます。人がやると半日かかるやつです。
+        <div class="steptitle">具体例 <span>／ ★1体を細かく。40秒</span></div>
+        <div class="say">うちに、<b>営業準備担当</b>ってのがいるんですけど。
 
-あと、商談の準備をするやつが。会社名を渡すと、調べて提案書と商談台本まで作ります。
-朝来たら、もうできてる。<b>私、頼んでないんですけど。</b></div>
-        <div class="note"><b class="x">12体を全部説明しない。1〜2体だけ。</b>効いているのは<b>「頼んでないのに動く」</b>（ChatGPTは聞かないと動かない）</div>
+私が「<b>明日◯◯株式会社に行く</b>」って言うだけなんです。
+それだけで、朝までにその会社のことを全部調べて、
+<b>提案書と、商談で話す台本と、見積の資料まで作ってある</b>んです。
+
+（一拍）
+私、指示出してないんですよ。<b>会社名を言っただけで。</b></div>
+        <div class="q2 hot"><span class="n">Q5</span><span class="t">社長、それ人がやったら、どのくらいかかりますか？</span></div>
+        <div class="ans">▶「半日はかかるだろうね」　→ <b>そうなんです。それが朝には終わってます。</b></div>
+        <div class="say alt">あと、<b>断られると勝手に反省会やってるやつ</b>がいて。
+「今回はここが弱かったので次はこう言います」って、向こうから報告してくるんです。</div>
+        <div class="note"><b class="x">12体を並べない。1体を細かく＋1体を一言。</b>「<b>会社名を言うだけ</b>」が分かりやすさの核。<b>工数は相手に言わせる</b>（こちらが「半日かかります」と言うと押し売りになる）</div>
       </div>
     </div>
 
@@ -237,7 +244,7 @@
         <div class="steptitle">先回り＋規模の確認 <span>／ ★必須</span></div>
         <div class="say">あ、<b>今いる方を減らす話ではないです。</b>
 これから増やす分の話なので。</div>
-        <div class="q2"><span class="n">Q5</span><span class="t">御社、いま何名くらいでやられてます？　<span style="color:var(--gray2);font-size:6.7pt">（助成金判定。電話では助成金の話をしない）</span></span></div>
+        <div class="q2"><span class="n">Q6</span><span class="t">御社、いま何名くらいでやられてます？　<span style="color:var(--gray2);font-size:6.7pt">（助成金判定。電話では助成金の話をしない）</span></span></div>
         <div class="note">1人増やすと<b>年400〜500万</b>。聞かれたら出す。<b class="x">✕人件費が下がります</b>＝身内を切る話に聞こえて、社長でも引く</div>
       </div>
     </div>
@@ -249,8 +256,8 @@
         <div class="say"><b>30分だけいただけませんか。うちのAI社員、実際に動かしてお見せします。</b>
 
 <b>さっきの◯◯（Q4で社長が言った業務）</b>だと何が作れるか、その場で話せると思うので。</div>
-        <div class="q2"><span class="n">Q6</span><span class="t">来週だと、火曜の午後か木曜の午前、どちらが動きやすいですか？</span></div>
-        <div class="q2 hot"><span class="n">Q7</span><span class="t">当日、社長のカレンダーってGoogleですか？　<span style="color:var(--gray2);font-size:6.7pt">★実演に使う</span></span></div>
+        <div class="q2"><span class="n">Q7</span><span class="t">来週だと、火曜の午後か木曜の午前、どちらが動きやすいですか？</span></div>
+        <div class="q2 hot"><span class="n">Q8</span><span class="t">当日、社長のカレンダーってGoogleですか？　<span style="color:var(--gray2);font-size:6.7pt">★実演に使う</span></span></div>
       </div>
     </div>
 
@@ -259,14 +266,16 @@
   <div class="col-side">
 
     <div class="panel">
-      <div class="ptitle">★出す具体例（この順）</div>
+      <div class="ptitle">★AI社員の名簿</div>
       <div class="nglist">
-        <div>▶ <b>数字をまとめるやつ</b>／毎週KPIと月次PL（人：毎週半日）<b class="x">←社長が一番欲しい</b></div>
-        <div>▶ <b>商談の準備をするやつ</b>／会社名→提案書・商談台本（人：半日〜1日）</div>
-        <div>▶ 受注後の段取り／キックオフ→計画届→進捗（人：数十時間）</div>
-        <div>▶ 報告書を作るやつ／アンケート分析つき（人：半日）</div>
+        <div><b>①営業準備担当</b>／<b class="x">まずこれ。</b>会社名を1つ言うだけ → 調査・提案書・商談台本・見積資料（人：<b>半日〜1日</b>）</div>
+        <div><b>②失注分析担当</b>／断られると勝手に分析し、次のトークの修正案まで出す（人：<b>やっていない会社が大半</b>）</div>
+        <div>③経理・KPI担当／毎週KPIと月次PL（人：毎週半日）<b class="x">←社長が一番欲しい</b></div>
+        <div>④オンボーディング担当／受注後の段取りを全部（人：数十時間）</div>
+        <div>⑤報告書担当／アンケート分析つき（人：半日）</div>
+        <div>⑥リスト担当　⑦フォローメール担当　⑧カリキュラム担当</div>
       </div>
-      <div class="note" style="margin-top:1mm"><b>Q4で社長が言った業務に一番近いものを1つ。</b>合うものがなければ「数字のやつ」</div>
+      <div class="note" style="margin-top:1mm"><b>①を細かく＋②を一言。それ以上出さない。</b>Q4で社長が言った業務に近いものがあれば③〜⑤に差し替える。<b class="x">残り4体は未特定なので触れない</b></div>
     </div>
 
     <div class="panel">
