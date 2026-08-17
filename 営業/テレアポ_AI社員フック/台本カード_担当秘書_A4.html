@@ -1,0 +1,327 @@
+<meta charset="utf-8">
+<title>テレアポ台本カード</title>
+<style>
+  @page { size: A4 portrait; margin: 7mm 8mm 6mm 8mm; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink:   #000000;
+    --gray1: #3a3a3a;
+    --gray2: #6b6b6b;
+    --gray3: #9a9a9a;
+    --rule:  #b8b8b8;
+    --fill:  #efefef;
+    --fill2: #e2e2e2;
+    --red:   #8c1d13;
+  }
+
+  html, body {
+    font-family: "IPAGothic", "IPAPGothic", sans-serif;
+    color: var(--ink);
+    font-size: 7.6pt;
+    line-height: 1.24;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ---------- masthead ---------- */
+  .mast { display: flex; align-items: flex-end; gap: 4mm; border-bottom: 1.6pt solid var(--ink); padding-bottom: .95mm; }
+  .mast-l { flex: 1; }
+  .kicker { font-size: 6.6pt; letter-spacing: .26em; color: var(--gray2); }
+  h1 { font-size: 11.8pt; line-height: 1.15; letter-spacing: -.01em; margin-top: .6mm; }
+  .tagline { font-size: 9pt; margin-top: .8mm; letter-spacing: .01em; }
+  .tagline b { border-bottom: 1.4pt solid var(--ink); padding-bottom: .3mm; }
+  .slots { display: flex; gap: 3mm; font-size: 6.8pt; color: var(--gray2); white-space: nowrap; }
+  .slot { border-bottom: .6pt solid var(--gray3); min-width: 24mm; padding-bottom: .4mm; }
+
+  /* ---------- top warning strip ---------- */
+  .warn {
+    display: flex; align-items: center; gap: 2.5mm;
+    border: 1.1pt solid var(--red); margin-top: 1.4mm; padding: 1mm 1.8mm;
+  }
+  .warn-tag { font-size: 6.4pt; letter-spacing: .16em; color: #fff; background: var(--red); padding: .5mm 1.4mm; white-space: nowrap; }
+  .warn-body { font-size: 8pt; }
+  .warn-body b { color: var(--red); }
+
+  /* ---------- columns ---------- */
+  .cols { display: flex; gap: 2.6mm; margin-top: 1.4mm; align-items: flex-start; }
+  .col-main { flex: 1 1 70.5%; }
+  .col-side { flex: 0 0 27.2%; }
+
+  /* ---------- steps ---------- */
+  .step { display: flex; gap: 1.4mm; padding: .06mm 0; border-top: .5pt solid var(--rule); }
+  .step:first-child { border-top: none; padding-top: 0; }
+  .stepno {
+    flex: 0 0 5mm; height: 5mm; border: 1pt solid var(--ink);
+    font-size: 7.4pt; display: flex; align-items: center; justify-content: center;
+  }
+  .stepbody { flex: 1; min-width: 0; }
+  .steptitle { font-size: 8.1pt; letter-spacing: .01em; line-height: 1.18; }
+  .steptitle span { font-size: 6.8pt; color: var(--gray2); letter-spacing: .04em; }
+
+  .say {
+    border-left: 2.2pt solid var(--ink); background: var(--fill);
+    padding: .48mm 1.45mm; margin-top: .22mm; font-size: 7.6pt; line-height: 1.12;
+    white-space: pre-line;
+  }
+  .say.alt { border-left-color: var(--gray3); background: transparent; border-left-style: dashed; }
+  .say-tag { display: block; font-size: 6.1pt; letter-spacing: .16em; color: var(--gray2); margin-bottom: .3mm; }
+  .beat { font-size: 6.8pt; color: var(--gray2); text-align: center; letter-spacing: .12em; margin: .55mm 0; }
+  .note { font-size: 6.6pt; color: var(--gray1); margin-top: .3mm; line-height: 1.19; }
+  .note b { background: var(--fill2); padding: 0 .6mm; }
+
+  /* ---------- questions ---------- */
+  .qrow { display: flex; gap: 1.4mm; padding: .5mm 0; border-top: .4pt dotted var(--rule); font-size: 7.95pt; line-height: 1.28; }
+  .qrow:first-of-type { border-top: none; }
+  .qn { flex: 0 0 6mm; color: var(--gray2); font-size: 7.4pt; padding-top: .3mm; }
+  .qrow.hot .qn { color: var(--ink); }
+  .qrow.hot .qt { border-bottom: 1.2pt solid var(--ink); display: inline; }
+
+  /* ---------- side panel ---------- */
+  .panel { border: 1pt solid var(--ink); padding: 1.1mm 1.6mm; margin-bottom: 1.1mm; }
+  .panel:last-child { margin-bottom: 0; }
+  .ptitle { font-size: 7.4pt; letter-spacing: .14em; border-bottom: .8pt solid var(--ink); padding-bottom: .55mm; margin-bottom: .95mm; }
+  .frow { font-size: 7pt; margin-bottom: 1.05mm; }
+  .frow:last-child { margin-bottom: 0; }
+  .flabel { color: var(--gray1); }
+  .fline { border-bottom: .6pt solid var(--gray3); height: 3.8mm; margin-top: .4mm; }
+  .fline.short { width: 60%; }
+  .fbox { display: flex; flex-wrap: wrap; gap: .9mm; margin-top: .6mm; }
+  .fchk { border: .7pt solid var(--gray2); font-size: 6.8pt; padding: .3mm 1.1mm; white-space: nowrap; }
+
+  .rb { font-size: 6.9pt; line-height: 1.19; margin-bottom: .62mm; }
+  .rb:last-child { margin-bottom: 0; }
+  .rb .q { color: var(--gray1); }
+  .rb .a { display: block; border-left: 1.6pt solid var(--ink); padding-left: 1.6mm; margin-top: .5mm; }
+
+  .nglist { font-size: 6.9pt; line-height: 1.26; }
+  .nglist div { margin-bottom: .45mm; padding-left: 3.4mm; text-indent: -3.4mm; }
+  .nglist div:last-child { margin-bottom: 0; }
+  .x { color: var(--red); }
+
+  /* ---------- footer ---------- */
+  .foot {
+    margin-top: 1.4mm; border-top: 1.2pt solid var(--ink); padding-top: .9mm;
+    display: flex; gap: 3mm; align-items: baseline; font-size: 6.9pt; color: var(--gray1);
+  }
+  .foot b { color: var(--ink); }
+  .foot .sp { margin-left: auto; color: var(--gray2); white-space: nowrap; }
+
+  /* ---------- v7: compact question rows ---------- */
+  .q2 { display: flex; gap: 1.2mm; align-items: baseline; padding: .16mm 0; font-size: 7.95pt; line-height: 1.21; }
+  .q2 .n { flex: 0 0 6.4mm; font-size: 6.9pt; color: var(--gray2); font-variant-numeric: tabular-nums; }
+  .q2 .t { flex: 1; }
+  .q2.hot .n { color: var(--ink); }
+  .q2.hot .t { border-bottom: 1.1pt solid var(--ink); display: inline; }
+  .ans { font-size: 6.8pt; color: var(--gray2); padding-left: 7.4mm; line-height: 1.26; margin-bottom: .2mm; }
+  .fork { font-size: 6.6pt; color: var(--gray1); padding-left: 7.2mm; line-height: 1.2; }
+  .fork b { background: var(--fill2); padding: 0 .5mm; }
+  .qgrp { border-left: 1.6pt solid var(--rule-2); padding-left: 1.8mm; margin-top: .7mm; }
+</style>
+
+<div class="mast">
+  <div class="mast-l">
+    <div class="kicker">株式会社ヒダネ ／ テレアポ台本 ／ 担当秘書ルート</div>
+    <h1>担当秘書アポ</h1>
+    <div class="tagline">社員さん一人ひとりに、<b>秘書を1体</b>。ゴールは社長との商談。</div>
+  </div>
+  <div class="slots">
+    <div class="slot">会社名</div>
+    <div class="slot">担当者</div>
+    <div class="slot">日付</div>
+  </div>
+</div>
+
+<div class="warn">
+  <span class="warn-tag">絶対厳守</span>
+  <span class="warn-body"><b class="x">✕「AI社員」「採用しなくてよくなる」は社長専用</b>。担当には<b>必ず「秘書」</b>（<b>前職の話はしてよい。結論だけ分ける</b>）　／　<b class="x">✕「作ってから伺います」</b>＝当日できない → <b>◯「その場でお見せします」</b>　／　<b class="x">✕電話で金額と助成金</b></span>
+</div>
+
+<div class="cols">
+
+  <div class="col-main">
+
+    <div class="step">
+      <div class="stepno">1</div>
+      <div class="stepbody">
+        <div class="steptitle">受付突破 <span>／ ★指名は「総務」。分類させない言い方で入る</span></div>
+        <div class="say">お世話になります、名古屋のヒダネと申します。
+社員さん一人ひとりに秘書をつける、という仕事をしてまして。
+<b>総務のご担当の方</b>、いらっしゃいますか。</div>
+        <div class="fork"><b>「私が総務ですが」</b>→ そのままQ1へ（<b>20〜50名では一番多い。受付＝総務</b>）　　<b>「ご用件は？」</b>→ <b class="x">言い換えず同じ言葉を繰り返す</b>（言い換えたら営業になる）　　<b>「総務はおりません」</b>→「社員さんの研修とか見られてる方は、どなたになりますか？」</div>
+        <div class="note"><b>◯総務＝ほぼ実在する唯一の名称／受付自身が総務のことが多い／外れても正しい人を教えてくれる</b>（100名超なら人事も可）　<b class="x">✕AI担当・社内システム担当・研修担当は指名しない</b></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">2</div>
+      <div class="stepbody">
+        <div class="steptitle">名乗り・前職 <span>／ ★ここで「分かってる人」になる。25秒</span></div>
+        <div class="q2"><span class="n">Q1</span><span class="t">総務のご担当の方でいらっしゃいますか？</span></div>
+        <div class="q2"><span class="n">Q2</span><span class="t">突然すみません、名古屋のヒダネの祖父江と申します。3分だけ、よろしいですか？</span></div>
+        <div class="say">私、<b>もともと求人広告の代理店</b>にいたんです。
+会社さんに人を採ってもらうのが仕事で。
+今は、<b>AI社員を作る会社</b>にいます。</div>
+        <div class="note"><b>前職は担当にも出してよい。</b>代理店と毎日やりとりしている人なので<b>「この人は分かってる」</b>になる。<b class="x">✕分けるのは結論だけ</b>（社長＝採用しなくていい／担当＝秘書がつく）。<b class="x">ここでAI社員12人と言わない</b>（3の落差が消える）</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">3</div>
+      <div class="stepbody">
+        <div class="steptitle">引っかける <span>／ ★ここが分岐点。30秒</span></div>
+        <div class="q2 hot"><span class="n">Q3</span><span class="t">◯◯さん、秘書ってついたことあります？　<span style="color:var(--gray2);font-size:6.7pt">▶「ないです（笑）」</span></span></div>
+
+        <div class="say">ないですよね。うち、社員3人しかいないんですけど、
+全員に秘書がついてまして。私にも1人、専属で。</div>
+        <div class="ans">▶「え、3人で？」　← <b>ここで聞き返させる</b></div>
+        <div class="say alt">はい。AIで作った秘書なんですけど、<b>1人1体</b>。</div>
+        <div class="note"><b class="x">「AI社員」と言わない。</b>社員＝自分の代わり、<b>秘書＝自分に補佐がつく</b>。3秒で敵になる</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">4</div>
+      <div class="stepbody">
+        <div class="steptitle">具体的に言う <span>／ ★どの職種でも成立する話から。40秒</span></div>
+        <div class="q2 hot"><span class="n">Q4</span><span class="t">◯◯さん、予定って自分でカレンダーに入れてますか？</span></div>
+        <div class="ans">▶「入れてますね」</div>
+        <div class="say">それ、秘書に言うだけで済みます。「来週の火曜14時に◯◯社」って言ったら、
+そのままカレンダーに入って、当日の朝に「今日はこれです」って教えてくれます。
+<b>今この電話でもできるんですけど、画面がないので。当日お見せします。</b></div>
+        <div class="say alt">あと、うちに<b>蒔田ユイ</b>っていう事務のやつがいて。「え、社員さん？」って言われますけど<b>AI</b>です。
+私が言うのは「<b>受注決まった</b>」の一言だけで、<b>契約書と名簿と請求書が1時間で全部できてる</b>んです。
+頼んでないのに<b>チェックした項目まで報告してくる</b>んですよ。古いひな形が残ってないか、とか。</div>
+        <div class="q2"><span class="n">Q5</span><span class="t">あと◯◯さんの場合…社内から質問される回数って、1日何回くらいですか？</span></div>
+        <div class="ans">▶「けっこう来ますね…」　→ 有給の残り・経費の出し方・書類の場所。<b>そこも秘書が一次対応します</b></div>
+        <div class="note"><b>予定の話は全職種で通る。</b><b class="x">機能で勝とうとしない</b>（Siriで返される）。<b>売り物は「全員が使えている状態」</b></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">5</div>
+      <div class="stepbody">
+        <div class="steptitle">先回りする <span>／ ★必須。聞かれる前に言う</span></div>
+        <div class="say">先に言っておくと、◯◯さんの代わりを作る話ではないです。
+部下でもなくて、秘書です。指示を出すのは◯◯さんなので。
+
+うち研修の会社なので、<b>1体目はうちが作りますけど、2体目は◯◯さんが作れるようになります。</b></div>
+        <div class="note"><b>本人が作れるから、本人の言い方と判断を覚える。</b>これが<b>「代替ではない」の根拠</b></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">6</div>
+      <div class="stepbody">
+        <div class="steptitle">全員分の話にする <span>／ ★ここで社長案件になる</span></div>
+        <div class="say">これ、最終的には<b>全員に1体ずつ配る形</b>になるんですけど、
+最初の1体は◯◯さんのを作りたいんです。使ってもらわないと、配れないので。
+<b>新しく入った方にも、初日から1体つけられます。</b></div>
+        <div class="q2"><span class="n">Q6</span><span class="t">御社、今何名くらいでやられてます？　<span style="color:var(--gray2);font-size:6.7pt">（＝秘書の体数。助成金判定も兼ねる）</span></span></div>
+        <div class="note"><b>秘書を配る側になるのは総務。</b>担当が社内で「配った人」になる</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">7</div>
+      <div class="stepbody">
+        <div class="steptitle">アポ打診 <span>／ ★本命。見てもらうだけ</span></div>
+        <div class="say"><b>30分だけ、見てもらうだけでいいので、いただけませんか。</b>
+
+うちが今使ってる秘書を、その場でお見せします。
+私が予定を言って、カレンダーに入るところまで、実際に。
+<b>同じものを、◯◯さん専用に作れます。</b></div>
+        <div class="q2"><span class="n">Q7</span><span class="t">来週だと、火曜の午後か木曜の午前、どちらが動きやすいですか？</span></div>
+        <div class="note"><b>「見てもらうだけ」＝断る理由が作れない。</b>実演は<b>ヒダネのカレンダーで完結＝準備ゼロ</b>。<b class="x">「専用を作ってから伺う」は言わない</b></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">8</div>
+      <div class="stepbody">
+        <div class="steptitle">社長へ渡す <span>／ ★動くものがあるから当日呼べる</span></div>
+        <div class="q2 hot"><span class="n">Q8</span><span class="t">全員分だと人数×の話になるので、そこは社長さんの決裁ですよね？</span></div>
+        <div class="ans">▶「そうですね」</div>
+        <div class="say">じゃあ当日、社長さんも5分だけ覗いてもらうことできませんか。
+実際に動かして見せるので、そのほうが早いと思うんです。</div>
+        <div class="note"><b>「見るだけ5分」なので社長も断りにくい。</b>断られたら →<b>「◯◯さんから社長さんに、見た話をしてもらえませんか」</b>の2段構え。<b class="x">助成金は電話で出さない</b></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stepno">9</div>
+      <div class="stepbody">
+        <div class="steptitle">確定と仕込み <span>／ 30秒</span></div>
+        <div class="q2 hot"><span class="n">Q9</span><span class="t">◯◯さんのところ、カレンダーってGoogleですか？　<span style="color:var(--gray2);font-size:6.7pt">★Google＝そのまま同じ形。他＝実演は見せられるが導入可否は「確認します」と言う</span></span></div>
+        <div class="q2 hot"><span class="n">Q10</span><span class="t">ちなみに社長さんって、なんてお名前でしたっけ？　<span style="color:var(--gray2);font-size:6.7pt">← 次回の名指し用。不発でもこれは残す</span></span></div>
+        <div class="q2"><span class="n">Q11</span><span class="t">当日は◯◯さんが普段使ってるパソコンで大丈夫ですか？</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col-side">
+
+    <div class="panel">
+      <div class="ptitle">★秘書がやること</div>
+      <div class="nglist">
+        <div>▶ <b>言った予定をGoogleカレンダーに入れる＋当日リマインド</b>　<b class="x">←全職種。当日その場で実演する</b></div>
+        <div>▶ <b>社内からの質問の一次対応</b>（有給・経費・書類の場所・就業規則）</div>
+        <div>▶ 明日行く会社を調べて紙にする／お礼メールの下書き</div>
+        <div>▶ <b>面接の記録を、しゃべると評価シートにする</b></div>
+        <div>▶ 社長から急に言われた資料／<b>新人の質問に24時間答える</b></div>
+      </div>
+      <div class="note" style="margin-top:1mm"><b>予定＋相手の職種のもの1つ。計2つだけ出す。</b>並べると薄まる</div>
+    </div>
+
+    <div class="panel">
+      <div class="ptitle">切り返し</div>
+      <div class="rb"><span class="q">それ、私の仕事なくなりません？</span>
+        <span class="a"><b>なくなりません。秘書です。</b>指示を出すのは◯◯さんです。</span></div>
+      <div class="rb"><span class="q">それSiriでできますよね／カレンダーで十分</span>
+        <span class="a"><b>できます。</b>でも<b>部署の全員が使ってる状態</b>って、なってます？　うちは全員に1体ずつ配って、使える状態にするところまでなので。</span></div>
+      <div class="rb"><span class="q">うちの社員にAIなんて使えますかね</span>
+        <span class="a"><b>だから研修でやります。</b>本人が自分の秘書を作るところまでやるので。</span></div>
+      <div class="rb"><span class="q">ChatGPT入れてます</span>
+        <span class="a"><b>どなたが使われてます？</b>→ <b>全員に1体ずつある状態</b>は別なので。あと<b>チェックした項目まで報告してくる</b>ので。</span></div>
+      <div class="rb"><span class="q">うちOutlookなんですけど</span>
+        <span class="a">実演はうちのGoogleで見せます。<b>御社で同じことができるかは確認してお答えします</b>（できると言わない）。</span></div>
+      <div class="rb"><span class="q">情報漏洩が心配</span>
+        <span class="a">ですよね。<b>社内のルールを決めるところから</b>やります。</span></div>
+      <div class="rb"><span class="q">興味はあるけど時間が／求人は代理店に</span>
+        <span class="a">30分だけで、<b>◯◯さん自身の秘書の話</b>です。むしろ時間を作る話なので。</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="ptitle">言わない</div>
+      <div class="nglist">
+        <div><span class="x">✕</span> AI社員（<b>社長専用。担当には必ず「秘書」</b>）</div>
+        <div><span class="x">✕</span> 人が要らなくなります／省人化／人件費　✕部下ができます（<b>管理が増えると取られる</b>）</div>
+        <div><span class="x">✕</span> 手が空きます（暇だと取る）→ ◎<b>「秘書がつきます」</b></div>
+        <div><span class="x">✕</span> 御社の社員を1人作らせてください</div>
+        <div><span class="x">✕</span> 全員分でいくらです／✕助成金（<b>どちらも電話では出さない。商談で出す</b>）</div>
+        <div><span class="x">✕</span> 求人原稿AIで書けます（代理店の領域）／✕営業ではありません（嘘）</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ptitle">記入 ／ 結果</div>
+      <div class="frow"><span class="flabel">従業員数（＝秘書の体数）</span><div class="fline short"></div></div>
+      <div class="frow"><span class="flabel">担当の職種・兼任範囲</span><div class="fline"></div></div>
+      <div class="frow"><span class="flabel">社内ツール ／ 社長の氏名</span><div class="fline"></div></div>
+      <div class="frow"><span class="flabel">結果</span>
+        <div class="fbox"><span class="fchk">□アポ</span><span class="fchk">□送付</span><span class="fchk">□再架電</span><span class="fchk">□終了</span></div>
+      </div>
+      <div class="frow"><span class="flabel">★社長との商談が設定されたか</span>
+        <div class="fbox"><span class="fchk">□ YES</span><span class="fchk">□ NO</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="foot" style="display:block; line-height:1.5">
+  <b>商談で出す助成金：</b>2026-08-03改正で汎用のAI研修は対象外。<b>「自分の職務専用の秘書を作る」＝職務直結</b>（社労士確認が前提）<br>
+  <b>KPIは「担当アポが取れた」ではなく「社長との商談が設定された」。</b>／ <b>2回断られたら引く。</b>／ 優先順位：① 社労士紹介　② 社長へ直接　③ 本カード<span class="sp" style="float:right">株式会社ヒダネ ／ 2026-08-17</span>
+</div>
